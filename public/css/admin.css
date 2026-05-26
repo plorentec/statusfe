@@ -640,3 +640,189 @@ code {
 .doc-key-hint { font-size: 12px; color: #94a3b8; margin-top: 4px; }
 .doc-h1 { font-size: 16px; font-weight: 700; margin: 20px 0 8px; color: #e2e8f0; }
 .doc-h2 { font-size: 14px; font-weight: 700; margin: 16px 0 6px; color: #e2e8f0; }
+
+/* ===== VISIT BUTTON ===== */
+.btn-visit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+  margin-left: 6px;
+  text-decoration: none;
+  color: var(--primary);
+  background: rgba(99,102,241,0.08);
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  vertical-align: middle;
+}
+.btn-visit:hover {
+  background: rgba(99,102,241,0.18);
+  color: var(--primary-hover);
+}
+
+/* ===== TEMPLATE SELECTOR ===== */
+.template-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.template-option {
+  display: block;
+  cursor: pointer;
+  position: relative;
+}
+
+.template-option input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.template-option .template-card {
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.template-option input[type="radio"]:checked + .template-card,
+.template-option.selected .template-card {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+.template-card-header {
+  padding: 8px 12px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.template-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.template-card-preview {
+  padding: 10px;
+  min-height: 80px;
+  background: #fff;
+}
+
+/* Default template preview */
+.preview-bar {
+  height: 8px;
+  background: #dcffe4;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.preview-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.preview-line {
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 3px;
+  flex: 1;
+}
+
+.preview-line.short {
+  width: 30px;
+  flex: none;
+  background: #dcffe4;
+}
+
+/* Grid template preview */
+.preview-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.preview-gc {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.preview-card-mini {
+  height: 32px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  border-top: 3px solid #6366f1;
+}
+
+/* Dark template preview */
+.preview-dark {
+  background: #0a0a0f;
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.preview-dbar {
+  height: 6px;
+  background: rgba(34,197,94,0.4);
+  border-radius: 3px;
+  margin-bottom: 6px;
+}
+
+.preview-ditem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+}
+
+.preview-dline {
+  height: 5px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 3px;
+  flex: 1;
+}
+
+.preview-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+  flex-shrink: 0;
+}
+
+/* ===== TEMPLATE BADGE ===== */
+.template-badge {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.template-badge.template-default {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.template-badge.template-grid {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.template-badge.template-dark {
+  background: #1e293b;
+  color: #e2e8f0;
+}
+
