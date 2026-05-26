@@ -1,0 +1,16 @@
+[Unit]
+Description=StatusPage - Open Source Status Page System
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/var/www/statuspage
+ExecStart=/usr/bin/node src/app.js
+Restart=on-failure
+RestartSec=5
+Environment=NODE_ENV=production
+EnvironmentFile=/var/www/statuspage/.env
+
+[Install]
+WantedBy=multi-user.target
