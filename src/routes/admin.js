@@ -3,7 +3,7 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
 const db = require('../db/init');
-const { pages, components, apiKeys, incidents, maintenance } = require('../db/models');
+const { pages, components, apiKeys, incidents, maintenance, notifications } = require('../db/models');
 const { requireAuth } = require('../middleware/session');
 
 router.use(requireAuth);
@@ -27,6 +27,8 @@ router.get('/', (req, res) => {
     FROM pages p ORDER BY p.name
   `).all();
 
+  const unread = notifications.listUnread(req.user.id);
+
   res.render('admin/dashboard', {
     title: 'Dashboard',
     user: req.user,
@@ -34,7 +36,8 @@ router.get('/', (req, res) => {
     messageType: res.locals.messageType,
     stats: { pageCount, componentCount, incidentCount, userCount, operationalCount, openIncidents },
     recentIncidents,
-    pageStatuses
+    pageStatuses,
+    unread
   });
 });
 
