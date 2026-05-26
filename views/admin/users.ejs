@@ -68,7 +68,7 @@
 <td><span class="role-badge role-<%= u.role %>"><%= u.role %></span></td>
 <td><%= u.created_at %></td>
 <td class="actions">
-<% if (u.id !== user.id) { %>
+<% if (u.id !== user.id || users.filter(x => x.role === 'admin' && x.id !== u.id).length > 0) { %>
 <form action="/admin/users/<%= u.id %>?_method=DELETE" method="post" class="delete-form" onsubmit="return confirm('Delete this user?')">
 <button type="submit" class="btn btn-sm btn-danger">Delete</button>
 </form>
