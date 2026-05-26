@@ -1,6 +1,6 @@
 # StatusPage
 
-Open source status page system built with Node.js, Express, and SQLite.
+Sistema de páginas de estado open source construido con Node.js, Express y SQLite.
 
 ## Features
 
