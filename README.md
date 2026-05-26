@@ -2,13 +2,23 @@
 
 Open source status page system built with Node.js, Express, and SQLite.
 
+## Features
+
+- Multiple status pages
+- Components with status tracking
+- Incidents and maintenance windows
+- REST API with key-based authentication
+- Webhooks for status changes
+- User management
+- Custom CSS/HTML per page
+
 ## Quick Start
 
 ### Docker (Recommended)
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/statuspage.git
-cd statuspage
+git clone https://github.com/plorentec/statusfe.git
+cd statusfe
 cp .env.example .env
 docker compose up -d
 ```
@@ -22,8 +32,8 @@ Default admin credentials: `admin@status.local` / `admin123`
 **Prerequisites:** Node.js 20+, npm
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/statuspage.git
-cd statuspage
+git clone https://github.com/plorentec/statusfe.git
+cd statusfe
 cp .env.example .env
 
 npm install --production
@@ -38,8 +48,8 @@ Access at `http://localhost:3000`
 
 ```bash
 # Clone and install
-git clone https://github.com/YOUR_USERNAME/statuspage.git /var/www/statuspage
-cd /var/www/statuspage
+git clone https://github.com/plorentec/statusfe.git /var/www/statusfe
+cd /var/www/statusfe
 cp .env.example .env
 npm install --production
 
@@ -58,7 +68,7 @@ sudo systemctl status statuspage
 ### Docker
 
 ```bash
-cd /path/to/statuspage
+cd /path/to/statusfe
 git pull
 docker compose pull
 docker compose up -d --build
@@ -67,7 +77,7 @@ docker compose up -d --build
 ### Manual / systemd
 
 ```bash
-cd /var/www/statuspage
+cd /var/www/statusfe
 git pull
 npm install --production
 sudo systemctl restart statuspage
@@ -100,16 +110,6 @@ API key authentication supports:
 - `Authorization: Bearer <key>` header
 - `x-api-key: <key>` header
 - `?api_key=<key>` query parameter
-
-## Features
-
-- Multiple status pages
-- Components with status tracking
-- Incidents and maintenance windows
-- REST API with key-based authentication
-- Webhooks for status changes
-- User management
-- Custom CSS/HTML per page
 
 ## License
 
