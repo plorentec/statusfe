@@ -125,23 +125,80 @@
 <div class="template-card">
 <div class="template-card-header">
 <span class="template-card-name"><%= t === 'default' ? 'Default' : t === 'grid' ? 'Grid' : 'Dark' %></span>
+</div>
 <% if (t === 'default') { %>
 <div class="template-card-preview preview-default">
-<div class="preview-bar"></div>
-<div class="preview-item"><div class="preview-line"></div><div class="preview-line short"></div></div>
-<div class="preview-item"><div class="preview-line"></div><div class="preview-line short"></div></div>
-<div class="preview-item"><div class="preview-line"></div><div class="preview-line short"></div></div>
+<svg viewBox="0 0 300 180" xmlns="http://www.w3.org/2000/svg">
+<rect width="300" height="180" fill="#fff" rx="4"/>
+<rect x="16" y="12" width="120" height="14" rx="7" fill="#dcffe4"/>
+<rect x="16" y="32" width="60" height="6" rx="3" fill="#e2e8f0"/>
+<rect x="16" y="44" width="20" height="6" rx="3" fill="#dcffe4"/>
+<rect x="16" y="60" width="120" height="1" fill="#f0f0f0"/>
+<rect x="16" y="68" width="100" height="10" rx="5" fill="#e2e8f0"/>
+<rect x="16" y="84" width="20" height="10" rx="5" fill="#dcffe4"/>
+<rect x="16" y="100" width="120" height="1" fill="#f0f0f0"/>
+<rect x="16" y="108" width="100" height="10" rx="5" fill="#e2e8f0"/>
+<rect x="16" y="124" width="20" height="10" rx="5" fill="#dcffe4"/>
+<rect x="16" y="140" width="120" height="1" fill="#f0f0f0"/>
+<rect x="16" y="148" width="100" height="10" rx="5" fill="#e2e8f0"/>
+<rect x="16" y="164" width="20" height="10" rx="5" fill="#dcffe4"/>
+</svg>
 </div>
 <% } else if (t === 'grid') { %>
 <div class="template-card-preview preview-grid">
-<div class="preview-gc"><div class="preview-card-mini"></div><div class="preview-card-mini"></div></div>
-<div class="preview-gc"><div class="preview-card-mini"></div><div class="preview-card-mini"></div></div>
+<svg viewBox="0 0 300 180" xmlns="http://www.w3.org/2000/svg">
+<rect width="300" height="180" fill="#f0f2f5" rx="4"/>
+<rect x="16" y="10" width="140" height="16" rx="8" fill="#1a1a2e"/>
+<rect x="16" y="36" width="130" height="10" rx="5" fill="#fff" stroke="#e2e6ea" stroke-width="1"/>
+<rect x="16" y="36" width="130" height="4" rx="2" fill="#6366f1"/>
+<rect x="160" y="36" width="124" height="10" rx="5" fill="#fff" stroke="#e2e6ea" stroke-width="1"/>
+<rect x="160" y="36" width="124" height="4" rx="2" fill="#6366f1"/>
+<rect x="16" y="54" width="130" height="10" rx="5" fill="#fff" stroke="#e2e6ea" stroke-width="1"/>
+<rect x="16" y="54" width="130" height="4" rx="2" fill="#10b981"/>
+<rect x="160" y="54" width="124" height="10" rx="5" fill="#fff" stroke="#e2e6ea" stroke-width="1"/>
+<rect x="160" y="54" width="124" height="4" rx="2" fill="#10b981"/>
+<rect x="16" y="72" width="130" height="10" rx="5" fill="#fff" stroke="#e2e6ea" stroke-width="1"/>
+<rect x="16" y="72" width="130" height="4" rx="2" fill="#f59e0b"/>
+<rect x="160" y="72" width="124" height="10" rx="5" fill="#fff" stroke="#e2e6ea" stroke-width="1"/>
+<rect x="160" y="72" width="124" height="4" rx="2" fill="#10b981"/>
+<rect x="16" y="90" width="130" height="10" rx="5" fill="#fff" stroke="#e2e6ea" stroke-width="1"/>
+<rect x="16" y="90" width="130" height="4" rx="2" fill="#10b981"/>
+<rect x="160" y="90" width="124" height="10" rx="5" fill="#fff" stroke="#e2e6ea" stroke-width="1"/>
+<rect x="160" y="90" width="124" height="4" rx="2" fill="#ef4444"/>
+<rect x="16" y="108" width="130" height="10" rx="5" fill="#fff" stroke="#e2e6ea" stroke-width="1"/>
+<rect x="16" y="108" width="130" height="4" rx="2" fill="#10b981"/>
+<rect x="160" y="108" width="124" height="10" rx="5" fill="#fff" stroke="#e2e6ea" stroke-width="1"/>
+<rect x="160" y="108" width="124" height="4" rx="2" fill="#10b981"/>
+<rect x="16" y="126" width="130" height="10" rx="5" fill="#fff" stroke="#e2e6ea" stroke-width="1"/>
+<rect x="16" y="126" width="130" height="4" rx="2" fill="#a855f7"/>
+<rect x="160" y="126" width="124" height="10" rx="5" fill="#fff" stroke="#e2e6ea" stroke-width="1"/>
+<rect x="160" y="126" width="124" height="4" rx="2" fill="#10b981"/>
+<rect x="16" y="150" width="268" height="12" rx="6" fill="#fff" stroke="#e2e6ea" stroke-width="1"/>
+<rect x="16" y="150" width="268" height="4" rx="2" fill="#f59e0b"/>
+</svg>
 </div>
 <% } else { %>
 <div class="template-card-preview preview-dark">
-<div class="preview-dbar"></div>
-<div class="preview-ditem"><div class="preview-dline"></div><div class="preview-dot"></div></div>
-<div class="preview-ditem"><div class="preview-dline"></div><div class="preview-dot"></div></div>
+<svg viewBox="0 0 300 180" xmlns="http://www.w3.org/2000/svg">
+<rect width="300" height="180" fill="#0a0a0f" rx="4"/>
+<rect x="16" y="10" width="100" height="12" rx="6" fill="#12121a"/>
+<rect x="16" y="10" width="100" height="3" rx="1.5" fill="#6366f1"/>
+<rect x="16" y="32" width="268" height="10" rx="5" fill="rgba(34,197,94,0.3)"/>
+<rect x="16" y="48" width="268" height="22" rx="6" fill="#12121a" stroke="#1e1e2e" stroke-width="1"/>
+<circle cx="26" cy="59" r="4" fill="#22c55e"/>
+<rect x="38" y="55" width="80" height="8" rx="4" fill="rgba(255,255,255,0.2)"/>
+<rect x="16" y="76" width="268" height="22" rx="6" fill="#12121a" stroke="#1e1e2e" stroke-width="1"/>
+<circle cx="26" cy="87" r="4" fill="#22c55e"/>
+<rect x="38" y="83" width="100" height="8" rx="4" fill="rgba(255,255,255,0.2)"/>
+<rect x="16" y="104" width="268" height="22" rx="6" fill="#12121a" stroke="#1e1e2e" stroke-width="1"/>
+<circle cx="26" cy="115" r="4" fill="#eab308"/>
+<rect x="38" y="111" width="60" height="8" rx="4" fill="rgba(255,255,255,0.2)"/>
+<rect x="16" y="132" width="268" height="22" rx="6" fill="#12121a" stroke="#1e1e2e" stroke-width="1"/>
+<circle cx="26" cy="143" r="4" fill="#22c55e"/>
+<rect x="38" y="139" width="90" height="8" rx="4" fill="rgba(255,255,255,0.2)"/>
+<rect x="16" y="160" width="268" height="12" rx="4" fill="rgba(255,255,255,0.03)"/>
+<rect x="16" y="160" width="80" height="1" fill="rgba(255,255,255,0.1)"/>
+</svg>
 </div>
 <% } %>
 </div>
