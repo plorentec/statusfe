@@ -108,13 +108,13 @@
 <h3 class="doc-h2">POST /api/v1/pages <span class="doc-perm-badge perm-write">[write]</span></h3>
 <p class="doc-desc">Create a new page</p>
 <p class="doc-params-label">Body parameters:</p>
-<p class="doc-desc"><code data-curl="name">name</code> (required) — <code data-curl="slug">slug</code> (required, lowercase + hyphens only) — <code data-curl="description">description</code> — <code data-curl="status">status</code> — <code data-curl="timezone">timezone</code> — <code data-curl="logo_url">logo_url</code> — <code data-curl="custom_css">custom_css</code> — <code data-curl="custom_html">custom_html</code> — <code data-curl="is_public">is_public</code> (boolean)</p>
+<p class="doc-desc"><code data-curl="name">name</code> (required) — <code data-curl="slug">slug</code> (required, lowercase + hyphens only) — <code data-curl="description">description</code> — <code data-curl="status">status</code> — <code data-curl="template">template</code> (default/ grid/dark) — <code data-curl="timezone">timezone</code> — <code data-curl="logo_url">logo_url</code> — <code data-curl="custom_css">custom_css</code> — <code data-curl="custom_html">custom_html</code> — <code data-curl="is_public">is_public</code> (boolean)</p>
 <div class="doc-code-block">
 <button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
 <code data-curl="$ curl -X POST -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;name&quot;:&quot;My Service&quot;,&quot;slug&quot;:&quot;my-service&quot;,&quot;status&quot;:&quot;operational&quot;,&quot;is_public&quot;:1}&#39; \
+  -d &#39;{&quot;name&quot;:&quot;My Service&quot;,&quot;slug&quot;:&quot;my-service&quot;,&quot;status&quot;:&quot;operational&quot;,&quot;template&quot;:&quot;grid&quot;,&quot;is_public&quot;:1}&#39; \
   https://cachet.plorentec.com/api/v1/pages">$ curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
-  -d '{"name":"My Service","slug":"my-service","status":"operational","is_public":1}' \
+  -d '{"name":"My Service","slug":"my-service","status":"operational","template":"grid","is_public":1}' \
   https://cachet.plorentec.com/api/v1/pages</code>
 </div>
 

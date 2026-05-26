@@ -19,6 +19,11 @@ try {
   db.prepare('ALTER TABLE api_keys ADD COLUMN key TEXT').run();
 } catch(e) { /* column may already exist */ }
 
+// Migrate: add 'template' column to pages if it doesn't exist
+try {
+  db.prepare('ALTER TABLE pages ADD COLUMN template TEXT DEFAULT \'default\'').run();
+} catch(e) { /* column may already exist */ }
+
 // Regenerate keys that don't have a stored key value
 const rowsWithoutKey = db.prepare("SELECT id FROM api_keys WHERE key IS NULL").all();
 for (const row of rowsWithoutKey) {
@@ -35,6 +40,7 @@ db.exec(`
     slug TEXT UNIQUE NOT NULL,
     description TEXT DEFAULT '',
     status TEXT DEFAULT 'operational',
+    template TEXT DEFAULT 'default',
     timezone TEXT DEFAULT 'UTC',
     logo_url TEXT,
     custom_css TEXT,
@@ -166,8 +172,8 @@ db.exec(`
 const adminPage = db.prepare('SELECT id FROM pages WHERE slug = ?').get('admin');
 if (!adminPage) {
   const adminId = uuidv4();
-  db.prepare('INSERT INTO pages (id, name, slug, description, status) VALUES (?,?,?,?,?)').run(
-    adminId, 'Admin', 'admin', 'Default admin page', 'operational'
+  db.prepare('INSERT INTO pages (id, name, slug, description, status, template) VALUES (?,?,?,?,?,?)').run(
+    adminId, 'Admin', 'admin', 'Default admin page', 'operational', 'default'
   );
 
   // Default API key

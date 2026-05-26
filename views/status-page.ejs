@@ -4,10 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><%= page.name %> - System Status</title>
+<% if (page.template === 'grid') { %>
+<link rel="stylesheet" href="/css/template-grid.css">
+<% } else if (page.template === 'dark') { %>
+<link rel="stylesheet" href="/css/template-dark.css">
+<% } else { %>
 <link rel="stylesheet" href="/css/status.css">
+<% } %>
 <% if (page.custom_css) { %><style><%= page.custom_css %></style><% } %>
 </head>
-<body>
+<body class="<%= page.template === 'default' ? '' : 'template-' + page.template %>">
+
+<!-- ===== DEFAULT TEMPLATE ===== -->
+<% if (page.template === 'default') { %>
 <header>
 <div class="container">
 <div class="header-content">
@@ -24,14 +33,12 @@
 <span class="dot dot-<%= page.status %>"></span>
 <span><%= formatStatus(page.status) %></span>
 </div>
-
 <% const groups = {}; %>
 <% components.forEach(c => {
   const g = c.group_name || 'Other';
   if (!groups[g]) groups[g] = [];
   groups[g].push({ name: c.name, status: c.current_status || c.status, description: c.description });
 }); %>
-
 <% for (const [name, comps] of Object.entries(groups)) { %>
 <section class="group">
 <h2><%= name %></h2>
@@ -49,7 +56,6 @@
 <% }) %>
 </section>
 <% } %>
-
 <% if (incidents.length > 0) { %>
 <section class="incidents-section">
 <h2>Recent Incidents</h2>
@@ -68,6 +74,130 @@
 <% } %>
 </main>
 <footer><p>Powered by StatusPage</p></footer>
+
+<!-- ===== GRID TEMPLATE ===== -->
+<% } else if (page.template === 'grid') { %>
+<header>
+<div class="container">
+<div class="header-content">
+<% if (page.logo_url) { %><img src="<%= page.logo_url %>" alt="<%= page.name %>" class="logo"><% } %>
+<div>
+<h1><%= page.name %></h1>
+<p class="subtitle"><%= page.description || 'System Status' %></p>
+</div>
+</div>
+</div>
+</header>
+<div class="status-banner status-<%= page.status %>">
+<span class="dot dot-<%= page.status %>"></span>
+<span><%= formatStatus(page.status) %></span>
+</div>
+<div class="grid-container">
+<% const groups = {}; %>
+<% components.forEach(c => {
+  const g = c.group_name || 'Other';
+  if (!groups[g]) groups[g] = [];
+  groups[g].push({ name: c.name, status: c.current_status || c.status, description: c.description });
+}); %>
+<% for (const [groupName, comps] of Object.entries(groups)) { %>
+<div class="grid-group">
+<h2><%= groupName %></h2>
+<div class="card-grid">
+<% comps.forEach(c => { %>
+<div class="status-card <%= c.status %>">
+<div class="card-top">
+<span class="card-name"><%= c.name %></span>
+<span class="card-status <%= c.status %>"><%= formatStatus(c.status) %></span>
+</div>
+<p class="card-desc"><%= c.description || '' %></p>
+</div>
+<% }) %>
+</div>
+</div>
+<% } %>
+</div>
+<% if (incidents.length > 0) { %>
+<div class="incidents-section">
+<h2>Recent Incidents</h2>
+<% incidents.forEach(inc => { %>
+<div class="incident-card <%= inc.status %>">
+<div class="incident-header">
+<span class="incident-name"><%= inc.name %></span>
+<span class="card-status badge-<%= inc.status %>"><%= formatStatus(inc.status) %></span>
+</div>
+<p class="incident-date">Started: <%= inc.starts_at %></p>
+<% if (inc.resolved_at) { %><p class="incident-date">Resolved: <%= inc.resolved_at %></p><% } %>
+<p class="incident-msg"><%= inc.message.replace(/\n/g, '<br>') %></p>
+</div>
+<% }) %>
+</div>
+<% } %>
+</div>
+<footer><p>Powered by StatusPage</p></footer>
+
+<!-- ===== DARK TEMPLATE ===== -->
+<% } else { %>
+<header>
+<div class="container">
+<div class="header-content">
+<% if (page.logo_url) { %><img src="<%= page.logo_url %>" alt="<%= page.name %>" class="logo"><% } %>
+<div>
+<h1><%= page.name %></h1>
+<p class="subtitle"><%= page.description || 'System Status' %></p>
+</div>
+</div>
+</div>
+</header>
+<div class="status-banner status-<%= page.status %>">
+<span class="dot dot-<%= page.status %>"></span>
+<span><%= formatStatus(page.status) %></span>
+</div>
+<div class="dark-container">
+<% const groups = {}; %>
+<% components.forEach(c => {
+  const g = c.group_name || 'Other';
+  if (!groups[g]) groups[g] = [];
+  groups[g].push({ name: c.name, status: c.current_status || c.status, description: c.description });
+}); %>
+<% for (const [groupName, comps] of Object.entries(groups)) { %>
+<div class="dark-group">
+<h2><%= groupName %></h2>
+<% comps.forEach(c => { %>
+<div class="dark-item">
+<div class="dark-item-left">
+<span class="dot dot-<%= c.status %>"></span>
+<div>
+<div class="dark-item-name"><%= c.name %></div>
+<div class="dark-item-desc"><%= c.description || '' %></div>
+</div>
+</div>
+<div class="dark-item-right">
+<span class="dark-badge <%= c.status %>"><%= formatStatus(c.status) %></span>
+</div>
+</div>
+<% }) %>
+</div>
+<% } %>
+<% if (incidents.length > 0) { %>
+<div class="incidents-section">
+<h2>Recent Incidents</h2>
+<% incidents.forEach(inc => { %>
+<div class="dark-incident <%= inc.status %>">
+<div class="dark-incident-header">
+<span class="dark-incident-name"><%= inc.name %></span>
+<span class="dark-badge <%= inc.status %>"><%= formatStatus(inc.status) %></span>
+</div>
+<p class="dark-incident-date">Started: <%= inc.starts_at %></p>
+<% if (inc.resolved_at) { %><p class="dark-incident-date">Resolved: <%= inc.resolved_at %></p><% } %>
+<p class="dark-incident-msg"><%= inc.message.replace(/\n/g, '<br>') %></p>
+</div>
+<% }) %>
+</div>
+<% } %>
+</div>
+<footer><p>Powered by StatusPage</p></footer>
+<% } %>
+
 <script>
 setInterval(() => {
   fetch('/api/v1/status/<%= page.slug %>').then(r => r.json()).then(d => {

@@ -30,7 +30,7 @@ module.exports.pages = {
   update(id, data) {
     const fields = [];
     const params = [];
-    const allowed = ['name','slug','description','status','timezone','logo_url','custom_css','custom_html','is_public'];
+    const allowed = ['name','slug','description','status','template','timezone','logo_url','custom_css','custom_html','is_public'];
     for (const k of allowed) {
       if (data[k] !== undefined) { fields.push(k+'=?'); params.push(data[k]); }
     }

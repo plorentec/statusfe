@@ -1,0 +1,226 @@
+/* Template 2: Card Grid */
+:root {
+  --grid-bg: #f0f2f5;
+  --grid-card: #ffffff;
+  --grid-text: #1a1a2e;
+  --grid-muted: #6c757d;
+  --grid-border: #e2e6ea;
+  --grid-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  --grid-hover: 0 4px 20px rgba(0,0,0,0.12);
+  --grid-radius: 16px;
+  --grid-operational: #10b981;
+  --grid-degraded: #f59e0b;
+  --grid-partial: #f97316;
+  --grid-major: #ef4444;
+  --grid-maintenance: #8b5cf6;
+}
+
+body.template-grid {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--grid-bg);
+  color: var(--grid-text);
+  line-height: 1.5;
+}
+
+.template-grid header {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  padding: 32px 0;
+  margin-bottom: 0;
+}
+
+.template-grid .header-content {
+  align-items: center;
+  gap: 20px;
+}
+
+.template-grid .logo {
+  height: 48px;
+  border-radius: 8px;
+}
+
+.template-grid h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.template-grid .subtitle {
+  color: rgba(255,255,255,0.7);
+  font-size: 15px;
+}
+
+.template-grid .status-banner {
+  margin: 24px auto 0;
+  max-width: 960px;
+  padding: 14px 24px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.template-grid .status-banner.operational { background: rgba(16,185,129,0.15); color: #34d399; }
+.template-grid .status-banner.under_maintenance { background: rgba(139,92,246,0.15); color: #a78bfa; }
+.template-grid .status-banner.degraded_performance { background: rgba(245,158,11,0.15); color: #fbbf24; }
+.template-grid .status-banner.partial_outage { background: rgba(249,115,22,0.15); color: #fb923c; }
+.template-grid .status-banner.major_outage { background: rgba(239,68,68,0.15); color: #f87171; }
+
+.template-grid .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.template-grid .dot-operational { background: var(--grid-operational); }
+.template-grid .dot-under_maintenance { background: var(--grid-maintenance); }
+.template-grid .dot-degraded_performance { background: var(--grid-degraded); }
+.template-grid .dot-partial_outage { background: var(--grid-partial); }
+.template-grid .dot-major_outage { background: var(--grid-major); }
+
+.template-grid .grid-container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 20px;
+}
+
+.template-grid .grid-group {
+  margin-bottom: 32px;
+}
+
+.template-grid .grid-group h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--grid-muted);
+  margin-bottom: 16px;
+  font-weight: 600;
+}
+
+.template-grid .card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.template-grid .status-card {
+  background: var(--grid-card);
+  border-radius: var(--grid-radius);
+  padding: 20px;
+  box-shadow: var(--grid-shadow);
+  border: 1px solid var(--grid-border);
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.template-grid .status-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+}
+
+.template-grid .status-card.operational::before { background: var(--grid-operational); }
+.template-grid .status-card.degraded_performance::before { background: var(--grid-degraded); }
+.template-grid .status-card.partial_outage::before { background: var(--grid-partial); }
+.template-grid .status-card.major_outage::before { background: var(--grid-major); }
+.template-grid .status-card.under_maintenance::before { background: var(--grid-maintenance); }
+
+.template-grid .status-card:hover {
+  box-shadow: var(--grid-hover);
+  transform: translateY(-2px);
+}
+
+.template-grid .card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.template-grid .card-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--grid-text);
+}
+
+.template-grid .card-status {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.template-grid .card-status.operational { background: #d1fae5; color: #065f46; }
+.template-grid .card-status.degraded_performance { background: #fef3c7; color: #92400e; }
+.template-grid .card-status.partial_outage { background: #ffedd5; color: #9a3412; }
+.template-grid .card-status.major_outage { background: #fee2e2; color: #991b1b; }
+.template-grid .card-status.under_maintenance { background: #ede9fe; color: #5b21b6; }
+
+.template-grid .card-desc {
+  font-size: 13px;
+  color: var(--grid-muted);
+  margin-top: 4px;
+}
+
+.template-grid .incidents-section {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 20px 32px;
+}
+
+.template-grid .incidents-section h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--grid-muted);
+  margin-bottom: 16px;
+  font-weight: 600;
+}
+
+.template-grid .incident-card {
+  background: var(--grid-card);
+  border-radius: var(--grid-radius);
+  padding: 20px;
+  margin-bottom: 12px;
+  box-shadow: var(--grid-shadow);
+  border: 1px solid var(--grid-border);
+  border-left: 4px solid var(--grid-border);
+}
+
+.template-grid .incident-card.investigating { border-left-color: var(--grid-major); }
+.template-grid .incident-card.identified { border-left-color: var(--grid-partial); }
+.template-grid .incident-card.monitoring { border-left-color: var(--grid-degraded); }
+.template-grid .incident-card.resolved { border-left-color: var(--grid-operational); }
+
+.template-grid .incident-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.template-grid .incident-name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.template-grid .incident-date {
+  font-size: 12px;
+  color: var(--grid-muted);
+}
+
+.template-grid .incident-msg {
+  font-size: 14px;
+  color: var(--grid-text);
+  margin-top: 8px;
+  line-height: 1.6;
+}
+
+.template-grid footer {
+  text-align: center;
+  padding: 24px 0;
+  color: var(--grid-muted);
+  font-size: 13px;
+}

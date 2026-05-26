@@ -114,6 +114,14 @@
 <option value="under_maintenance" <%= page.status === 'under_maintenance' ? 'selected' : '' %>>Under Maintenance</option>
 </select>
 </div>
+<div class="form-group">
+<label for="template">Template</label>
+<select id="template" name="template">
+<option value="default" <%= (page.template || 'default') === 'default' ? 'selected' : '' %>>Default — Clean List</option>
+<option value="grid" <%= page.template === 'grid' ? 'selected' : '' %>>Grid — Card Boxes</option>
+<option value="dark" <%= page.template === 'dark' ? 'selected' : '' %>>Dark — Terminal Style</option>
+</select>
+</div>
 <div class="form-group checkbox-group">
 <label>
 <input type="checkbox" id="is_public" name="is_public" <%= page.is_public ? 'checked' : '' %>>
