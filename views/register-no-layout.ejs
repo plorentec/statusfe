@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Register - StatusPage</title>
+<link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+<div class="auth-container">
+<div class="auth-card">
+<div class="auth-header">
+<h1>StatusPage</h1>
+<p>Create your account</p>
+</div>
+<% if (message) { %>
+<div class="flash flash-<%= messageType %>"><%= message %></div>
+<% } %>
+<form action="/auth/register" method="post" class="auth-form">
+<div class="form-group">
+<label for="name">Full Name</label>
+<input type="text" id="name" name="name" required autofocus placeholder="John Doe">
+</div>
+<div class="form-group">
+<label for="email">Email</label>
+<input type="email" id="email" name="email" required placeholder="you@example.com">
+</div>
+<div class="form-group">
+<label for="password">Password</label>
+<input type="password" id="password" name="password" required minlength="6" placeholder="At least 6 characters">
+</div>
+<button type="submit" class="btn btn-primary btn-full">Create Account</button>
+</form>
+<p class="auth-footer"><a href="/login">Already have an account? Sign in</a></p>
+</div>
+</div>
+</body>
+</html>

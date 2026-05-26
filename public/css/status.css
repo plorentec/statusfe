@@ -1,0 +1,52 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --operational: #006b39; --maintenance: #f0ad4e; --degraded: #f0ad4e;
+  --partial: #f0ad85; --major: #d9534f;
+  --bg: #f9f9f9; --white: #fff; --text: #1a1a1a; --light: #6b6b6b; --border: #e6e6e6;
+}
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+.container { max-width: 960px; margin: 0 auto; padding: 0 20px; }
+header { background: var(--white); border-bottom: 1px solid var(--border); padding: 20px 0; }
+.header-content { display: flex; align-items: center; gap: 16px; }
+.logo { height: 40px; }
+h1 { font-size: 24px; }
+.subtitle { color: var(--light); font-size: 14px; }
+.status-banner { display: flex; align-items: center; gap: 10px; padding: 16px 24px; margin: 24px 0; border-radius: 8px; font-weight: 500; font-size: 16px; }
+.status-banner.operational { background: #dcffe4; color: var(--operational); }
+.status-banner.under_maintenance { background: #fff3cd; color: #856404; }
+.status-banner.degraded_performance { background: #fff3cd; color: #856404; }
+.status-banner.partial_outage { background: #ffe5cc; color: #9c4f00; }
+.status-banner.major_outage { background: #ffcccc; color: #cc0000; }
+.dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.dot-operational { background: var(--operational); }
+.dot-under_maintenance { background: var(--maintenance); }
+.dot-degraded_performance { background: var(--degraded); }
+.dot-partial_outage { background: var(--partial); }
+.dot-major_outage { background: var(--major); }
+.group { background: var(--white); border-radius: 8px; padding: 20px 24px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.group h2 { font-size: 16px; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.item:last-child { border-bottom: none; }
+.item-header { display: flex; align-items: center; gap: 8px; }
+.item-header h3 { font-size: 15px; }
+.desc { color: var(--light); font-size: 13px; margin-top: 2px; }
+.badge { font-size: 13px; font-weight: 500; padding: 4px 10px; border-radius: 20px; }
+.badge-operational { background: #dcffe4; color: var(--operational); }
+.badge-under_maintenance { background: #fff3cd; color: #856404; }
+.badge-degraded_performance { background: #fff3cd; color: #856404; }
+.badge-partial_outage { background: #ffe5cc; color: #9c4f00; }
+.badge-major_outage { background: #ffcccc; color: #cc0000; }
+.incidents-section { margin-top: 24px; }
+.incidents-section h2 { font-size: 18px; margin-bottom: 16px; }
+.card { background: var(--white); border-radius: 8px; padding: 20px 24px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-left: 4px solid var(--border); }
+.card.investigating { border-left-color: var(--major); }
+.card.identified { border-left-color: var(--partial); }
+.card.monitoring { border-left-color: var(--maintenance); }
+.card.resolved { border-left-color: var(--operational); }
+.card-header { display: flex; justify-content: space-between; margin-bottom: 8px; }
+.card-header h3 { font-size: 16px; }
+.card-date { font-size: 13px; color: var(--light); margin-bottom: 8px; }
+.card-msg { font-size: 14px; margin-top: 8px; }
+.tags { margin-top: 12px; display: flex; gap: 6px; flex-wrap: wrap; }
+.tag { font-size: 12px; background: var(--bg); padding: 2px 8px; border-radius: 4px; color: var(--light); }
+footer { text-align: center; padding: 32px 0; color: var(--light); font-size: 13px; }

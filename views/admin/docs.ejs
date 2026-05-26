@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title><%= title %> - StatusPage Admin</title>
+<link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+<div class="admin-layout">
+<aside class="sidebar">
+<div class="sidebar-header">
+<h2>StatusPage</h2>
+<span class="sidebar-subtitle">Admin Panel</span>
+</div>
+<nav class="sidebar-nav">
+<a href="/admin"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</a>
+<a href="/admin/pages"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>Pages</a>
+<a href="/admin/components"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42 1.42M18.36 5.64l1.42 1.42"/></svg>Components</a>
+<a href="/admin/incidents"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Incidents</a>
+<a href="/admin/maintenance"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Maintenance</a>
+<a href="/admin/api-keys"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>API Keys</a>
+<a href="/admin/docs" class="<%= title === 'API Docs' ? 'active' : '' %>"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>API Docs</a>
+<a href="/admin/users"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>Users</a>
+</nav>
+<div class="sidebar-footer">
+<div class="user-info">
+<span class="user-name"><%= user.name %></span>
+<span class="user-role"><%= user.role %></span>
+</div>
+<form action="/auth/logout" method="post"><button type="submit" class="btn-logout">Logout</button></form>
+</div>
+</aside>
+<main class="admin-main">
+<div class="admin-header"><h1><%= title %></h1></div>
+
+<!-- API Key Selector (admin only) -->
+<% if (user.role === 'admin' && keys && keys.length > 0) { %>
+<div class="doc-key-selector">
+<label>🔑 API Key (selecciona una para los ejemplos):</label>
+<select id="apiKeySelect" onchange="onKeyChange()">
+<option value="__custom__">— Custom key —</option>
+<% keys.forEach(function(k) { %>
+<option value="<%= k.key %>"><%= k.name %> (<%= k.key_prefix %>...)</option>
+<% }); %>
+</select>
+<input type="text" id="customApiKey" placeholder="Pega tu API key aquí..." style="display:none;" oninput="onCustomKeyChange()">
+<div class="doc-key-hint">El curl copiado incluirá esta key automáticamente.</div>
+</div>
+<% } %>
+
+<!-- Tab Navigation -->
+<div class="doc-tabs">
+<button class="doc-tab-btn active" onclick="showTab('auth', this)">Authentication</button>
+<button class="doc-tab-btn" onclick="showTab('info', this)">Info</button>
+<button class="doc-tab-btn" onclick="showTab('pages', this)">Pages</button>
+<button class="doc-tab-btn" onclick="showTab('components', this)">Components</button>
+<button class="doc-tab-btn" onclick="showTab('incidents', this)">Incidents</button>
+<button class="doc-tab-btn" onclick="showTab('apikeys', this)">API Keys</button>
+<button class="doc-tab-btn" onclick="showTab('webhooks', this)">Webhooks</button>
+<button class="doc-tab-btn" onclick="showTab('settings', this)">Settings</button>
+</div>
+
+<!-- AUTH TAB -->
+<div id="tab-auth" class="doc-tab-content active">
+<h2 class="doc-section-title">Authentication</h2>
+<p class="doc-desc">Include your API key in the <code data-curl="Authorization">Authorization</code> header. Admin permissions imply all others.</p>
+<div class="doc-code-block">
+<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; https://cachet.plorentec.com/api/v1/info">$ curl -H "Authorization: Bearer $API_KEY" https://cachet.plorentec.com/api/v1/info</code>
+</div>
+<p class="doc-desc">Alternative auth methods:</p>
+<p class="doc-desc">Header: <code data-curl="x-api-key: &lt;key&gt;">x-api-key: &lt;key&gt;</code></p>
+<p class="doc-desc">Query param: <code data-curl="?api_key=&lt;key&gt;">?api_key=&lt;key&gt;</code></p>
+</div>
+
+<!-- INFO TAB -->
+<div id="tab-info" class="doc-tab-content">
+<h2 class="doc-section-title">Info</h2>
+
+<h3 class="doc-h1">GET /api/v1/info</h3>
+<p class="doc-desc">Get authenticated user info and permissions</p>
+<p class="doc-desc">Permissions: <code data-curl="read">read</code>, <code data-curl="write">write</code>, <code data-curl="admin">admin</code> (admin implies all)</p>
+<div class="doc-code-block">
+<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; https://cachet.plorentec.com/api/v1/info">$ curl -H "Authorization: Bearer $API_KEY" https://cachet.plorentec.com/api/v1/info</code>
+</div>
+</div>
+
+<!-- PAGES TAB -->
+<div id="tab-pages" class="doc-tab-content">
+<h2 class="doc-section-title">Pages <span class="doc-auth-badge">API Key required</span></h2>
+
+<h3 class="doc-h2">GET /api/v1/pages</h3>
+<p class="doc-desc">List all pages (including private)</p>
+<div class="doc-code-block">
+<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; https://cachet.plorentec.com/api/v1/pages">$ curl -H "Authorization: Bearer $API_KEY" https://cachet.plorentec.com/api/v1/pages</code>
+</div>
+
+<h3 class="doc-h2">GET /api/v1/pages/:id</h3>
+<p class="doc-desc">Get page by ID or slug</p>
+<div class="doc-code-block">
+<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; https://cachet.plorentec.com/api/v1/pages/admin">$ curl -H "Authorization: Bearer $API_KEY" https://cachet.plorentec.com/api/v1/pages/admin</code>
+</div>
+
+<h3 class="doc-h2">POST /api/v1/pages <span class="doc-perm-badge perm-write">[write]</span></h3>
+<p class="doc-desc">Create a new page</p>
+<p class="doc-params-label">Body parameters:</p>
+<p class="doc-desc"><code data-curl="name">name</code> (required) — <code data-curl="slug">slug</code> (required, lowercase + hyphens only) — <code data-curl="description">description</code> — <code data-curl="status">status</code> — <code data-curl="timezone">timezone</code> — <code data-curl="logo_url">logo_url</code> — <code data-curl="custom_css">custom_css</code> — <code data-curl="custom_html">custom_html</code> — <code data-curl="is_public">is_public</code> (boolean)</p>
+<div class="doc-code-block">
+<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<code data-curl="$ curl -X POST -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; \
+  -d &#39;{&quot;name&quot;:&quot;My Service&quot;,&quot;slug&quot;:&quot;my-service&quot;,&quot;status&quot;:&quot;operational&quot;,&quot;is_public&quot;:1}&#39; \
+  https://cachet.plorentec.com/api/v1/pages">$ curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
+  -d '{"name":"My Service","slug":"my-service","status":"operational","is_public":1}' \
+  https://cachet.plorentec.com/api/v1/pages</code>
+</div>
+
+<h3 class="doc-h2">PUT /api/v1/pages/:id <span class="doc-perm-badge perm-write">[write]</span></h3>
+<p class="doc-desc">Update a page — any combination of the body parameters above</p>
+<div class="doc-code-block">
+<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<code data-curl="$ curl -X PUT -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; \
+  -d &#39;{&quot;status&quot;:&quot;degraded_performance&quot;}&#39; \
+  https://cachet.plorentec.com/api/v1/pages/admin">$ curl -X PUT -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
+  -d '{"status":"degraded_performance"}' \
+  https://cachet.plorentec.com/api/v1/pages/admin</code>
+</div>
+
+<h3 class="doc-h2">DELETE /api/v1/pages/:id <span class="doc-perm-badge perm-admin">[admin]</span></h3>
+<p class="doc-desc">Delete a page</p>
+<div class="doc-code-block">
+<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<code data-curl="$ curl -X DELETE -H &quot;Authorization: Bearer $API_KEY&quot; https://cachet.plorentec.com/api/v1/pages/admin">$ curl -X DELETE -H "Authorization: Bearer $API_KEY" https://cachet.plorentec.com/api/v1/pages/admin</code>
+</div>
+</div>
+
+<!-- COMPONENTS TAB -->
+<div id="tab-components" class="doc-tab-content">
+<h2 class="doc-section-title">Components <span class="doc-auth-badge">API Key required</span></h2>
+
+<h3 class="doc-h2">GET /api/v1/components</h3>
+<p class="doc-desc">List components. Query filters: <code data-curl="?status=">?status=</code> <code data-curl="?group=">?group=</code></p>
+<div class="doc-code-block">
+<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; https://cachet.plorentec.com/api/v1/components">$ curl -H "Authorization: Bearer $API_KEY" https://cachet.plorentec.com/api/v1/components</code>
+</div>
+
+<h3 class="doc-h2">GET /api/v1/components/:id</h3>
+<p class="doc-desc">Get component with pages assigned</p>
+<div class="doc-code-block">
+<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; https://cachet.plorentec.com/api/v1/components/UUID">$ curl -H "Authorization: Bearer $API_KEY" https://cachet.plorentec.com/api/v1/components/UUID</code>
+</div>
+
+<h3 class="doc-h2">POST /api/v1/components <span class="doc-perm-badge perm-write">[write]</span></h3>
+<p class="doc-desc">Create component</p>
+<p class="doc-params-label">Body parameters:</p>
+<p class="doc-desc"><code data-curl="name">name</code> (required) — <code data-curl="description">description</code> — <code data-curl="status">status</code> — <code data-curl="group_name">group_name</code> — <code data-curl="position">position</code></p>
+<div class="doc-code-block">
+<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<code data-curl="$ curl -X POST -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; \
+  -d &#39;{&quot;name&quot;:&quot;CDN&quot;,&quot;group_name&quot;:&quot;Infrastructure&quot;,&quot;status&quot;:&quot;operational&quot;}&#39; \
+  https://cachet.plorentec.com/api/v1/components">$ curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
+  -d '{"name":"CDN","group_name":"Infrastructure","status":"operational"}' \
+  https://cachet.plorentec.com/api/v1/components</code>
+</div>
+
+<h3 class="doc-h2">PUT /api/v1/components/:id <span class="doc-perm-badge perm-write">[write]</span></h3>
+<p class="doc-desc">Update component — any combination of the body parameters above</p>
+<div class="doc-code-block">
+<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<code data-curl="$ curl -X PUT -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; \
+  -d &#39;{&quot;status&quot;:&quot;partial_outage&quot;}&#39; \
+  https://cachet.plorentec.com/api/v1/components/UUID">$ curl -X PUT -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
+  -d '{"status":"partial_outage"}' \
+  https://cachet.plorentec.com/api/v1/components/UUID</code>
+</div>
+
+<h3 class="doc-h2">DELETE /api/v1/components/:id <span class="doc-perm-badge perm-admin">[admin]</span></h3>
+<div class="doc-code-block">
+<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<code data-curl="$ curl -X DELETE -H &quot;Authorization: Bearer $API_KEY&quot; https://cachet.plorentec.com/api/v1/components/UUID">$ curl -X DELETE -H "Authorization: Bearer $API_KEY" https://cachet.plorentec.com/api/v1/components/UUID</code>
+</div>
+
+<h3 class="doc-h2">PUT /api/v1/components/:id/status <span class="doc-perm-badge perm-write">[write]</span></h3>
+<p class="doc-desc">Update component status</p>
+<p class="doc-params-label">Body parameters:</p>
+<p class="doc-desc"><code data-curl="status">status</code> (required) — <code data-curl="page_id">page_id</code> (optional, can be UUID or slug)</p>
+<p class="doc-desc">Valid statuses: <code data-curl="operational">operational</code>, <code data-curl="degraded_performance">degraded_performance</code>, <code data-curl="partial_outage">partial_outage</code>, <code data-curl="major_outage">major_outage</code>, <code data-curl="under_maintenance">under_maintenance</code></p>
+<div class="doc-code-block">
+<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<code data-curl="$ curl -X PUT -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; \
+  -d &#39;{&quot;status&quot;:&quot;major_outage&quot;,&quot;page_id&quot;:&quot;UUID&quot;}&#39; \
+  https://cachet.plorentec.com/api/v1/components/UUID/status">$ curl -X PUT -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
+  -d '{"status":"major_outage","page_id":"UUID"}' \
+  https://cachet.plorentec.com/api/v1/components/UUID/status</code>
+</div>
+
+<h3 class="doc-h2">GET /api/v1/components/:id/history</h3>
+<p class="doc-desc">Status history for a component</p>
+<p class="doc-params-label">Query filters:</p>
+<p class="doc-desc"><code data-curl="?page_id=UUID">?page_id=UUID</code> — <code data-curl="?limit=50">?limit=50</code></p>
+<div class="doc-code-block">
+<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; https://cachet.plorentec.com/api/v1/components/UUID/history">$ curl -H "Authorization: Bearer $API_KEY" https://cachet.plorentec.com/api/v1/components/UUID/history</code>
+</div>
+
+<h3 class="doc-h2">POST /api/v1/pages/:pageId/components/:componentId <span class="doc-perm-badge perm-write">[write]</span></h3>
+<p class="doc-desc">Assign a component to a page</p>
+<p class="doc-params-label">Body parameters:</p>
+<p class="doc-desc"><code data-curl="position">position</code> (integer)</p>
+<div class="doc-code-block">
+<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<code data-curl="$ curl -X POST -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; \
+  -d &#39;{&quot;position&quot;:1}&#39; \
+  https://cachet.plorentec.com/api/v1/pages/UUID/components/UUID">$ curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
+  -d '{"position":1}' \
+  https://cachet.plorentec.com/api/v1/pages/UUID/components/UUID</code>
+</div>
+
+<h3 class="doc-h2">DELETE /api/v1/pages/:pageId/components/:componentId <span class="doc-perm-badge perm-write">[write]</span></h3>
+<div class="doc-code-block">
+<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<code data-curl="$ curl -X DELETE -H &quot;Authorization: Bearer $API_KEY&quot; https://cachet.plorentec.com/api/v1/pages/UUID/components/UUID">$ curl -X DELETE -H "Authorization: Bearer $API_KEY" https://cachet.plorentec.com/api/v1/pages/UUID/components/UUID</code>
+</div>
+</div>
+
+<!-- INCIDENTS TAB -->
+<div id="tab-incidents" class="doc-tab-content">
+<h2 class="doc-section-title">Incidents <span class="doc-auth-badge">API Key required</span></h2>
+
+<h3 class="doc-h2">GET /api/v1/incidents</h3>
+<p class="doc-desc">List visible incidents</p>
+<p class="doc-params-label">Query filters:</p>
+<p class="doc-desc"><code data-curl="?page_id=UUID">?page_id=UUID</code> — <code data-curl="?status=">?status=</code> — <code data-curl="?limit=5">?limit=5</code></p>
+<div class="doc-code-block">
+<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; https://cachet.plorentec.com/api/v1/incidents">$ curl -H "Authorization: Bearer $API_KEY" https://cachet.plorentec.com/api/v1/incidents</code>
+</div>
+
+<h3 class="doc-h2">GET /api/v1/incidents/:id</h3>
+<p class="doc-desc">Get incident by ID</p>
+<div class="doc-code-block">
+<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; https://cachet.plorentec.com/api/v1/incidents/UUID">$ curl -H "Authorization: Bearer $API_KEY" https://cachet.plorentec.com/api/v1/incidents/UUID</code>
+</div>
+
+<h3 class="doc-h2">POST /api/v1/incidents <span class="doc-perm-badge perm-write">[write]</span></h3>
+<p class="doc-desc">Create incident</p>
+<p class="doc-params-label">Body parameters:</p>
+<p class="doc-desc"><code data-curl="page_id">page_id</code> (required) — <code data-curl="name">name</code> (required) — <code data-curl="message">message</code> (required) — <code data-curl="status">status</code> — <code data-curl="impact">impact</code> — <code data-curl="starts_at">starts_at</code> — <code data-curl="resolved_at">resolved_at</code> — <code data-curl="visible">visible</code></p>
+<p class="doc-desc">Incident statuses: <code data-curl="investigating">investigating</code>, <code data-curl="identified">identified</code>, <code data-curl="monitoring">monitoring</code>, <code data-curl="resolved">resolved</code></p>
+<div class="doc-code-block">
+<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<code data-curl="$ curl -X POST -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; \
+  -d &#39;{&quot;page_id&quot;:&quot;UUID&quot;,&quot;name&quot;:&quot;API Outage&quot;,&quot;status&quot;:&quot;investigating&quot;,&quot;impact&quot;:&quot;critical&quot;,&quot;message&quot;:&quot;Investigating API issues&quot;}&#39; \
+  https://cachet.plorentec.com/api/v1/incidents">$ curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
+  -d '{"page_id":"UUID","name":"API Outage","status":"investigating","impact":"critical","message":"Investigating API issues"}' \
+  https://cachet.plorentec.com/api/v1/incidents</code>
+</div>
+
+<h3 class="doc-h2">PUT /api/v1/incidents/:id <span class="doc-perm-badge perm-write">[write]</span></h3>
+<p class="doc-desc">Update incident — any combination of the body parameters above</p>
+<div class="doc-code-block">
+<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<code data-curl="$ curl -X PUT -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; \
+  -d &#39;{&quot;status&quot;:&quot;monitoring&quot;}&#39; \
+  https://cachet.plorentec.com/api/v1/incidents/UUID">$ curl -X PUT -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
+  -d '{"status":"monitoring"}' \
+  https://cachet.plorentec.com/api/v1/incidents/UUID</code>
+</div>
+
+<h3 class="doc-h2">DELETE /api/v1/incidents/:id <span class="doc-perm-badge perm-admin">[admin]</span></h3>
+<div class="doc-code-block">
+<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<code data-curl="$ curl -X DELETE -H &quot;Authorization: Bearer $API_KEY&quot; https://cachet.plorentec.com/api/v1/incidents/UUID">$ curl -X DELETE -H "Authorization: Bearer $API_KEY" https://cachet.plorentec.com/api/v1/incidents/UUID</code>
+</div>
+</div>
+
+<!-- API KEYS TAB -->
+<div id="tab-apikeys" class="doc-tab-content">
+<h2 class="doc-section-title">API Keys <span class="doc-auth-badge">API Key required</span></h2>
+
+<h3 class="doc-h2">GET /api/v1/api-keys <span class="doc-perm-badge perm-admin">[admin]</span></h3>
+<div class="doc-code-block">
+<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; https://cachet.plorentec.com/api/v1/api-keys">$ curl -H "Authorization: Bearer $API_KEY" https://cachet.plorentec.com/api/v1/api-keys</code>
+</div>
+
+<h3 class="doc-h2">POST /api/v1/api-keys <span class="doc-perm-badge perm-admin">[admin]</span></h3>
+<p class="doc-desc">Create API key</p>
+<p class="doc-params-label">Body parameters:</p>
+<p class="doc-desc"><code data-curl="name">name</code> (required) — <code data-curl="permissions">permissions</code> — <code data-curl="page_id">page_id</code> — <code data-curl="rate_limit">rate_limit</code> — <code data-curl="expires_at">expires_at</code></p>
+<div class="doc-code-block">
+<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<code data-curl="$ curl -X POST -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; \
+  -d &#39;{&quot;name&quot;:&quot;Bot&quot;,&quot;permissions&quot;:[&quot;read&quot;,&quot;write&quot;]}&#39; \
+  https://cachet.plorentec.com/api/v1/api-keys">$ curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
+  -d '{"name":"Bot","permissions":["read","write"]}' \
+  https://cachet.plorentec.com/api/v1/api-keys</code>
+</div>
+
+<h3 class="doc-h2">DELETE /api/v1/api-keys/:id <span class="doc-perm-badge perm-admin">[admin]</span></h3>
+<div class="doc-code-block">
+<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<code data-curl="$ curl -X DELETE -H &quot;Authorization: Bearer $API_KEY&quot; https://cachet.plorentec.com/api/v1/api-keys/UUID">$ curl -X DELETE -H "Authorization: Bearer $API_KEY" https://cachet.plorentec.com/api/v1/api-keys/UUID</code>
+</div>
+</div>
+
+<!-- WEBHOOKS TAB -->
+<div id="tab-webhooks" class="doc-tab-content">
+<h2 class="doc-section-title">Webhooks <span class="doc-auth-badge">API Key required</span></h2>
+
+<h3 class="doc-h2">GET /api/v1/pages/:pageId/webhooks</h3>
+<p class="doc-desc">List webhooks for a page</p>
+<div class="doc-code-block">
+<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; https://cachet.plorentec.com/api/v1/pages/UUID/webhooks">$ curl -H "Authorization: Bearer $API_KEY" https://cachet.plorentec.com/api/v1/pages/UUID/webhooks</code>
+</div>
+
+<h3 class="doc-h2">POST /api/v1/pages/:pageId/webhooks <span class="doc-perm-badge perm-write">[write]</span></h3>
+<p class="doc-desc">Create webhook</p>
+<p class="doc-params-label">Body parameters:</p>
+<p class="doc-desc"><code data-curl="url">url</code> (required) — <code data-curl="events">events</code> — <code data-curl="secret">secret</code></p>
+<p class="doc-desc">Events: <code data-curl="status.updated">status.updated</code>, <code data-curl="incident.created">incident.created</code>, <code data-curl="incident.updated">incident.updated</code>, <code data-curl="incident.deleted">incident.deleted</code>, <code data-curl="component.assigned">component.assigned</code></p>
+<div class="doc-code-block">
+<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<code data-curl="$ curl -X POST -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; \
+  -d &#39;{&quot;url&quot;:&quot;https://hooks.example.com/status&quot;,&quot;events&quot;:[&quot;status.updated&quot;,&quot;incident.created&quot;],&quot;secret&quot;:&quot;mysecret&quot;}&#39; \
+  https://cachet.plorentec.com/api/v1/pages/UUID/webhooks">$ curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
+  -d '{"url":"https://hooks.example.com/status","events":["status.updated","incident.created"],"secret":"mysecret"}' \
+  https://cachet.plorentec.com/api/v1/pages/UUID/webhooks</code>
+</div>
+
+<h3 class="doc-h2">PUT /api/v1/webhooks/:id <span class="doc-perm-badge perm-write">[write]</span></h3>
+<p class="doc-desc">Update webhook</p>
+<p class="doc-params-label">Body parameters:</p>
+<p class="doc-desc"><code data-curl="url">url</code> — <code data-curl="events">events</code> — <code data-curl="is_active">is_active</code> — <code data-curl="secret">secret</code></p>
+<div class="doc-code-block">
+<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<code data-curl="$ curl -X PUT -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; \
+  -d &#39;{&quot;is_active&quot;:0}&#39; \
+  https://cachet.plorentec.com/api/v1/webhooks/UUID">$ curl -X PUT -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
+  -d '{"is_active":0}' \
+  https://cachet.plorentec.com/api/v1/webhooks/UUID</code>
+</div>
+
+<h3 class="doc-h2">DELETE /api/v1/webhooks/:id <span class="doc-perm-badge perm-admin">[admin]</span></h3>
+<div class="doc-code-block">
+<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<code data-curl="$ curl -X DELETE -H &quot;Authorization: Bearer $API_KEY&quot; https://cachet.plorentec.com/api/v1/webhooks/UUID">$ curl -X DELETE -H "Authorization: Bearer $API_KEY" https://cachet.plorentec.com/api/v1/webhooks/UUID</code>
+</div>
+</div>
+
+<!-- SETTINGS TAB -->
+<div id="tab-settings" class="doc-tab-content">
+<h2 class="doc-section-title">Settings <span class="doc-auth-badge">API Key required</span></h2>
+
+<h3 class="doc-h2">GET /api/v1/settings <span class="doc-perm-badge perm-admin">[admin]</span></h3>
+<div class="doc-code-block">
+<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; https://cachet.plorentec.com/api/v1/settings">$ curl -H "Authorization: Bearer $API_KEY" https://cachet.plorentec.com/api/v1/settings</code>
+</div>
+</div>
+
+</main>
+</div>
+<script src="/js/admin.js"></script>
+<script>
+const BASE_URL = 'https://cachet.plorentec.com';
+let currentKey = '';
+
+function showTab(tabName, btn) {
+  document.querySelectorAll('.doc-tab-content').forEach(function(el) { el.classList.remove('active'); });
+  document.querySelectorAll('.doc-tab-btn').forEach(function(el) { el.classList.remove('active'); });
+  document.getElementById('tab-' + tabName).classList.add('active');
+  if (btn) btn.classList.add('active');
+}
+
+function onKeyChange() {
+  var sel = document.getElementById('apiKeySelect');
+  var customInput = document.getElementById('customApiKey');
+  if (sel.value === '__custom__') {
+    customInput.style.display = 'block';
+    customInput.focus();
+  } else {
+    customInput.style.display = 'none';
+    currentKey = sel.value;
+    refreshDisplay();
+  }
+}
+
+function initApiKey() {
+  var sel = document.getElementById('apiKeySelect');
+  var customInput = document.getElementById('customApiKey');
+  <% if (keys && keys.length > 0) { %>
+  sel.selectedIndex = 1;
+  currentKey = sel.value;
+  refreshDisplay();
+  <% } else { %>
+  customInput.style.display = 'block';
+  <% } %>
+}
+
+function onCustomKeyChange() {
+  currentKey = document.getElementById('customApiKey').value.trim();
+  refreshDisplay();
+}
+
+function refreshDisplay() {
+  document.querySelectorAll('.doc-code-block code').forEach(function(el) {
+    var original = el.getAttribute('data-curl') || '';
+    var ta = document.createElement('textarea');
+    ta.innerHTML = original;
+    var decoded = ta.value;
+    if (currentKey) {
+      el.textContent = decoded.replace(/\$API_KEY/g, currentKey);
+    } else {
+      el.textContent = decoded;
+    }
+  });
+}
+
+function copyCurl(btn) {
+  var block = btn.parentElement;
+  var codeEl = block.querySelector('code');
+  var text = codeEl ? codeEl.textContent.trim() : '';
+
+  if (!text) {
+    showToast('Nothing to copy', 'error');
+    return;
+  }
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function() {
+      showToast('Copied to clipboard!', 'success');
+    }).catch(function() {
+      fallbackCopy(text);
+    });
+  } else {
+    fallbackCopy(text);
+  }
+}
+
+function fallbackCopy(text) {
+  var textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  try {
+    document.execCommand('copy');
+    showToast('Copied to clipboard!', 'success');
+  } catch (e) {
+    showToast('Failed to copy', 'error');
+  }
+  document.body.removeChild(textarea);
+}
+
+window.addEventListener('DOMContentLoaded', initApiKey);
+</script>
+</body>
+</html>
