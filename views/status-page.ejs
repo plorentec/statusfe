@@ -211,6 +211,31 @@ setInterval(() => {
 }, 60000);
 function formatStatus(s) { return {operational:'Operational',under_maintenance:'Under Maintenance',degraded_performance:'Degraded Performance',partial_outage:'Partial Outage',major_outage:'Major Outage',investigating:'Investigating',identified:'Identified',monitoring:'Monitoring',resolved:'Resolved'}[s] || s; }
 </script>
+<button class="status-theme-toggle" onclick="toggleStatusTheme()" title="Toggle dark/light mode">
+<span id="statusThemeIcon">🌙</span>
+</button>
+<script>
+(function() {
+  const saved = localStorage.getItem('statuspage-status-theme');
+  if (saved === 'dark') {
+    document.body.classList.add('status-dark');
+    const icon = document.getElementById('statusThemeIcon');
+    if (icon) icon.textContent = '☀️';
+  }
+})();
+
+function toggleStatusTheme() {
+  document.body.classList.toggle('status-dark');
+  const icon = document.getElementById('statusThemeIcon');
+  if (document.body.classList.contains('status-dark')) {
+    localStorage.setItem('statuspage-status-theme', 'dark');
+    if (icon) icon.textContent = '☀️';
+  } else {
+    localStorage.setItem('statuspage-status-theme', 'light');
+    if (icon) icon.textContent = '🌙';
+  }
+}
+</script>
 <% if (page.custom_html) { %><%= page.custom_html %><% } %>
 </body>
 </html>
