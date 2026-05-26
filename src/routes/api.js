@@ -110,17 +110,28 @@ router.put('/components/:id/status', requirePerm('write'), async (req, res) => {
   const valid = ['operational','degraded_performance','partial_outage','major_outage','under_maintenance'];
   if (!valid.includes(status)) return res.status(400).json({ error: `Invalid. Use: ${valid.join(', ')}` });
   
-  // Check if component is in a maintenance window
-  const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
-  const activeMaintenance = maintenance.list({ status: 'ongoing' }).filter(w => {
-    if (w.component_id && w.component_id !== req.params.id) return false;
-    return true;
-  });
-  
   const result = components.updateStatus(req.params.id, status, page_id);
   const pid = page_id || (result.component.pages && result.component.pages[0] ? result.component.pages[0].id : null);
+  
+  // Trigger webhook
   if (pid) await triggerWebhook(pid, 'status.updated', { component_id: req.params.id, old: result.history?.old_status, new: status });
-  res.json({ component: result.component, history: result.history, in_maintenance: activeMaintenance.length > 0 });
+  
+  // Create notifications for admins
+  if (result.history) {
+    const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
+    const { notifications } = require('../db/models');
+    admins.forEach(a => {
+      notifications.create({
+        user_id: a.id,
+        component_id: req.params.id,
+        type: 'status_change',
+        title: `Component ${result.component.name} status changed`,
+        message: `${result.component.name}: ${result.history.old_status} → ${status}`
+      });
+    });
+  }
+  
+  res.json({ component: result.component, history: result.history });
 });
 
 // Component history

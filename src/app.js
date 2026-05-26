@@ -14,6 +14,7 @@ require('./db/init');
 const apiRoutes = require('./routes/api');
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
+const adminExtraRoutes = require('./routes/admin-extra');
 const { session } = require('./middleware/session');
 
 const app = express();
@@ -40,7 +41,7 @@ app.use(cookieParser(process.env.SESSION_SECRET || 'statuspage-session-secret-ch
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.use(session);
 
-const { pages, components, incidents } = require('./db/models');
+const { pages, components, incidents, analytics, dependencies } = require('./db/models');
 const db = require('./db/init');
 
 app.set('view engine', 'ejs');
@@ -72,22 +73,43 @@ app.get('/register', (req, res) => {
 
 // Admin routes (protected)
 app.use('/admin', adminRoutes);
+app.use('/admin', adminExtraRoutes);
 
-// Public status page HTML
+// Public status page with analytics tracking
 app.get('/status/:slug', (req, res) => {
   const page = pages.getBySlug(req.params.slug);
   if (!page) return res.status(404).send('Not found');
-  const comps = db.prepare(`
-    SELECT c.*,
+  
+  // Record view analytics
+  analytics.recordView(page.id, req.ip, req.get('User-Agent') || '', req.get('Referrer') || '');
+  
+  // Check dependencies and cascade status
+  const pageComps = db.prepare(`
+    SELECT c.*, pc.position,
       (SELECT new_status FROM status_history WHERE component_id=c.id AND page_id=? ORDER BY created_at DESC LIMIT 1) as current_status
     FROM components c JOIN page_components pc ON c.id=pc.component_id WHERE pc.page_id=? ORDER BY pc.position,c.name
   `).all(page.id, page.id);
+  
+  // Resolve dependencies
+  const resolvedComps = pageComps.map(c => {
+    const deps = dependencies.listByDependsOn(c.id);
+    if (deps.length > 0 && c.current_status === 'operational') {
+      for (const dep of deps) {
+        const depComp = components.get(dep.depends_on);
+        if (depComp && depComp.status !== 'operational' && dep.cascade_status) {
+          return { ...c, current_status: depComp.status };
+        }
+      }
+    }
+    return c;
+  });
+  
   const incs = incidents.list({ page_id: page.id, visible: 1 });
   const formatStatus = s => ({operational:'Operational',under_maintenance:'Under Maintenance',degraded_performance:'Degraded Performance',partial_outage:'Partial Outage',major_outage:'Major Outage',investigating:'Investigating',identified:'Identified',monitoring:'Monitoring',resolved:'Resolved'}[s] || s);
-  res.render('status-page', { page, components: comps, incidents: incs, formatStatus });
+  res.render('status-page', { page, components: resolvedComps, incidents: incs, formatStatus });
 });
 
-// Embed widget
+// Embed widget with customization
 app.get('/embed/:slug', (req, res) => {
   const page = pages.getBySlug(req.params.slug);
   if (!page) return res.status(404).send('Not found');
@@ -99,9 +121,21 @@ app.get('/embed/:slug', (req, res) => {
   let status = 'operational';
   const order = { operational: 0, under_maintenance: 1, degraded_performance: 2, partial_outage: 3, major_outage: 4 };
   comps.forEach(c => { const s = c.current_status || c.status; if (order[s] > order[status]) status = s; });
+  
+  const style = req.query.style || 'compact';
+  const color = req.query.color || '#6366f1';
+  
+  const widgets = {
+    compact: `<div class="w"><div class="h"><span class="t">${page.name}</span></div><div class="b ${status}"><span class="d ${status}"></span>${status.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())}</div><a href="/status/${page.slug}">View full status &rarr;</a></div>`,
+    detailed: `<div class="w detailed"><div class="h"><span class="t">${page.name}</span><span class="b ${status}">${status.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())}</span></div><div class="cl"><div class="c"><span class="d ${status}"></span> All Systems Operational</div></div><a href="/status/${page.slug}">View full status &rarr;</a></div>`,
+    minimal: `<div class="w minimal"><span class="d ${status}"></span> ${status.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())}</div>`
+  };
+  
+  const widget = widgets[style] || widgets.compact;
+  
   res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-  .w{font-family:sans-serif;max-width:400px;padding:16px}.h{display:flex;align-items:center;gap:8px;margin-bottom:12px}.t{font-size:14px;font-weight:600}.b{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:500}.b-operational{background:#dcffe4;color:#006b39}.b-under_maintenance{background:#fff3cd;color:#856404}.b-degraded_performance{background:#fff3cd;color:#856404}.b-partial_outage{background:#ffe5cc;color:#9c4f00}.b-major_outage{background:#ffcccc;color:#cc0000}.d{width:8px;height:8px;border-radius:50%;display:inline-block}.d-operational{background:#006b39}.d-under_maintenance{background:#856404}.d-degraded_performance{background:#856404}.d-partial_outage{background:#9c4f00}.d-major_outage{background:#cc0000}a{display:block;margin-top:12px;font-size:12px;color:#006b39;text-decoration:none}
-  </style></head><body><div class="w"><div class="h"><span class="t">${page.name}</span></div><div class="b ${status}"><span class="d ${status}"></span>${status.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())}</div><a href="/status/${page.slug}">View full status &rarr;</a></div></body></html>`);
+  .w{font-family:sans-serif;max-width:400px;padding:12px 16px}.h{display:flex;align-items:center;gap:8px;margin-bottom:8px}.t{font-size:14px;font-weight:600}.b{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:500}.b-operational{background:#dcffe4;color:#006b39}.b-under_maintenance{background:#fff3cd;color:#856404}.b-degraded_performance{background:#fff3cd;color:#856404}.b-partial_outage{background:#ffe5cc;color:#9c4f00}.b-major_outage{background:#ffcccc;color:#cc0000}.d{width:8px;height:8px;border-radius:50%;display:inline-block}.d-operational{background:#006b39}.d-under_maintenance{background:#856404}.d-degraded_performance{background:#856404}.d-partial_outage{background:#9c4f00}.d-major_outage{background:#cc0000}a{display:block;margin-top:8px;font-size:12px;color:#006b39;text-decoration:none}.w.detailed{padding:16px}.w.detailed .c{display:flex;align-items:center;gap:6px;font-size:13px;margin-top:8px}.w.minimal{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;font-size:13px}.w.minimal .d{width:6px;height:6px}
+  </style></head><body>${widget}</body></html>`);
 });
 
 // Redirect root to admin if logged in, otherwise to login
