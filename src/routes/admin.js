@@ -467,8 +467,9 @@ router.post('/users', (req, res) => {
 });
 
 router.delete('/users/:id', (req, res) => {
-  if (req.user.id === req.params.id) {
-    return res.redirect('/admin/users?msg=self&type=error');
+  const adminCount = db.prepare("SELECT COUNT(*) as count FROM users WHERE role='admin'").get().count;
+  if (req.user.id === req.params.id && adminCount <= 1) {
+    return res.redirect('/admin/users?msg=last_admin&type=error');
   }
   const user = db.prepare('SELECT id FROM users WHERE id=?').get(req.params.id);
   if (!user) {
