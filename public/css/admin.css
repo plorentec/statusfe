@@ -928,3 +928,13 @@ body.dark .no {
   box-shadow: 0 6px 16px rgba(99,102,241,0.4);
 }
 
+
+/* ===== NOTIFICATIONS ===== */
+.unread { background: rgba(99,102,241,0.05); }
+.notif-badge { background: #ef4444; color: #fff; font-size: 11px; padding: 1px 6px; border-radius: 10px; margin-left: 8px; }
+.notif-type { font-size: 12px; font-weight: 500; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; }
+.notif-status_change { background: #dcffe4; color: #065f46; }
+.notif-incident { background: #fee2e2; color: #991b1b; }
+.notif-maintenance { background: #fff3cd; color: #856404; }
+.sidebar-nav .notif-badge { position: absolute; right: 16px; }
+.sidebar-nav a { position: relative; }

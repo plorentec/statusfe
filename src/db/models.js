@@ -293,3 +293,128 @@ module.exports.maintenance = {
     db.prepare("UPDATE maintenance_windows SET status='completed' WHERE status='ongoing' AND ends_at<=?").run(now);
   }
 };
+
+// ===== NOTIFICATIONS =====
+module.exports.notifications = {
+  list(userId, limit=50) {
+    return db.prepare('SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT ?').all(userId, limit);
+  },
+  
+  listUnread(userId) {
+    return db.prepare('SELECT COUNT(*) as count FROM notifications WHERE user_id=? AND is_read=0').get(userId).count;
+  },
+  
+  create({ user_id, page_id, component_id, type, title, message }) {
+    const id = uuidv4();
+    db.prepare('INSERT INTO notifications (id,user_id,page_id,component_id,type,title,message) VALUES (?,?,?,?,?,?,?)').run(
+      id, user_id||null, page_id||null, component_id||null, type, title, message||''
+    );
+    return this.getById(id);
+  },
+  
+  getById(id) { return db.prepare('SELECT * FROM notifications WHERE id=?').get(id); },
+  
+  markRead(id) { db.prepare('UPDATE notifications SET is_read=1 WHERE id=?').run(id); return true; },
+  
+  markAllRead(userId) { db.prepare('UPDATE notifications SET is_read=1 WHERE user_id=?').run(userId); return true; },
+  
+  delete(id) { db.prepare('DELETE FROM notifications WHERE id=?').run(id); return true; }
+};
+
+// ===== ANALYTICS =====
+module.exports.analytics = {
+  recordView(pageId, ip, userAgent, referrer) {
+    const id = uuidv4();
+    db.prepare('INSERT INTO page_views (id,page_id,ip,user_agent,referrer) VALUES (?,?,?,?,?)').run(
+      id, pageId, ip||'', userAgent||'', referrer||''
+    );
+  },
+  
+  getViews(pageId, days=30) {
+    return db.prepare(`
+      SELECT DATE(created_at) as date, COUNT(*) as views 
+      FROM page_views 
+      WHERE page_id=? AND created_at >= datetime('now', ?) 
+      GROUP BY DATE(created_at) 
+      ORDER BY date DESC
+    `).all(pageId, `-${days} days`);
+  },
+  
+  getTotalViews(pageId) {
+    return db.prepare('SELECT COUNT(*) as count FROM page_views WHERE page_id=?').get(pageId).count;
+  },
+  
+  getRecentViews(pageId, limit=20) {
+    return db.prepare('SELECT * FROM page_views WHERE page_id=? ORDER BY created_at DESC LIMIT ?').all(pageId, limit);
+  },
+  
+  getUptime(pageId, days=30) {
+    const rows = db.prepare(`
+      SELECT sh.component_id, sh.new_status, DATE(sh.created_at) as date
+      FROM status_history sh
+      JOIN page_components pc ON sh.component_id = pc.component_id
+      WHERE pc.page_id=? AND sh.created_at >= datetime('now', ?)
+      ORDER BY sh.created_at DESC
+    `).all(pageId, `-${days} days`);
+    
+    const componentStatuses = {};
+    rows.forEach(r => {
+      if (!componentStatuses[r.component_id]) componentStatuses[r.component_id] = {};
+      componentStatuses[r.component_id][r.date] = r.new_status;
+    });
+    
+    let totalDays = 0;
+    let operationalDays = 0;
+    const dates = [];
+    
+    for (let i = 0; i < days; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+      dates.push(dateStr);
+      totalDays++;
+      
+      const allOperational = Object.values(componentStatuses).every(statuses => 
+        statuses[dateStr] === 'operational'
+      );
+      if (allOperational) operationalDays++;
+    }
+    
+    return {
+      percentage: totalDays > 0 ? ((operationalDays / totalDays) * 100).toFixed(2) : '100.00',
+      days,
+      operationalDays,
+      totalDays
+    };
+  }
+};
+
+// ===== COMPONENT DEPENDENCIES =====
+module.exports.dependencies = {
+  list(componentId) {
+    return db.prepare('SELECT * FROM component_dependencies WHERE component_id=?').all(componentId);
+  },
+  
+  listByDependsOn(dependsOnId) {
+    return db.prepare('SELECT * FROM component_dependencies WHERE depends_on=?').all(dependsOnId);
+  },
+  
+  create({ component_id, depends_on, cascade_status }) {
+    const id = uuidv4();
+    db.prepare('INSERT INTO component_dependencies (id,component_id,depends_on,cascade_status) VALUES (?,?,?,?)').run(
+      id, component_id, depends_on, cascade_status ? 1 : 0
+    );
+    return this.getById(id);
+  },
+  
+  getById(id) { return db.prepare('SELECT * FROM component_dependencies WHERE id=?').get(id); },
+  
+  delete(id) { db.prepare('DELETE FROM component_dependencies WHERE id=?').run(id); return true; },
+  
+  deleteByComponent(componentId) {
+    db.prepare('DELETE FROM component_dependencies WHERE component_id=? OR depends_on=?').run(componentId, componentId);
+    return true;
+  }
+};
+
+};

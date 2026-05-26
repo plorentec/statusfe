@@ -24,6 +24,16 @@ try {
   db.prepare('ALTER TABLE pages ADD COLUMN template TEXT DEFAULT \'default\'').run();
 } catch(e) { /* column may already exist */ }
 
+// Migrate: add 'dependency_id' to components if it doesn't exist
+try {
+  db.prepare('ALTER TABLE components ADD COLUMN dependency_id TEXT').run();
+} catch(e) { /* column may already exist */ }
+
+// Migrate: add 'email_notifications' to users if it doesn't exist
+try {
+  db.prepare('ALTER TABLE users ADD COLUMN email_notifications INTEGER DEFAULT 1').run();
+} catch(e) { /* column may already exist */ }
+
 // Regenerate keys that don't have a stored key value
 const rowsWithoutKey = db.prepare("SELECT id FROM api_keys WHERE key IS NULL").all();
 for (const row of rowsWithoutKey) {
@@ -166,6 +176,48 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_maintenance_page ON maintenance_windows(page_id);
   CREATE INDEX IF NOT EXISTS idx_maintenance_status ON maintenance_windows(status);
+
+  -- Notifications
+  CREATE TABLE IF NOT EXISTS notifications (
+    id TEXT PRIMARY KEY,
+    user_id TEXT,
+    page_id TEXT,
+    component_id TEXT,
+    type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    message TEXT,
+    is_read INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE CASCADE,
+    FOREIGN KEY (component_id) REFERENCES components(id) ON DELETE CASCADE
+  );
+
+  -- Analytics
+  CREATE TABLE IF NOT EXISTS page_views (
+    id TEXT PRIMARY KEY,
+    page_id TEXT NOT NULL,
+    ip TEXT,
+    user_agent TEXT,
+    referrer TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE CASCADE
+  );
+
+  -- Component Dependencies
+  CREATE TABLE IF NOT EXISTS component_dependencies (
+    id TEXT PRIMARY KEY,
+    component_id TEXT NOT NULL,
+    depends_on TEXT NOT NULL,
+    cascade_status INTEGER DEFAULT 1,
+    FOREIGN KEY (component_id) REFERENCES components(id) ON DELETE CASCADE,
+    FOREIGN KEY (depends_on) REFERENCES components(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+  CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(is_read);
+  CREATE INDEX IF NOT EXISTS idx_page_views_page ON page_views(page_id);
+  CREATE INDEX IF NOT EXISTS idx_page_views_date ON page_views(created_at);
 `);
 
 // Seed data
