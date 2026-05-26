@@ -2,19 +2,21 @@
 
 Sistema de páginas de estado open source construido con Node.js, Express y SQLite.
 
-## Features
+Open source status page system built with Node.js, Express, and SQLite.
 
-- Multiple status pages
-- Components with status tracking
-- Incidents and maintenance windows
-- REST API with key-based authentication
-- Webhooks for status changes
-- User management
-- Custom CSS/HTML per page
+## Features / Características
 
-## Quick Start
+- Multiple status pages / Múltiples páginas de estado
+- Components with status tracking / Componentes con seguimiento de estado
+- Incidents and maintenance windows / Incidentes y ventanas de mantenimiento
+- REST API with key-based authentication / API REST con autenticación por clave
+- Webhooks for status changes / Webhooks para cambios de estado
+- User management / Gestión de usuarios
+- Custom CSS/HTML per page / CSS/HTML personalizado por página
 
-### Docker (Recommended)
+## Quick Start / Inicio Rápido
+
+### Docker (Recommended / Recomendado)
 
 ```bash
 git clone https://github.com/plorentec/statusfe.git
@@ -23,13 +25,13 @@ cp .env.example .env
 docker compose up -d
 ```
 
-Access at `http://localhost:3000`
+Access at `http://localhost:3000` / Acceso en `http://localhost:3000`
 
-Default admin credentials: `admin@status.local` / `admin123`
+Default admin credentials: `admin@status.local` / `admin123` / Credenciales admin por defecto: `admin@status.local` / `admin123`
 
-### Manual Installation (Apache, etc.)
+### Manual Installation (Apache, etc.) / Instalación Manual (Apache, etc.)
 
-**Prerequisites:** Node.js 20+, npm
+**Prerequisites:** Node.js 20+, npm / **Requisitos:** Node.js 20+, npm
 
 ```bash
 git clone https://github.com/plorentec/statusfe.git
@@ -38,32 +40,32 @@ cp .env.example .env
 
 npm install --production
 
-# Start the server
+# Start the server / Iniciar el servidor
 npm start
 ```
 
-Access at `http://localhost:3000`
+Access at `http://localhost:3000` / Acceso en `http://localhost:3000`
 
-### As a System Service (systemd)
+### As a System Service (systemd) / Como Servicio del Sistema (systemd)
 
 ```bash
-# Clone and install
+# Clone and install / Clonar e instalar
 git clone https://github.com/plorentec/statusfe.git /var/www/statusfe
 cd /var/www/statusfe
 cp .env.example .env
 npm install --production
 
-# Copy systemd service
+# Copy systemd service / Copiar servicio systemd
 sudo cp systemd/statuspage.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable statuspage
 sudo systemctl start statuspage
 
-# Check status
+# Check status / Verificar estado
 sudo systemctl status statuspage
 ```
 
-## Updating
+## Updating / Actualizando
 
 ### Docker
 
@@ -83,34 +85,34 @@ npm install --production
 sudo systemctl restart statuspage
 ```
 
-## Configuration
+## Configuration / Configuración
 
-Copy `.env.example` to `.env` and adjust:
+Copy `.env.example` to `.env` and adjust / Copia `.env.example` a `.env` y ajusta:
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `PORT` | Server port | `3000` |
-| `SESSION_SECRET` | Session signing key | `change-me-to-a-random-string` |
+| Variable | Description / Descripción | Default |
+|----------|--------------------------|---------|
+| `PORT` | Server port / Puerto del servidor | `3000` |
+| `SESSION_SECRET` | Session signing key / Clave de firma de sesión | `change-me-to-a-random-string` |
 
-**Important:** Change `SESSION_SECRET` in production to a random string.
+**Important:** Change `SESSION_SECRET` in production to a random string. / **Importante:** Cambia `SESSION_SECRET` en producción por una cadena aleatoria.
 
-## Default Credentials
+## Default Credentials / Credenciales por Defecto
 
-| Email | Password | Role |
-|-------|----------|------|
+| Email | Password / Contraseña | Role / Rol |
+|-------|----------------------|------------|
 | admin@status.local | admin123 | admin |
 
-**Important:** Change these credentials after first login.
+**Important:** Change these credentials after first login. / **Importante:** Cambia estas credenciales después del primer inicio de sesión.
 
 ## API
 
-Full API documentation is available at `/admin/docs` after logging in.
+Full API documentation is available at `/admin/docs` after logging in. / La documentación completa de la API está disponible en `/admin/docs` después de iniciar sesión.
 
-API key authentication supports:
-- `Authorization: Bearer <key>` header
-- `x-api-key: <key>` header
-- `?api_key=<key>` query parameter
+API key authentication supports / La autenticación con clave API soporta:
+- `Authorization: Bearer <key>` header / Cabecera
+- `x-api-key: <key>` header / Cabecera
+- `?api_key=<key>` query parameter / Parámetro de consulta
 
-## License
+## License / Licencia
 
 MIT
