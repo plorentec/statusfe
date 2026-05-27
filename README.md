@@ -1,4 +1,4 @@
-# StatusPage
+# StatusFe
 
 Sistema de páginas de estado open source construido con Node.js, Express y SQLite.
 
