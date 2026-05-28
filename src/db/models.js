@@ -287,14 +287,15 @@ module.exports.incidents = {
     if (component_id && status !== 'resolved') {
       const incidentStatus = status || 'investigating';
       const comp = this.get(component_id);
-      if (comp && comp.status === 'operational') {
-        const newStatus = incidentStatus === 'investigating' ? 'major_outage'
-          : incidentStatus === 'identified' ? 'partial_outage'
-          : 'degraded_performance';
+      const newStatus = incidentStatus === 'investigating' ? 'major_outage'
+        : incidentStatus === 'identified' ? 'partial_outage'
+        : 'degraded_performance';
+      const oldStatus = comp ? comp.status : 'operational';
+      if (oldStatus !== newStatus) {
         db.prepare('UPDATE components SET status=?, updated_at=datetime(\'now\') WHERE id=?').run(newStatus, component_id);
         const hId = uuidv4();
         try {
-          db.prepare('INSERT INTO status_history (id,component_id,page_id,old_status,new_status) VALUES (?,?,?,?,?)').run(hId, component_id, resolvedPageId, 'operational', newStatus);
+          db.prepare('INSERT INTO status_history (id,component_id,page_id,old_status,new_status) VALUES (?,?,?,?,?)').run(hId, component_id, resolvedPageId, oldStatus, newStatus);
         } catch(e) {
           if (!e.message.includes('FOREIGN KEY')) throw e;
         }
