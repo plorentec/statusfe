@@ -37,7 +37,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(cookieParser(process.env.SESSION_SECRET || 'statuspage-session-secret-change-in-production'));
+app.use(cookieParser(process.env.SESSION_SECRET || 'statusfe-session-secret-change-in-production'));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.use(session);
 
@@ -105,8 +105,39 @@ app.get('/status/:slug', (req, res) => {
   });
   
   const incs = incidents.list({ page_id: page.id, visible: 1 });
+  
+  // Also get incidents for components on this page (incidents are tied to component, not page)
+  const compIds = resolvedComps.map(c => c.id);
+  if (compIds.length > 0) {
+    const compIncs = db.prepare(`
+      SELECT * FROM incidents 
+      WHERE component_id IN (SELECT component_id FROM page_components WHERE page_id=?) 
+      AND visible=1 AND status != 'resolved'
+      ORDER BY starts_at DESC
+    `).all(page.id);
+    const existingIds = new Set(incs.map(i => i.id));
+    compIncs.forEach(inc => { if (!existingIds.has(inc.id)) incs.push(inc); });
+  }
+  
+  // Group incidents by component (only for components on this page)
+  const incidentsByComponent = {};
+  resolvedComps.forEach(c => { incidentsByComponent[c.id] = []; });
+  incs.forEach(inc => {
+    if (inc.component_id && incidentsByComponent[inc.component_id]) {
+      incidentsByComponent[inc.component_id].push(inc);
+    }
+  });
+  
+  // Override component status with active incident status
+  resolvedComps.forEach(c => {
+    const activeInc = incidentsByComponent[c.id] && incidentsByComponent[c.id].find(i => i.status !== 'resolved');
+    if (activeInc) {
+      c.current_status = activeInc.status;
+    }
+  });
+  
   const formatStatus = s => ({operational:'Operational',under_maintenance:'Under Maintenance',degraded_performance:'Degraded Performance',partial_outage:'Partial Outage',major_outage:'Major Outage',investigating:'Investigating',identified:'Identified',monitoring:'Monitoring',resolved:'Resolved'}[s] || s);
-  res.render('status-page', { page, components: resolvedComps, incidents: incs, formatStatus });
+  res.render('status-page', { page, components: resolvedComps, incidents: incs, incidentsByComponent, formatStatus });
 });
 
 // Embed widget with customization
@@ -154,7 +185,18 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n  StatusPage: http://0.0.0.0:${PORT}\n`);
+  console.log(`\n  StatusFe: http://0.0.0.0:${PORT}\n`);
+  
+  // Daily cleanup of old analytics data
+  setInterval(() => {
+    try {
+      const { analytics } = require('./db/models');
+      const deleted = analytics.cleanOldData();
+      if (deleted > 0) console.log(`Analytics cleanup: deleted ${deleted} old records`);
+    } catch(e) {
+      // ignore
+    }
+  }, 24 * 60 * 60 * 1000);
 });
 
 module.exports = app;

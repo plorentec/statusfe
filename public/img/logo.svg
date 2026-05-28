@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 50" width="200" height="50">
+  <defs>
+    <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#10b981"/>
+      <stop offset="100%" style="stop-color:#059669"/>
+    </linearGradient>
+  </defs>
+  <circle cx="25" cy="25" r="18" fill="url(#logoGrad)"/>
+  <path d="M16 25 L22 31 L34 19" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="52" y="33" font-family="system-ui, -apple-system, sans-serif" font-size="24" font-weight="700" fill="currentColor">
+    Status<tspan fill="#10b981">Fe</tspan>
+  </text>
+</svg>

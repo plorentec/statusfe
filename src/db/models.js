@@ -65,6 +65,7 @@ module.exports.components = {
   },
 
   update(id, data) {
+    const oldComp = this.get(id);
     const fields = [];
     const params = [];
     const allowed = ['name','description','status','group_name','position'];
@@ -74,6 +75,21 @@ module.exports.components = {
     if (fields.length) {
       params.push(id);
       db.prepare(`UPDATE components SET ${fields.join(',')}, updated_at=datetime('now') WHERE id=?`).run(...params);
+    }
+    // If status changed, record in status_history for all pages this component belongs to
+    if (data.status && oldComp.status !== data.status) {
+      const pages = db.prepare('SELECT page_id FROM page_components WHERE component_id=?').all(id);
+      pages.forEach(pc => {
+        const hId = uuidv4();
+        db.prepare('INSERT INTO status_history (id,component_id,page_id,old_status,new_status) VALUES (?,?,?,?,?)').run(
+          hId, id, pc.page_id, oldComp.status, data.status
+        );
+      });
+      // Also record with empty page_id for global tracking
+      const hId2 = uuidv4();
+      db.prepare('INSERT INTO status_history (id,component_id,page_id,old_status,new_status) VALUES (?,?,?,?,?)').run(
+        hId2, id, '', oldComp.status, data.status
+      );
     }
     return this.get(id);
   },
@@ -115,6 +131,15 @@ module.exports.components = {
     const hId = uuidv4();
     db.prepare('INSERT INTO status_history (id,component_id,page_id,old_status,new_status) VALUES (?,?,?,?,?)').run(hId, componentId, pageId || '', oldStatus, newStatus);
 
+    // Send email notification
+    let pageTitle = 'Status Page';
+    if (pageId) {
+      const p = module.exports.pages.getById(pageId);
+      if (p) pageTitle = p.name;
+    }
+    const email = require('../utils/email');
+    email.notifyComponentStatusChange(comp.name, oldStatus, newStatus, pageTitle).catch(() => {});
+
     return {
       component: this.get(componentId),
       history: db.prepare('SELECT * FROM status_history WHERE id=?').get(hId)
@@ -146,6 +171,29 @@ module.exports.components = {
       if (latest) comp.status_by_page[p.slug] = latest;
     });
     return comp;
+  },
+
+  getActiveIncidents(componentId) {
+    return db.prepare(`
+      SELECT * FROM incidents 
+      WHERE component_id=? AND status != 'resolved' 
+      ORDER BY starts_at DESC
+    `).all(componentId);
+  },
+
+  getActiveIncidentForComponent(componentId, pageId) {
+    if (pageId) {
+      return db.prepare(`
+        SELECT * FROM incidents 
+        WHERE component_id=? AND page_id=? AND status != 'resolved' 
+        ORDER BY starts_at DESC LIMIT 1
+      `).get(componentId, pageId);
+    }
+    return db.prepare(`
+      SELECT * FROM incidents 
+      WHERE component_id=? AND status != 'resolved' 
+      ORDER BY starts_at DESC LIMIT 1
+    `).get(componentId);
   }
 };
 
@@ -155,6 +203,7 @@ module.exports.incidents = {
     let q = 'SELECT * FROM incidents WHERE 1=1';
     const p = [];
     if (filters.page_id) { q += ' AND page_id=?'; p.push(filters.page_id); }
+    if (filters.component_id) { q += ' AND component_id=?'; p.push(filters.component_id); }
     if (filters.status) { q += ' AND status=?'; p.push(filters.status); }
     if (filters.visible !== undefined) { q += ' AND visible=?'; p.push(filters.visible ? 1 : 0); }
     q += ' ORDER BY starts_at DESC';
@@ -164,18 +213,36 @@ module.exports.incidents = {
 
   get(id) { return db.prepare('SELECT * FROM incidents WHERE id=?').get(id); },
 
-  create({ page_id, name, status, impact, starts_at, resolved_at, message, visible }) {
+  getFirstByComponentAndPage(componentId, pageId) {
+    return db.prepare('SELECT * FROM incidents WHERE component_id=? AND page_id=? AND status != \'resolved\' ORDER BY starts_at DESC LIMIT 1').get(componentId, pageId);
+  },
+
+  create({ component_id, page_id, name, status, impact, starts_at, resolved_at, message, visible }) {
     const id = uuidv4();
-    db.prepare(`INSERT INTO incidents (id,page_id,name,status,impact,starts_at,resolved_at,message,visible)
-      VALUES (?,?,?,?,?,?,?,?,?)`).run(id, page_id, name, status||'investigating', impact||'none',
+    // Incident is associated with component_id only, page_id is resolved from component
+    let resolvedPageId = page_id;
+    if (component_id && !page_id) {
+      const pageComp = db.prepare('SELECT page_id FROM page_components WHERE component_id=? LIMIT 1').get(component_id);
+      if (pageComp) resolvedPageId = pageComp.page_id;
+    }
+    if (!resolvedPageId) return null;
+    
+    db.prepare(`INSERT INTO incidents (id,component_id,page_id,name,status,impact,starts_at,resolved_at,message,visible)
+      VALUES (?,?,?,?,?,?,?,?,?,?)`).run(id, component_id||null, resolvedPageId, name, status||'investigating', impact||'none',
       starts_at||new Date().toISOString().slice(0,19).replace('T',' '), resolved_at||null, message, visible ? 1 : 1);
-    return this.get(id);
+    const inc = this.get(id);
+    const page = module.exports.pages.getById(resolvedPageId);
+    const comp = component_id ? module.exports.components.get(component_id) : null;
+    const email = require('../utils/email');
+    const compName = comp ? comp.name : 'Status Page';
+    email.notifyIncident(true, name, status, message, page ? page.name : compName).catch(() => {});
+    return inc;
   },
 
   update(id, data) {
     const fields = [];
     const params = [];
-    const allowed = ['name','status','impact','starts_at','resolved_at','message','visible'];
+    const allowed = ['name','status','impact','starts_at','resolved_at','message','visible','component_id'];
     for (const k of allowed) {
       if (data[k] !== undefined) { fields.push(k+'=?'); params.push(data[k]); }
     }
@@ -183,10 +250,18 @@ module.exports.incidents = {
       params.push(id);
       db.prepare(`UPDATE incidents SET ${fields.join(',')}, updated_at=datetime('now') WHERE id=?`).run(...params);
     }
-    return this.get(id);
+    const inc = this.get(id);
+    if (inc) {
+      const page = module.exports.pages.getById(inc.page_id);
+      const comp = inc.component_id ? module.exports.components.get(inc.component_id) : null;
+      const compName = comp ? comp.name : 'Status Page';
+      const email = require('../utils/email');
+      email.notifyIncident(false, inc.name, inc.status, data.message || '', page ? page.name : compName).catch(() => {});
+    }
+    return inc;
   },
 
-  delete(id) { db.prepare('DELETE FROM incidents WHERE id=?').run(id); return true; }
+  delete(id) { db.prepare('DELETE FROM incidents WHERE id=?').run(id); return true }
 };
 
 // ===== API KEYS =====
@@ -330,14 +405,17 @@ module.exports.analytics = {
     );
   },
   
-  getViews(pageId, days=30) {
+  getViews(pageId, days) {
+    const retention = module.exports.settings.get('analytics_retention_days');
+    const maxDays = retention ? parseInt(retention) : 365;
+    const effectiveDays = days > maxDays ? maxDays : days;
     return db.prepare(`
       SELECT DATE(created_at) as date, COUNT(*) as views 
       FROM page_views 
       WHERE page_id=? AND created_at >= datetime('now', ?) 
       GROUP BY DATE(created_at) 
       ORDER BY date DESC
-    `).all(pageId, `-${days} days`);
+    `).all(pageId, `-${effectiveDays} days`);
   },
   
   getTotalViews(pageId) {
@@ -348,14 +426,17 @@ module.exports.analytics = {
     return db.prepare('SELECT * FROM page_views WHERE page_id=? ORDER BY created_at DESC LIMIT ?').all(pageId, limit);
   },
   
-  getUptime(pageId, days=30) {
+  getUptime(pageId, days) {
+    const retention = module.exports.settings.get('analytics_retention_days');
+    const maxDays = retention ? parseInt(retention) : 365;
+    const effectiveDays = days > maxDays ? maxDays : days;
     const rows = db.prepare(`
       SELECT sh.component_id, sh.new_status, DATE(sh.created_at) as date
       FROM status_history sh
       JOIN page_components pc ON sh.component_id = pc.component_id
       WHERE pc.page_id=? AND sh.created_at >= datetime('now', ?)
       ORDER BY sh.created_at DESC
-    `).all(pageId, `-${days} days`);
+    `).all(pageId, `-${effectiveDays} days`);
     
     const componentStatuses = {};
     rows.forEach(r => {
@@ -367,7 +448,7 @@ module.exports.analytics = {
     let operationalDays = 0;
     const dates = [];
     
-    for (let i = 0; i < days; i++) {
+    for (let i = 0; i < effectiveDays; i++) {
       const d = new Date();
       d.setDate(d.getDate() - i);
       const dateStr = d.toISOString().split('T')[0];
@@ -382,11 +463,151 @@ module.exports.analytics = {
     
     return {
       percentage: totalDays > 0 ? ((operationalDays / totalDays) * 100).toFixed(2) : '100.00',
-      days,
+      days: effectiveDays,
       operationalDays,
       totalDays
     };
+  },
+
+  getComponentUptime(componentId, days) {
+    const retention = module.exports.settings.get('analytics_retention_days');
+    const maxDays = retention ? parseInt(retention) : 365;
+    const effectiveDays = days > maxDays ? maxDays : days;
+    const rows = db.prepare(`
+      SELECT new_status, DATE(created_at) as date
+      FROM status_history
+      WHERE component_id=? AND created_at >= datetime('now', ?)
+      ORDER BY created_at DESC
+    `).all(componentId, `-${effectiveDays} days`);
+    
+    const componentStatuses = {};
+    rows.forEach(r => {
+      if (!componentStatuses[r.date]) componentStatuses[r.date] = r.new_status;
+    });
+    
+    let totalDays = 0;
+    let operationalDays = 0;
+    
+    for (let i = 0; i < effectiveDays; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+      totalDays++;
+      
+      const status = componentStatuses[dateStr];
+      if (status === 'operational' || !status) operationalDays++;
+    }
+    
+    return {
+      percentage: totalDays > 0 ? ((operationalDays / totalDays) * 100).toFixed(2) : '100.00',
+      days: effectiveDays,
+      operationalDays,
+      totalDays
+    };
+  },
+
+  getAllComponentsUptime(days) {
+    const retention = module.exports.settings.get('analytics_retention_days');
+    const maxDays = retention ? parseInt(retention) : 365;
+    const effectiveDays = days > maxDays ? maxDays : days;
+    const components = db.prepare(`SELECT DISTINCT c.id, c.name FROM components c ORDER BY c.name`).all();
+    const results = [];
+    
+    for (const comp of components) {
+      const rows = db.prepare(`
+        SELECT new_status, DATE(created_at) as date
+        FROM status_history
+        WHERE component_id=? AND created_at >= datetime('now', ?)
+        ORDER BY created_at DESC
+      `).all(comp.id, `-${effectiveDays} days`);
+      
+      const dayStatuses = {};
+      rows.forEach(r => {
+        if (!dayStatuses[r.date]) dayStatuses[r.date] = r.new_status;
+      });
+      
+      let totalDays = 0;
+      let operationalDays = 0;
+      
+      for (let i = 0; i < effectiveDays; i++) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const dateStr = d.toISOString().split('T')[0];
+        totalDays++;
+        
+        const status = dayStatuses[dateStr];
+        if (status === 'operational' || !status) operationalDays++;
+      }
+      
+      const uptime = totalDays > 0 ? ((operationalDays / totalDays) * 100).toFixed(2) : '100.00';
+      
+      const history = db.prepare(`
+        SELECT new_status, created_at FROM status_history
+        WHERE component_id=? AND created_at >= datetime('now', ?)
+        ORDER BY created_at DESC LIMIT 30
+      `).all(comp.id, `-${effectiveDays} days`);
+      
+      results.push({
+        id: comp.id,
+        name: comp.name,
+        uptime: uptime,
+        operationalDays,
+        totalDays,
+        history: history.slice(0, 30)
+      });
+    }
+    
+    return results;
+  },
+
+  cleanOldData() {
+    const retention = module.exports.settings.get('analytics_retention_days');
+    if (!retention) return 0;
+    const days = parseInt(retention);
+    const cutoff = db.prepare("SELECT datetime('now', ?) as cutoff").get(`-${days} days`);
+    
+    db.pragma('foreign_keys = OFF');
+    let deleted = 0;
+    const viewsDeleted = db.prepare("DELETE FROM page_views WHERE created_at < ?").run(cutoff.cutoff);
+    deleted += viewsDeleted.changes;
+    
+    const histDeleted = db.prepare("DELETE FROM status_history WHERE created_at < ?").run(cutoff.cutoff);
+    deleted += histDeleted.changes;
+    db.pragma('foreign_keys = ON');
+    
+    return deleted;
   }
+};
+
+// ===== SETTINGS =====
+module.exports.settings = {
+  get(key) {
+    const row = db.prepare('SELECT value FROM settings WHERE key=?').get(key);
+    return row ? row.value : null;
+  },
+  set(key, value) {
+    db.prepare('INSERT OR REPLACE INTO settings (key,value) VALUES (?,?)').run(key, String(value));
+    return true;
+  },
+  getSMTP() {
+    return {
+      host: this.get('smtp_host'),
+      port: this.get('smtp_port'),
+      user: this.get('smtp_user'),
+      pass: this.get('smtp_pass'),
+      secure: this.get('smtp_secure'),
+      from: this.get('smtp_from'),
+      from_name: this.get('smtp_from_name'),
+    };
+  },
+  setSMTP(data) {
+    const fields = ['smtp_host','smtp_port','smtp_user','smtp_pass','smtp_secure','smtp_from','smtp_from_name'];
+    for (const k of fields) {
+      this.set(k, data[k] !== undefined ? data[k] : '');
+    }
+    return true;
+  },
+  delete(key) { db.prepare('DELETE FROM settings WHERE key=?').run(key); return true; }
 };
 
 // ===== COMPONENT DEPENDENCIES =====
@@ -417,4 +638,28 @@ module.exports.dependencies = {
   }
 };
 
+// ===== PASSWORD RESETS =====
+module.exports.passwordResets = {
+  create(userId, expiresHours) {
+    const id = uuidv4();
+    const token = uuidv4() + '-' + uuidv4();
+    const expiresAt = new Date(Date.now() + expiresHours * 3600000).toISOString();
+    db.prepare('INSERT INTO password_resets (id, user_id, token, expires_at) VALUES (?,?,?,?)').run(id, userId, token, expiresAt);
+    return token;
+  },
+  
+  get(token) {
+    return db.prepare(`SELECT pr.*, u.email, u.name FROM password_resets pr 
+      JOIN users u ON pr.user_id = u.id 
+      WHERE pr.token=? AND pr.expires_at > datetime('now')`).get(token);
+  },
+  
+  deleteUser(userId) {
+    db.prepare('DELETE FROM password_resets WHERE user_id=?').run(userId);
+  },
+  
+  deleteToken(token) {
+    db.prepare('DELETE FROM password_resets WHERE token=?').run(token);
+  }
 };
+

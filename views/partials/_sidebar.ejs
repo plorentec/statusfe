@@ -1,17 +1,7 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><%= title %> - StatusFe Admin</title>
-<link rel="stylesheet" href="/css/admin.css">
-</head>
-<body>
-<div class="admin-layout">
 <aside class="sidebar">
 <div class="sidebar-header">
 <h2 style="display:flex;align-items:center;gap:8px;">
-<span style="display:inline-flex;align-items:center;gap:8px;font-weight:800;font-size:22px;letter-spacing:-0.5px;"><span style="display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;background:linear-gradient(135deg,#10b981,#059669);border-radius:8px;color:#fff;font-size:18px;font-weight:900;line-height:1;">S</span><span>Status<span style="color:#10b981;">Fe</span></span></span>
+<span style="display:inline-flex;align-items:center;gap:8px;font-weight:800;font-size:20px;letter-spacing:-0.5px;"><span style="display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;background:linear-gradient(135deg,#10b981,#059669);border-radius:8px;color:#fff;font-size:16px;font-weight:900;line-height:1;">S</span><span>Status<span style="color:#10b981;">Fe</span></span></span>
 </h2>
 <span class="sidebar-subtitle">Admin Panel <a href="/admin/customize" style="color:#10b981;text-decoration:none;margin-left:4px;font-size:13px;">Customize</a></span>
 </div>
@@ -62,9 +52,6 @@ Users
 </a>
 </nav>
 <div class="sidebar-footer">
-<div class="theme-switch-admin" onclick="toggleAdminTheme()" title="Toggle dark/light mode" style="cursor:pointer;text-align:center;padding:8px 0;border-top:1px solid var(--border);margin-top:8px;">
-<span id="adminThemeIcon">🌙</span> <span style="font-size:11px;color:var(--text-muted);">Theme</span>
-</div>
 <div class="user-info">
 <span class="user-name"><%= user.name %></span>
 <span class="user-role"><%= user.role %></span>
@@ -73,51 +60,12 @@ Users
 <button type="submit" class="btn-logout">Logout</button>
 </form>
 </div>
+<div class="sidebar-theme-btn" onclick="toggleAdminTheme()" title="Toggle dark/light mode" style="cursor:pointer;text-align:center;padding:12px 0 4px;border-top:1px solid var(--border);margin-top:8px;">
+<span id="adminThemeIcon">🌙</span>
+</div>
+</div>
 </aside>
-<main class="admin-main">
-<div class="admin-header">
-<h1><%= title %></h1>
-<% if (message) { %>
-<div class="flash flash-<%= messageType %>"><%= message %></div>
-<% } %>
-</div>
-<%- body %>
-</main>
-</div>
-<button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">
-<span id="themeIcon">🌙</span>
-</button>
-<script src="/js/admin.js"></script>
 <script>
-(function() {
-  const saved = localStorage.getItem('statusfe-theme');
-  if (saved === 'dark') {
-    document.body.classList.add('dark');
-    const icon = document.getElementById('themeIcon');
-    if (icon) icon.textContent = '☀️';
-    const adminIcon = document.getElementById('adminThemeIcon');
-    if (adminIcon) adminIcon.textContent = '☀️';
-  }
-})();
-
-function toggleTheme() {
-  document.body.classList.toggle('dark');
-  const icon = document.getElementById('themeIcon');
-  const adminIcon = document.getElementById('adminThemeIcon');
-  if (document.body.classList.contains('dark')) {
-    localStorage.setItem('statusfe-theme', 'dark');
-    if (icon) icon.textContent = '☀️';
-    if (adminIcon) adminIcon.textContent = '☀️';
-  } else {
-    localStorage.setItem('statusfe-theme', 'light');
-    if (icon) icon.textContent = '🌙';
-    if (adminIcon) adminIcon.textContent = '🌙';
-  }
-}
-
-function toggleAdminTheme() {
-  toggleTheme();
-}
+(function(){const s=localStorage.getItem('statusfe-theme');if(s==='dark'){document.body.classList.add('dark');const i=document.getElementById('adminThemeIcon');if(i)i.textContent='☀️';}})();
+function toggleAdminTheme(){document.body.classList.toggle('dark');const i=document.getElementById('adminThemeIcon');if(document.body.classList.contains('dark')){localStorage.setItem('statusfe-theme','dark');if(i)i.textContent='☀️';}else{localStorage.setItem('statusfe-theme','light');if(i)i.textContent='🌙';}}
 </script>
-</body>
-</html>

@@ -1,12 +1,12 @@
 {
-  "name": "statuspage",
+  "name": "statusfe",
   "version": "1.0.0",
   "description": "Open source status page system",
   "main": "src/app.js",
   "scripts": {
     "start": "node src/app.js",
     "dev": "node --watch src/app.js",
-    "docker:build": "docker build -t statuspage .",
+    "docker:build": "docker build -t statusfe .",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f",
@@ -15,6 +15,7 @@
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^11.7.0",
+    "chart.js": "^4.5.1",
     "compression": "^1.7.4",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
@@ -22,6 +23,7 @@
     "ejs": "^5.0.2",
     "express": "^4.21.0",
     "helmet": "^8.0.0",
+    "nodemailer": "^8.0.9",
     "uuid": "^10.0.0"
   }
 }

@@ -1,4 +1,5 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { overflow-x: hidden; margin: 0 !important; padding: 0 !important; }
 :root {
   --sidebar-width: 240px;
   --sidebar-bg: #1a1b2e;
@@ -31,6 +32,8 @@ body {
   color: var(--text);
   line-height: 1.6;
   transition: background 0.2s ease, color 0.2s ease;
+  margin: 0;
+  padding: 0;
 }
 
 /* ===== AUTH PAGES ===== */
@@ -74,7 +77,6 @@ body {
 /* ===== ADMIN LAYOUT ===== */
 .admin-layout {
   display: flex;
-  min-height: 100vh;
 }
 
 .sidebar {
@@ -167,11 +169,13 @@ body {
 .admin-main {
   flex: 1;
   margin-left: var(--sidebar-width);
-  padding: 32px;
-  max-width: 1200px;
+  padding: 24px 40px;
+  max-width: none;
+  margin-top: 0;
 }
 
 .admin-header {
+  margin-top: 0 !important;
   margin-bottom: 28px;
 }
 .admin-header h1 {

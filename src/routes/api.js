@@ -19,7 +19,14 @@ router.get('/pages/:slug', (req, res) => {
     FROM components c JOIN page_components pc ON c.id=pc.component_id WHERE pc.page_id=? ORDER BY pc.position,c.name
   `).all(page.id, page.id);
   const incs = incidents.list({ page_id: page.id, visible: 1 });
-  res.json({ page, components: comps, incidents: incs });
+  const incidentsByComponent = {};
+  comps.forEach(c => { incidentsByComponent[c.id] = []; });
+  incs.forEach(inc => {
+    if (inc.component_id && incidentsByComponent[inc.component_id]) {
+      incidentsByComponent[inc.component_id].push(inc);
+    }
+  });
+  res.json({ page, components: comps, incidents: incs, incidentsByComponent });
 });
 
 router.get('/components', (req, res) => {
@@ -45,14 +52,24 @@ router.get('/status/:slug', (req, res) => {
       (SELECT new_status FROM status_history WHERE component_id=c.id AND page_id=? ORDER BY created_at DESC LIMIT 1) as current_status
     FROM components c JOIN page_components pc ON c.id=pc.component_id WHERE pc.page_id=? ORDER BY pc.position,c.name
   `).all(page.id, page.id);
-  const incs = incidents.list({ page_id: page.id, visible: 1 });
-  res.json({ page: { id: page.id, name: page.name, slug: page.slug, status: page.status, description: page.description }, components: comps, incidents: incs });
+  
+  // Get incidents for this page, grouped by component
+  const allIncs = incidents.list({ page_id: page.id, visible: 1 });
+  const incidentsByComponent = {};
+  comps.forEach(c => { incidentsByComponent[c.id] = []; });
+  allIncs.forEach(inc => {
+    if (inc.component_id && incidentsByComponent[inc.component_id]) {
+      incidentsByComponent[inc.component_id].push(inc);
+    }
+  });
+  
+  res.json({ page: { id: page.id, name: page.name, slug: page.slug, status: page.status, description: page.description }, components: comps, incidents: allIncs, incidentsByComponent });
 });
 
 // ===== PROTECTED =====
 router.use(auth);
 
-router.get('/info', (req, res) => res.json({ name: 'StatusPage API', version: '1.0', user: req.user.name, permissions: req.user.permissions }));
+router.get('/info', (req, res) => res.json({ name: 'StatusFe API', version: '1.0', user: req.user.name, permissions: req.user.permissions }));
 
 // Pages
 router.get('/pages', (req, res) => res.json({ pages: pages.list(), total: pages.list().length }));
@@ -150,19 +167,18 @@ router.get('/incidents', (req, res) => {
 });
 router.get('/incidents/:id', (req, res) => { const i = incidents.get(req.params.id); if (!i) return res.status(404).json({ error: 'Not found' }); res.json({ incident: i }); });
 router.post('/incidents', requirePerm('write'), async (req, res) => {
-  const { page_id, name, status, impact, starts_at, resolved_at, message, visible } = req.body;
-  if (!page_id || !name || !message) return res.status(400).json({ error: 'page_id, name, message required' });
-  const page = pages.getById(page_id) || pages.getBySlug(page_id);
-  if (!page) return res.status(404).json({ error: 'Page not found' });
-  const incident = incidents.create({ page_id: page.id, name, status, impact, starts_at, resolved_at, message, visible });
-  await triggerWebhook(page.id, 'incident.created', { incident_id: incident.id, name: incident.name, status: incident.status });
+  const { component_id, page_id, name, status, impact, starts_at, resolved_at, message, visible } = req.body;
+  if (!name || !message) return res.status(400).json({ error: 'name and message required' });
+  const incident = incidents.create({ component_id, page_id, name, status, impact, starts_at, resolved_at, message, visible });
+  const pid = incident.page_id || page_id;
+  if (pid) await triggerWebhook(pid, 'incident.created', { incident_id: incident.id, name: incident.name, status: incident.status });
   res.status(201).json({ incident });
 });
 router.put('/incidents/:id', requirePerm('write'), async (req, res) => {
   const incident = incidents.get(req.params.id);
   if (!incident) return res.status(404).json({ error: 'Not found' });
   const updated = incidents.update(req.params.id, req.body);
-  await triggerWebhook(incident.page_id, 'incident.updated', { incident_id: updated.id, status: updated.status });
+  await triggerWebhook(updated.page_id, 'incident.updated', { incident_id: updated.id, status: updated.status });
   res.json({ incident: updated });
 });
 router.delete('/incidents/:id', requirePerm('admin'), async (req, res) => {
@@ -208,5 +224,124 @@ router.delete('/webhooks/:id', requirePerm('admin'), (req, res) => { webhooks.de
 
 // Settings (placeholder)
 router.get('/settings', requirePerm('admin'), (req, res) => { res.json({ settings: {} }); });
+
+// Analytics detail for admin UI
+router.get('/analytics-detail', requirePerm('read'), (req, res) => {
+  const { id, type } = req.query;
+  if (!id || !type) return res.status(400).json({ error: 'id and type required' });
+  
+  const labels = [];
+  const datasets = [];
+  
+  // Generate 30 days of labels
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    labels.push(d.toLocaleDateString('en', { month: 'short', day: 'numeric' }));
+  }
+  
+  if (type === 'page') {
+    const page = pages.getById(id) || pages.getBySlug(id);
+    if (!page) return res.status(404).json({ error: 'Page not found' });
+    
+    // Get page views
+    const views = db.prepare(`
+      SELECT DATE(created_at) as date, COUNT(*) as cnt
+      FROM page_views WHERE page_id=? AND created_at >= datetime('now', '-30 days')
+      GROUP BY DATE(created_at) ORDER BY date
+    `).all(id).map(v => ({ date: v.date, cnt: v.cnt }));
+    
+    const viewData = new Array(30).fill(0);
+    views.forEach(v => {
+      const idx = labels.indexOf(v.date);
+      if (idx >= 0) viewData[idx] = v.cnt;
+    });
+    
+    datasets.push({
+      label: 'Page Views',
+      data: viewData,
+      borderColor: 'rgb(99,102,241)',
+      backgroundColor: 'rgba(99,102,241,0.1)',
+      fill: true,
+      tension: 0.4,
+      borderWidth: 2
+    });
+    
+    // Get component uptimes for this page
+    const pageComps = db.prepare(`
+      SELECT c.id, c.name
+      FROM components c JOIN page_components pc ON c.id = pc.component_id
+      WHERE pc.page_id=?
+    `).all(id);
+    
+    const colors = ['rgb(16,185,129)','rgb(245,158,11)','rgb(239,68,68)','rgb(139,92,246)','rgb(14,165,233)','rgb(236,72,153)'];
+    pageComps.forEach((c, ci) => {
+      const history = db.prepare(`
+        SELECT new_status, DATE(created_at) as date
+        FROM status_history WHERE component_id=? AND created_at >= datetime('now', '-30 days')
+        ORDER BY created_at DESC
+      `).all(c.id);
+      
+      const dayStatus = {};
+      history.forEach(h => { if (!dayStatus[h.date]) dayStatus[h.date] = h.new_status; });
+      
+      const data = [];
+      for (let i = 29; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const ds = d.toISOString().split('T')[0];
+        const s = dayStatus[ds];
+        data.push(s === 'operational' ? 100 : (s ? 50 : 100));
+      }
+      
+      datasets.push({
+        label: c.name + ' uptime',
+        data: data,
+        borderColor: colors[ci % colors.length],
+        backgroundColor: 'transparent',
+        tension: 0.3,
+        borderWidth: 1.5,
+        pointRadius: 0
+      });
+    });
+    
+    res.json({ name: page.name, type: 'page', labels, datasets });
+    
+  } else if (type === 'component') {
+    const comp = components.get(id);
+    if (!comp) return res.status(404).json({ error: 'Component not found' });
+    
+    // Get status history for chart
+    const history = db.prepare(`
+      SELECT new_status, DATE(created_at) as date
+      FROM status_history WHERE component_id=? AND created_at >= datetime('now', '-30 days')
+      ORDER BY created_at DESC
+    `).all(id);
+    
+    const dayStatus = {};
+    history.forEach(h => { if (!dayStatus[h.date]) dayStatus[h.date] = h.new_status; });
+    
+    const data = [];
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const ds = d.toISOString().split('T')[0];
+      const s = dayStatus[ds];
+      data.push(s === 'operational' ? 100 : (s ? 50 : 100));
+    }
+    
+    datasets.push({
+      label: comp.name + ' uptime',
+      data: data,
+      borderColor: 'rgb(99,102,241)',
+      backgroundColor: 'rgba(99,102,241,0.1)',
+      fill: true,
+      tension: 0.3,
+      borderWidth: 2
+    });
+    
+    res.json({ name: comp.name, type: 'component', labels, datasets });
+  }
+});
 
 module.exports = router;

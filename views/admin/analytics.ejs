@@ -3,101 +3,264 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><%= title %> - StatusPage Admin</title>
+<title><%= title %> - StatusFe Admin</title>
 <link rel="stylesheet" href="/css/admin.css">
 <style>
 .chart-bar { display: flex; align-items: flex-end; gap: 2px; height: 120px; margin-top: 12px; }
 .chart-bar .bar { flex: 1; background: var(--primary); border-radius: 3px 3px 0 0; min-width: 4px; transition: height 0.3s; }
-.uptime-circle { width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; }
-.uptime-high { background: #dcffe4; color: #065f46; }
-.uptime-med { background: #fff3cd; color: #856404; }
-.uptime-low { background: #ffcccc; color: #cc0000; }
-.metric-card { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; text-align: center; }
-.metric-value { font-size: 28px; font-weight: 700; color: var(--text); }
-.metric-label { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+.retention-bar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 20px; flex-wrap: wrap; }
+.retention-bar label { font-size: 14px; font-weight: 600; }
+.retention-bar select { padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; background: var(--white); color: var(--text); }
+.retention-bar .btn { font-size: 13px; }
+.time-range-label { font-size: 13px; color: var(--text-muted); margin-left: auto; }
+.select-bar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 20px; flex-wrap: wrap; }
+.select-bar label { font-size: 14px; font-weight: 600; }
+.select-bar select { padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; background: var(--white); color: var(--text); }
+.select-bar .btn { font-size: 13px; }
+.chart-container { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 20px; }
+.chart-container canvas { max-height: 300px; }
 </style>
 </head>
 <body>
 <div class="admin-layout">
-<aside class="sidebar">
-<div class="sidebar-header">
-<h2>StatusPage</h2>
-<span class="sidebar-subtitle">Admin Panel</span>
-</div>
-<nav class="sidebar-nav">
-<a href="/admin"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</a>
-<a href="/admin/pages"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>Pages</a>
-<a href="/admin/components"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42 1.42M18.36 5.64l1.42 1.42"/></svg>Components</a>
-<a href="/admin/incidents"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Incidents</a>
-<a href="/admin/maintenance"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Maintenance</a>
-<a href="/admin/notifications"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>Notifications</a>
-<a href="/admin/analytics" class="active"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Analytics</a>
-<a href="/admin/dependencies"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>Dependencies</a>
-<a href="/admin/api-keys"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>API Keys</a>
-<a href="/admin/docs"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>API Docs</a>
-<a href="/admin/users"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>Users</a>
-</nav>
-<div class="sidebar-footer">
-<div class="user-info">
-<span class="user-name"><%= user.name %></span>
-<span class="user-role"><%= user.role %></span>
-</div>
-<form action="/auth/logout" method="post"><button type="submit" class="btn-logout">Logout</button></form>
-</div>
-</aside>
+<%- include('/var/www/cachet/views/partials/_sidebar'); %>
 <main class="admin-main">
-<div class="admin-header"><h1><%= title %></h1></div>
+<div class="admin-header"><h1><%= title %></h1>
+<% if (message) { %>
+<div class="flash flash-<%= messageType %>"><%= message %></div>
+<% } %>
+</div>
 
-<% if (pages.length === 0) { %>
-<div class="card"><p class="text-muted">No pages to show analytics for.</p></div>
+<!-- Disk Usage -->
+<div class="card" style="margin-bottom:20px;">
+<h2 style="font-size: 16px; font-weight: 600; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border);">Disk Usage</h2>
+<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+<div style="flex:1;min-width:200px;">
+<div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:6px;">
+<span>Storage</span>
+<span style="font-weight:600;"><%= diskInfo.dbSize ? (diskInfo.dbSize / (1024*1024)).toFixed(1) + ' MB (DB)' : diskInfo.percentage + '% used' %></span>
+</div>
+<div style="height:10px;background:var(--border);border-radius:5px;overflow:hidden;">
+<div style="height:100%;width:<%= diskInfo.percentage || 0 %>%;background:<%= parseFloat(diskInfo.percentage) >= 90 ? '#ef4444' : parseFloat(diskInfo.percentage) >= 75 ? '#f59e0b' : '#10b981' %>;border-radius:5px;transition:width 0.5s;"></div>
+</div>
+<% if (diskInfo.total > 0) { %>
+<div style="font-size:12px;color:var(--text-muted);margin-top:6px;"><%= (diskInfo.used / (1024*1024*1024)).toFixed(2) %> GB used of <%= (diskInfo.total / (1024*1024*1024)).toFixed(2) %> GB</div>
+<% } %>
+<% if (diskInfo.dbOnly) { %>
+<div style="font-size:12px;color:var(--text-muted);margin-top:6px;">Database: <%= (diskInfo.dbSize / 1024).toFixed(0) %> KB</div>
+<% } %>
+</div>
+</div>
+</div>
+
+<!-- Retention Settings -->
+<div class="retention-bar">
+<label for="retentionSelect">Data retention:</label>
+<select id="retentionSelect" onchange="changeRetention()">
+<option value="30" <%= parseInt(retention) === 30 ? 'selected' : '' %>>30 days</option>
+<option value="90" <%= parseInt(retention) === 90 ? 'selected' : '' %>>3 months</option>
+<option value="180" <%= parseInt(retention) === 180 ? 'selected' : '' %>>6 months</option>
+<option value="365" <%= parseInt(retention) === 365 ? 'selected' : '' %>>1 year</option>
+<option value="730" <%= parseInt(retention) === 730 ? 'selected' : '' %>>2 years</option>
+<option value="1825" <%= parseInt(retention) === 1825 ? 'selected' : '' %>>5 years</option>
+</select>
+<button class="btn btn-sm btn-primary" onclick="changeRetention()">Apply</button>
+<button class="btn btn-sm btn-danger" onclick="cleanupData()">Clean old data now</button>
+<span class="time-range-label">Older data will be permanently deleted</span>
+</div>
+
+<!-- Selector: Page or Component -->
+<div class="select-bar">
+<label>View analytics for:</label>
+<select id="analyticsType" onchange="toggleAnalytics()">
+<option value="">— Select type —</option>
+<option value="page">Page</option>
+<option value="component">Component</option>
+</select>
+<select id="pageSelect" style="display:none;" onchange="loadAnalytics()">
+<option value="">Select a page...</option>
+<% pages.forEach(p => { %>
+<option value="<%= p.id %>"><%= p.name %></option>
+<% }) %>
+</select>
+<select id="compSelect" style="display:none;" onchange="loadAnalytics()">
+<option value="">Select a component...</option>
+<% components.forEach(c => { %>
+<option value="<%= c.id %>"><%= c.name %></option>
+<% }) %>
+</select>
+</div>
+
+<!-- Chart area -->
+<div id="chartArea" style="display:none;">
+<div class="select-bar">
+<label>Chart style:</label>
+<select id="chartStyle" onchange="redrawChart()">
+<option value="chart">Line Chart</option>
+<option value="bar">Bar Chart</option>
+</select>
+<label style="margin-left:16px;">Time range:</label>
+<select id="timeRange" onchange="loadAnalytics()">
+<option value="1">Last 1 hour</option>
+<option value="2">Last 2 hours</option>
+<option value="4" selected>Last 4 hours</option>
+<option value="8">Last 8 hours</option>
+<option value="16">Last 16 hours</option>
+<option value="24">Last 24 hours</option>
+<option value="48">Last 48 hours</option>
+<option value="168">Last 7 days</option>
+<option value="720">Last 30 days</option>
+</select>
+<span class="time-range-label" id="chartTitle"></span>
+</div>
+<div class="chart-container">
+<canvas id="mainChart" height="250"></canvas>
+</div>
+</div>
+
+<!-- Component Uptime Overview -->
+<div class="card">
+<h2 style="font-size: 16px; font-weight: 600; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border);">All Components Uptime Overview</h2>
+<% if (componentUptime.length === 0) { %>
+<p class="text-muted">No components yet.</p>
 <% } else { %>
-<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;">
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;">
+<% componentUptime.forEach(c => { %>
+<div style="background:var(--bg);border-radius:var(--radius);padding:16px;text-align:center;">
+<div style="font-size:14px;font-weight:600;margin-bottom:8px;"><%= c.name %></div>
+<div style="font-size:32px;font-weight:700;color:<%= parseFloat(c.uptime) >= 99 ? 'var(--success)' : parseFloat(c.uptime) >= 95 ? 'var(--warning)' : 'var(--danger)' %>"><%= c.uptime %>%</div>
+<div style="font-size:12px;color:var(--text-muted);margin-top:4px;">uptime (30d)</div>
+<div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden;margin-top:8px;">
+<div style="height:100%;width:<%= c.uptime %>%;background:<%= parseFloat(c.uptime) >= 99 ? '#10b981' : parseFloat(c.uptime) >= 95 ? '#f59e0b' : '#ef4444' %>;border-radius:4px;"></div>
+</div>
+</div>
+<% }) %>
+</div>
+<% } %>
+</div>
+
+<!-- Page Views Overview -->
+<div class="card">
+<h2 style="font-size: 16px; font-weight: 600; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border);">Page Views Overview</h2>
+<% if (pages.length === 0) { %>
+<p class="text-muted">No pages configured.</p>
+<% } else { %>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;">
 <% pages.forEach(p => { %>
 <div class="metric-card">
-<div class="metric-value"><%= p.totalViews %></div>
-<div class="metric-label">Views — <%= p.page.name %></div>
+<div class="metric-value"><%= p.totalViews || 0 %></div>
+<div class="metric-label">Views — <%= p.name %></div>
 </div>
 <% }) %>
-</div>
-
-<% pages.forEach(p => { %>
-<div class="card" style="margin-bottom:20px;">
-<h3><%= p.page.name %> (<code><%= p.page.slug %></code>)</h3>
-<div style="display:flex;gap:16px;margin:16px 0;flex-wrap:wrap;">
-<div class="uptime-circle <%= parseFloat(p.uptime.percentage) >= 99 ? 'uptime-high' : parseFloat(p.uptime.percentage) >= 95 ? 'uptime-med' : 'uptime-low' %>">
-<%= p.uptime.percentage %>%
-</div>
-<div>
-<div style="font-size:14px;font-weight:600;">Uptime (30 days)</div>
-<div style="font-size:13px;color:var(--text-muted);"><%= p.uptime.operationalDays %> / <%= p.uptime.totalDays %> days operational</div>
-</div>
-<div>
-<div style="font-size:14px;font-weight:600;">Total Views</div>
-<div style="font-size:24px;font-weight:700;color:var(--primary);"><%= p.totalViews %></div>
-</div>
-</div>
-<% if (p.views.length > 0) { %>
-<div class="chart-bar">
-<% const maxViews = Math.max(...p.views.map(v => parseInt(v.views)), 1); %>
-<% p.views.forEach(v => { %>
-<div class="bar" style="height:<%= (parseInt(v.views) / maxViews) * 100 %>%" title="<%= v.date %>: <%= v.views %> views"></div>
-<% }) %>
-</div>
-<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-top:4px;">
-<span><%= p.views[p.views.length-1]?.date || '' %></span>
-<span>Today</span>
 </div>
 <% } %>
 </div>
-<% }) %>
-<% } %>
 </main>
 </div>
 <button class="theme-toggle" onclick="toggleTheme()"><span id="themeIcon">🌙</span></button>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="/js/admin.js"></script>
 <script>
-(function(){const s=localStorage.getItem('statuspage-theme');if(s==='dark'){document.body.classList.add('dark');const i=document.getElementById('themeIcon');if(i)i.textContent='☀️';}})();
-function toggleTheme(){document.body.classList.toggle('dark');const i=document.getElementById('themeIcon');if(document.body.classList.contains('dark')){localStorage.setItem('statuspage-theme','dark');if(i)i.textContent='☀️';}else{localStorage.setItem('statuspage-theme','light');if(i)i.textContent='🌙';}}
+(function(){const s=localStorage.getItem('statusfe-theme');if(s==='dark'){document.body.classList.add('dark');const i=document.getElementById('themeIcon');if(i)i.textContent='☀️';}})();
+function toggleTheme(){document.body.classList.toggle('dark');const i=document.getElementById('themeIcon');if(document.body.classList.contains('dark')){localStorage.setItem('statusfe-theme','dark');if(i)i.textContent='☀️';}else{localStorage.setItem('statusfe-theme','light');if(i)i.textContent='🌙';}}
+
+let mainChart = null;
+
+const isDark = document.body.classList.contains('dark');
+const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
+const textColor = isDark ? '#94a3b8' : '#64748b';
+
+function toggleAnalytics() {
+  const type = document.getElementById('analyticsType').value;
+  document.getElementById('pageSelect').style.display = type === 'page' ? '' : 'none';
+  document.getElementById('compSelect').style.display = type === 'component' ? '' : 'none';
+  document.getElementById('chartArea').style.display = 'none';
+}
+
+function loadAnalytics() {
+  const type = document.getElementById('analyticsType').value;
+  let targetId;
+  if (type === 'page') {
+    targetId = document.getElementById('pageSelect').value;
+  } else if (type === 'component') {
+    targetId = document.getElementById('compSelect').value;
+  }
+  if (!targetId) {
+    document.getElementById('chartArea').style.display = 'none';
+    return;
+  }
+
+  const hours = document.getElementById('timeRange').value;
+  fetch('/admin/analytics-detail?id=' + encodeURIComponent(targetId) + '&type=' + type + '&hours=' + hours)
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        showToast(data.error, 'error');
+        return;
+      }
+      document.getElementById('chartArea').style.display = '';
+      const h = data.hours || hours;
+      let rangeLabel = '';
+      if (h <= 24) rangeLabel = 'Last ' + h + ' hours';
+      else if (h <= 720) rangeLabel = 'Last ' + (h / 24) + ' days';
+      else rangeLabel = 'Last ' + (h / 24) + ' days';
+      document.getElementById('chartTitle').textContent = data.name + ' — ' + rangeLabel;
+      buildChart(data);
+    })
+    .catch(err => showToast('Failed to load data: ' + err.message, 'error'));
+}
+
+function buildChart(data) {
+  const style = document.getElementById('chartStyle').value;
+  const labels = data.labels;
+  const datasets = data.datasets;
+
+  if (mainChart) mainChart.destroy();
+
+  mainChart = new Chart(document.getElementById('mainChart'), {
+    type: style === 'chart' ? 'line' : 'bar',
+    data: {
+      labels: labels,
+      datasets: datasets
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: textColor } }
+      },
+      scales: {
+        x: { ticks: { color: textColor, maxTicksLimit: 15 }, grid: { color: gridColor } },
+        y: { ticks: { color: textColor }, grid: { color: gridColor } }
+      }
+    }
+  });
+}
+
+function redrawChart() {
+  loadAnalytics();
+}
+
+function changeRetention() {
+  const days = document.getElementById('retentionSelect').value;
+  fetch('/admin/analytics/retention', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'retention_days=' + days
+  }).then(() => location.reload());
+}
+
+function cleanupData() {
+  if (!confirm('Delete all analytics data older than the retention period? This cannot be undone.')) return;
+  fetch('/admin/analytics/cleanup', { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        alert('Deleted ' + data.deleted + ' old records.');
+        location.reload();
+      }
+    });
+}
 </script>
 </body>
 </html>

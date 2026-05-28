@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title><%= title %> - StatusFe Admin</title>
+<link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+<div class="admin-layout">
+<%- include('/var/www/cachet/views/partials/_sidebar'); %>
+<main class="admin-main">
+<div class="admin-header">
+<h1><%= title %></h1>
+<% if (message) { %>
+<div class="flash flash-<%= messageType %>"><%= message %></div>
+<% } %>
+</div>
+
+<div class="card">
+<h3 style="font-size:16px;font-weight:600;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border);">Branding</h3>
+<div class="form-row">
+<div class="form-group">
+<label for="logo_text">Logo Text</label>
+<input type="text" id="logo_text" name="logo_text" value="<%= customization.logo_text %>">
+</div>
+<div class="form-group">
+<label for="logo_color">Logo Color</label>
+<input type="color" id="logo_color" name="logo_color" value="<%= customization.logo_color %>" style="height:40px;">
+</div>
+</div>
+</div>
+
+<div class="card" style="margin-top:20px;">
+<h3 style="font-size:16px;font-weight:600;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border);">Colors</h3>
+<div class="form-row">
+<div class="form-group">
+<label for="primary_color">Primary Color</label>
+<input type="color" id="primary_color" name="primary_color" value="<%= customization.primary_color %>" style="height:40px;">
+</div>
+<div class="form-group">
+<label for="secondary_color">Secondary Color</label>
+<input type="color" id="secondary_color" name="secondary_color" value="<%= customization.secondary_color %>" style="height:40px;">
+</div>
+</div>
+<div class="form-row">
+<div class="form-group">
+<label for="bg_color">Background Color</label>
+<input type="color" id="bg_color" name="bg_color" value="<%= customization.bg_color %>" style="height:40px;">
+</div>
+<div class="form-group">
+<label for="text_color">Text Color</label>
+<input type="color" id="text_color" name="text_color" value="<%= customization.text_color %>" style="height:40px;">
+</div>
+</div>
+</div>
+
+<div class="card" style="margin-top:20px;">
+<h3 style="font-size:16px;font-weight:600;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border);">Typography & Layout</h3>
+<div class="form-row">
+<div class="form-group">
+<label for="font_family">Font Family</label>
+<input type="text" id="font_family" name="font_family" value="<%= customization.font_family %>" placeholder="-apple-system, BlinkMacSystemFont, sans-serif">
+</div>
+<div class="form-group">
+<label for="border_radius">Border Radius (px)</label>
+<input type="number" id="border_radius" name="border_radius" value="<%= customization.border_radius %>" min="0" max="30">
+</div>
+</div>
+<div class="form-group">
+<label for="page_structure">Page Structure</label>
+<select id="page_structure" name="page_structure">
+<option value="default" <%= customization.page_structure === 'default' ? 'selected' : '' %>>Default (List)</option>
+<option value="grid" <%= customization.page_structure === 'grid' ? 'selected' : '' %>>Grid Cards</option>
+<option value="dark" <%= customization.page_structure === 'dark' ? 'selected' : '' %>>Dark Terminal</option>
+</select>
+</div>
+</div>
+
+<form action="/admin/customize" method="post" style="margin-top:20px;">
+<div class="form-actions">
+<button type="submit" class="btn btn-primary">Save Customization</button>
+<a href="/admin" class="btn">Cancel</a>
+</div>
+</form>
+
+</main>
+</div>
+<script src="/js/admin.js"></script>
+</body>
+</html>

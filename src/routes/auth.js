@@ -3,6 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const db = require('../db/init');
 const { createSession, destroySession, getSession } = require('../middleware/session');
+const { passwordResets } = require('../db/models');
 
 // POST /auth/login
 router.post('/login', (req, res) => {
@@ -90,6 +91,44 @@ router.get('/me', (req, res) => {
     return res.status(401).json({ error: 'Not authenticated' });
   }
   res.json({ user: req.user });
+});
+
+// GET /auth/set-password/:token
+router.get('/set-password/:token', (req, res) => {
+  const reset = passwordResets.get(req.params.token);
+  if (!reset) {
+    return res.redirect('/login?msg=invalid_reset&type=error');
+  }
+  res.render('auth/set-password', {
+    title: 'Set Password',
+    token: req.params.token,
+    error: null
+  });
+});
+
+// POST /auth/set-password
+router.post('/set-password', (req, res) => {
+  const { token, password, confirm_password } = req.body;
+  if (!token || !password || !confirm_password) {
+    return res.redirect('/login?msg=error&type=error');
+  }
+  if (password.length < 6) {
+    return res.redirect('/login?msg=error&type=error');
+  }
+  if (password !== confirm_password) {
+    return res.redirect('/login?msg=error&type=error');
+  }
+
+  const reset = passwordResets.get(token);
+  if (!reset) {
+    return res.redirect('/login?msg=invalid_reset&type=error');
+  }
+
+  const passwordHash = bcrypt.hashSync(password, 10);
+  db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(passwordHash, reset.user_id);
+  passwordResets.deleteToken(token);
+
+  res.redirect('/login?msg=password_set&type=success');
 });
 
 module.exports = router;

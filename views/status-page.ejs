@@ -17,22 +17,49 @@
 
 <!-- ===== DEFAULT TEMPLATE ===== -->
 <% if (page.template === 'default') { %>
-<header>
-<div class="container">
-<div class="header-content">
+<div class="page-header">
+<div class="page-header-inner">
+<%- include('/var/www/cachet/views/partials/_logo'); %>
 <% if (page.logo_url) { %><img src="<%= page.logo_url %>" alt="<%= page.name %>" class="logo"><% } %>
 <div>
 <h1><%= page.name %></h1>
-<p class="subtitle"><%= page.description || 'System Status' %></p>
+<p><%= page.description || 'System Status' %></p>
 </div>
 </div>
 </div>
-</header>
-<main class="container">
-<div class="status-banner status-<%= page.status %>">
-<span class="dot dot-<%= page.status %>"></span>
-<span><%= formatStatus(page.status) %></span>
+<div class="page-body">
+<div class="container">
+<div class="overall-status status-<%= page.status %>">
+<span class="pulse-dot dot-<%= page.status %>"></span>
+<div>
+<span class="overall-label">Overall Status</span>
+<span class="overall-value"><%= formatStatus(page.status) %></span>
 </div>
+</div>
+<% if (incidents && incidents.length > 0) { %>
+<% const activeIncs = incidents.filter(i => i.status !== 'resolved'); %>
+<% if (activeIncs.length > 0) { %>
+<% const worstImpact = (() => { const order = {critical:4,major:3,minor:2,none:1}; let w='none'; activeIncs.forEach(i => { if ((order[i.impact]||0) > (order[w]||0)) w = i.impact; }); return w; })(); %>
+<div class="incidents-panel impact-<%= worstImpact %>">
+<div class="incidents-panel-header">
+<span class="alert-icon"></span>
+<span class="incidents-count"><%= activeIncs.length %> Active Incident<%= activeIncs.length > 1 ? 's' : '' %></span>
+</div>
+<% activeIncs.forEach(inc => { %>
+<div class="incident-row impact-<%= inc.impact || 'minor' %>">
+<div class="incident-row-left">
+<span class="incident-dot impact-<%= inc.impact || 'minor' %>"></span>
+<div>
+<div class="incident-row-name"><%= inc.name %></div>
+<div class="incident-row-msg"><%= inc.message.replace(/\n/g, '<br>') %></div>
+</div>
+</div>
+<span class="incident-row-badge badge-<%= inc.status %>"><%= formatStatus(inc.status) %></span>
+</div>
+<% }) %>
+</div>
+<% } %>
+<% } %>
 <% const groups = {}; %>
 <% components.forEach(c => {
   const g = c.group_name || 'Other';
@@ -40,46 +67,33 @@
   groups[g].push({ name: c.name, status: c.current_status || c.status, description: c.description });
 }); %>
 <% for (const [name, comps] of Object.entries(groups)) { %>
-<section class="group">
+<div class="component-group">
 <h2><%= name %></h2>
 <% comps.forEach(c => { %>
-<div class="item status-<%= c.status %>">
+<div class="component-row status-<%= c.status %>">
+<div class="component-row-left">
+<span class="component-dot dot-<%= c.status %>"></span>
 <div>
-<div class="item-header">
-<span class="dot dot-<%= c.status %>"></span>
-<h3><%= c.name %></h3>
+<div class="component-name"><%= c.name %></div>
+<div class="component-desc"><%= c.description || '' %></div>
 </div>
-<p class="desc"><%= c.description || '' %></p>
 </div>
-<span class="badge badge-<%= c.status %>"><%= formatStatus(c.status) %></span>
+<span class="component-badge badge-<%= c.status %>"><%= formatStatus(c.status) %></span>
 </div>
 <% }) %>
-</section>
-<% } %>
-<% if (incidents.length > 0) { %>
-<section class="incidents-section">
-<h2>Recent Incidents</h2>
-<% incidents.forEach(inc => { %>
-<div class="card <%= inc.status %>">
-<div class="card-header">
-<h3><%= inc.name %></h3>
-<span class="badge badge-<%= inc.status %>"><%= formatStatus(inc.status) %></span>
 </div>
-<p class="card-date">Started: <%= inc.starts_at %></p>
-<% if (inc.resolved_at) { %><p class="card-date">Resolved: <%= inc.resolved_at %></p><% } %>
-<p class="card-msg"><%= inc.message.replace(/\n/g, '<br>') %></p>
-</div>
-<% }) %>
-</section>
 <% } %>
+</div>
+</div>
 </main>
-<footer><p>Powered by StatusPage</p></footer>
+<footer><p>Powered by StatusFe</p></footer>
 
 <!-- ===== GRID TEMPLATE ===== -->
 <% } else if (page.template === 'grid') { %>
 <header>
 <div class="container">
 <div class="header-content">
+<%- include('/var/www/cachet/views/partials/_logo'); %>
 <% if (page.logo_url) { %><img src="<%= page.logo_url %>" alt="<%= page.name %>" class="logo"><% } %>
 <div>
 <h1><%= page.name %></h1>
@@ -88,10 +102,39 @@
 </div>
 </div>
 </header>
-<div class="status-banner status-<%= page.status %>">
-<span class="dot dot-<%= page.status %>"></span>
-<span><%= formatStatus(page.status) %></span>
+<div class="page-body">
+<div class="container">
+<div class="overall-status status-<%= page.status %>">
+<span class="pulse-dot dot-<%= page.status %>"></span>
+<div>
+<span class="overall-label">Overall Status</span>
+<span class="overall-value"><%= formatStatus(page.status) %></span>
 </div>
+</div>
+<% if (incidents && incidents.length > 0) { %>
+<% const activeIncs = incidents.filter(i => i.status !== 'resolved'); %>
+<% if (activeIncs.length > 0) { %>
+<% const worstImpact = (() => { const order = {critical:4,major:3,minor:2,none:1}; let w='none'; activeIncs.forEach(i => { if ((order[i.impact]||0) > (order[w]||0)) w = i.impact; }); return w; })(); %>
+<div class="incidents-panel impact-<%= worstImpact %>">
+<div class="incidents-panel-header">
+<span class="alert-icon"></span>
+<span class="incidents-count"><%= activeIncs.length %> Active Incident<%= activeIncs.length > 1 ? 's' : '' %></span>
+</div>
+<% activeIncs.forEach(inc => { %>
+<div class="incident-row impact-<%= inc.impact || 'minor' %>">
+<div class="incident-row-left">
+<span class="incident-dot impact-<%= inc.impact || 'minor' %>"></span>
+<div>
+<div class="incident-row-name"><%= inc.name %></div>
+<div class="incident-row-msg"><%= inc.message.replace(/\n/g, '<br>') %></div>
+</div>
+</div>
+<span class="incident-row-badge badge-<%= inc.status %>"><%= formatStatus(inc.status) %></span>
+</div>
+<% }) %>
+</div>
+<% } %>
+<% } %>
 <div class="grid-container">
 <% const groups = {}; %>
 <% components.forEach(c => {
@@ -116,30 +159,15 @@
 </div>
 <% } %>
 </div>
-<% if (incidents.length > 0) { %>
-<div class="incidents-section">
-<h2>Recent Incidents</h2>
-<% incidents.forEach(inc => { %>
-<div class="incident-card <%= inc.status %>">
-<div class="incident-header">
-<span class="incident-name"><%= inc.name %></span>
-<span class="card-status badge-<%= inc.status %>"><%= formatStatus(inc.status) %></span>
 </div>
-<p class="incident-date">Started: <%= inc.starts_at %></p>
-<% if (inc.resolved_at) { %><p class="incident-date">Resolved: <%= inc.resolved_at %></p><% } %>
-<p class="incident-msg"><%= inc.message.replace(/\n/g, '<br>') %></p>
-</div>
-<% }) %>
-</div>
-<% } %>
-</div>
-<footer><p>Powered by StatusPage</p></footer>
+<footer><p>Powered by StatusFe</p></footer>
 
 <!-- ===== DARK TEMPLATE ===== -->
 <% } else { %>
 <header>
 <div class="container">
 <div class="header-content">
+<%- include('/var/www/cachet/views/partials/_logo'); %>
 <% if (page.logo_url) { %><img src="<%= page.logo_url %>" alt="<%= page.name %>" class="logo"><% } %>
 <div>
 <h1><%= page.name %></h1>
@@ -148,10 +176,39 @@
 </div>
 </div>
 </header>
-<div class="status-banner status-<%= page.status %>">
-<span class="dot dot-<%= page.status %>"></span>
-<span><%= formatStatus(page.status) %></span>
+<div class="page-body">
+<div class="container">
+<div class="overall-status status-<%= page.status %>">
+<span class="pulse-dot dot-<%= page.status %>"></span>
+<div>
+<span class="overall-label">Overall Status</span>
+<span class="overall-value"><%= formatStatus(page.status) %></span>
 </div>
+</div>
+<% if (incidents && incidents.length > 0) { %>
+<% const activeIncs = incidents.filter(i => i.status !== 'resolved'); %>
+<% if (activeIncs.length > 0) { %>
+<% const worstImpact = (() => { const order = {critical:4,major:3,minor:2,none:1}; let w='none'; activeIncs.forEach(i => { if ((order[i.impact]||0) > (order[w]||0)) w = i.impact; }); return w; })(); %>
+<div class="incidents-panel impact-<%= worstImpact %>">
+<div class="incidents-panel-header">
+<span class="alert-icon"></span>
+<span class="incidents-count"><%= activeIncs.length %> Active Incident<%= activeIncs.length > 1 ? 's' : '' %></span>
+</div>
+<% activeIncs.forEach(inc => { %>
+<div class="incident-row impact-<%= inc.impact || 'minor' %>">
+<div class="incident-row-left">
+<span class="incident-dot impact-<%= inc.impact || 'minor' %>"></span>
+<div>
+<div class="incident-row-name"><%= inc.name %></div>
+<div class="incident-row-msg"><%= inc.message.replace(/\n/g, '<br>') %></div>
+</div>
+</div>
+<span class="incident-row-badge badge-<%= inc.status %>"><%= formatStatus(inc.status) %></span>
+</div>
+<% }) %>
+</div>
+<% } %>
+<% } %>
 <div class="dark-container">
 <% const groups = {}; %>
 <% components.forEach(c => {
@@ -178,63 +235,25 @@
 <% }) %>
 </div>
 <% } %>
-<% if (incidents.length > 0) { %>
-<div class="incidents-section">
-<h2>Recent Incidents</h2>
-<% incidents.forEach(inc => { %>
-<div class="dark-incident <%= inc.status %>">
-<div class="dark-incident-header">
-<span class="dark-incident-name"><%= inc.name %></span>
-<span class="dark-badge <%= inc.status %>"><%= formatStatus(inc.status) %></span>
 </div>
-<p class="dark-incident-date">Started: <%= inc.starts_at %></p>
-<% if (inc.resolved_at) { %><p class="dark-incident-date">Resolved: <%= inc.resolved_at %></p><% } %>
-<p class="dark-incident-msg"><%= inc.message.replace(/\n/g, '<br>') %></p>
 </div>
-<% }) %>
-</div>
-<% } %>
-</div>
-<footer><p>Powered by StatusPage</p></footer>
+<footer><p>Powered by StatusFe</p></footer>
 <% } %>
 
 <script>
 setInterval(() => {
   fetch('/api/v1/status/<%= page.slug %>').then(r => r.json()).then(d => {
-    const b = document.querySelector('.status-banner');
+    const b = document.querySelector('.overall-status');
     if (b && d.page) {
-      b.className = 'status-banner status-' + d.page.status;
-      b.querySelector('.dot').className = 'dot dot-' + d.page.status;
-      b.lastChild.textContent = formatStatus(d.page.status);
+      b.className = 'overall-status status-' + d.page.status;
+      const dot = b.querySelector('.pulse-dot');
+      if (dot) dot.className = 'pulse-dot dot-' + d.page.status;
+      const val = b.querySelector('.overall-value');
+      if (val) val.textContent = formatStatus(d.page.status);
     }
   }).catch(() => {});
 }, 60000);
 function formatStatus(s) { return {operational:'Operational',under_maintenance:'Under Maintenance',degraded_performance:'Degraded Performance',partial_outage:'Partial Outage',major_outage:'Major Outage',investigating:'Investigating',identified:'Identified',monitoring:'Monitoring',resolved:'Resolved'}[s] || s; }
-</script>
-<button class="status-theme-toggle" onclick="toggleStatusTheme()" title="Toggle dark/light mode">
-<span id="statusThemeIcon">🌙</span>
-</button>
-<script>
-(function() {
-  const saved = localStorage.getItem('statuspage-status-theme');
-  if (saved === 'dark') {
-    document.body.classList.add('status-dark');
-    const icon = document.getElementById('statusThemeIcon');
-    if (icon) icon.textContent = '☀️';
-  }
-})();
-
-function toggleStatusTheme() {
-  document.body.classList.toggle('status-dark');
-  const icon = document.getElementById('statusThemeIcon');
-  if (document.body.classList.contains('status-dark')) {
-    localStorage.setItem('statuspage-status-theme', 'dark');
-    if (icon) icon.textContent = '☀️';
-  } else {
-    localStorage.setItem('statuspage-status-theme', 'light');
-    if (icon) icon.textContent = '🌙';
-  }
-}
 </script>
 <% if (page.custom_html) { %><%= page.custom_html %><% } %>
 </body>
