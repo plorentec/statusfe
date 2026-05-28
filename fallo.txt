@@ -1,24 +1,19 @@
-{"error":"/app/views/status-page.ejs:22\n    20| <div class=\"page-header\">\n    21| <div class=\"page-header-inner\">\n >> 22| <%- include('../partials/_logo'); %>\n    23| <% if (page.logo_url) { %><img src=\"<%= page.logo_url %>\" alt=\"<%= page.name %>\" class=\"logo\"><% } %>\n    24| <div>\n    25| <h1><%= page.name %></h1>\n\nCould not find the include file \"../partials/_logo\""}
+{"error":"no such column: \"resolved\" - should this be a string literal in single-quotes?"}
 
-statusfe  | RENDERING docs.ejs from: /app/views
-statusfe  | Error: /app/views/status-page.ejs:22
-statusfe  |     20| <div class="page-header">
-statusfe  |     21| <div class="page-header-inner">
-statusfe  |  >> 22| <%- include('../partials/_logo'); %>
-statusfe  |     23| <% if (page.logo_url) { %><img src="<%= page.logo_url %>" alt="<%= page.name %>" class="logo"><% } %>
-statusfe  |     24| <div>
-statusfe  |     25| <h1><%= page.name %></h1>
-statusfe  |
-statusfe  | Could not find the include file "../partials/_logo"
-statusfe  |     at getIncludePath (/app/node_modules/ejs/lib/cjs/ejs.js:170:19)
-statusfe  |     at includeFile (/app/node_modules/ejs/lib/cjs/ejs.js:284:21)
-statusfe  |     at include (/app/node_modules/ejs/lib/cjs/ejs.js:630:24)
-statusfe  |     at eval ("/app/views/status-page.ejs":40:17)
-statusfe  |     at status-page (/app/node_modules/ejs/lib/cjs/ejs.js:632:23)
-statusfe  |     at tryHandleCache (/app/node_modules/ejs/lib/cjs/ejs.js:253:42)
-statusfe  |     at ejs.renderFile [as engine] (/app/node_modules/ejs/lib/cjs/ejs.js:444:12)
-statusfe  |     at View.render (/app/node_modules/express/lib/view.js:135:8)
-statusfe  |     at tryRender (/app/node_modules/express/lib/application.js:657:10)
-statusfe  |     at Function.render (/app/node_modules/express/lib/application.js:609:3) {
-statusfe  |   path: '/app/views/status-page.ejs'
+statusfe  | SqliteError: no such column: "resolved" - should this be a string literal in single-quotes?
+statusfe  |     at Database.prepare (/app/node_modules/better-sqlite3/lib/methods/wrappers.js:5:21)
+statusfe  |     at Object.update (/app/src/db/models.js:334:36)
+statusfe  |     at /app/src/routes/admin.js:353:13
+statusfe  |     at Layer.handle [as handle_request] (/app/node_modules/express/lib/router/layer.js:95:5)
+statusfe  |     at next (/app/node_modules/express/lib/router/route.js:149:13)
+statusfe  |     at Route.dispatch (/app/node_modules/express/lib/router/route.js:119:3)
+statusfe  |     at Layer.handle [as handle_request] (/app/node_modules/express/lib/router/layer.js:95:5)
+statusfe  |     at /app/node_modules/express/lib/router/index.js:284:15
+statusfe  |     at param (/app/node_modules/express/lib/router/index.js:365:14)
+statusfe  |     at param (/app/node_modules/express/lib/router/index.js:376:14) {
+statusfe  |   code: 'SQLITE_ERROR'
 statusfe  | }
+statusfe  | Cascading status degraded_performance from 776aebb2-19a6-4125-9bfe-c35783189031 to e979f16f-ffc1-48ff-930c-cf2fc4287fa9
+statusfe  |   Cascade: API operational -> degraded_performance
+statusfe  | Cascading status operational from 776aebb2-19a6-4125-9bfe-c35783189031 to e979f16f-ffc1-48ff-930c-cf2fc4287fa9
+statusfe  |   Cascade: API degraded_performance -> operational

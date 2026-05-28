@@ -331,7 +331,7 @@ module.exports.incidents = {
     if (inc) {
       // When incident is resolved and no active incidents on this component, restore component to operational
       if (data.status === 'resolved' && inc.component_id) {
-        const activeIncidents = db.prepare('SELECT id FROM incidents WHERE component_id=? AND status != "resolved"').all(inc.component_id);
+        const activeIncidents = db.prepare('SELECT id FROM incidents WHERE component_id=? AND status != \'resolved\'').all(inc.component_id);
         if (activeIncidents.length === 0) {
           const comp = this.get(inc.component_id);
           if (comp && comp.status !== 'operational') {
