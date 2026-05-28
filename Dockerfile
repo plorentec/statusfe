@@ -4,8 +4,8 @@ RUN apk add --no-cache dumb-init
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
-RUN npm ci --only=production
+COPY package.json package-lock.json* ./
+RUN npm install --omit=dev
 
 COPY . .
 
