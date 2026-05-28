@@ -191,7 +191,7 @@ router.get('/analytics-detail', (req, res) => {
     const colors = ['rgb(16,185,129)','rgb(245,158,11)','rgb(239,68,68)','rgb(139,92,246)','rgb(14,165,233)','rgb(236,72,153)'];
     pageComps.forEach((c, ci) => {
       const history = db.prepare(`
-        SELECT new_status, strftime('%Y-%m-%H', created_at) as hour
+        SELECT new_status, strftime('%Y-%m-%d-%H', created_at) as hour
         FROM status_history WHERE component_id=? AND created_at >= datetime('now', ? || ' hours')
         ORDER BY created_at DESC
       `).all(c.id, String(h));
@@ -202,7 +202,7 @@ router.get('/analytics-detail', (req, res) => {
       const data = [];
       for (let i = 0; i < h; i++) {
         const d = new Date(now.getTime() - i * 3600000);
-        const hk = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate() + '-' + d.getHours();
+        const hk = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0') + '-' + String(d.getHours()).padStart(2,'0');
         const s = hourStatus[hk];
         data.push(s === 'operational' ? 100 : (s ? 50 : 0));
       }
@@ -225,7 +225,7 @@ router.get('/analytics-detail', (req, res) => {
     if (!comp) return res.status(404).json({ error: 'Component not found' });
     
     const history = db.prepare(`
-      SELECT new_status, strftime('%Y-%m-%H', created_at) as hour
+      SELECT new_status, strftime('%Y-%m-%d-%H', created_at) as hour
       FROM status_history WHERE component_id=? AND created_at >= datetime('now', ? || ' hours')
       ORDER BY created_at DESC
     `).all(id, String(h));
@@ -236,7 +236,7 @@ router.get('/analytics-detail', (req, res) => {
     const data = [];
     for (let i = 0; i < h; i++) {
       const d = new Date(now.getTime() - i * 3600000);
-      const hk = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate() + '-' + d.getHours();
+      const hk = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0') + '-' + String(d.getHours()).padStart(2,'0');
       const s = hourStatus[hk];
       data.push(s === 'operational' ? 100 : (s ? 50 : 0));
     }
