@@ -5,6 +5,24 @@ function isUUID(str) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 }
 
+function cascadeStatusChange(componentId, newStatus) {
+  const dependents = db.prepare('SELECT * FROM component_dependencies WHERE component_id=?').all(componentId);
+  for (const dep of dependents) {
+    if (dep.cascade_status) {
+      const depComp = db.prepare('SELECT * FROM components WHERE id=?').get(dep.component_id);
+      if (depComp && depComp.status !== newStatus) {
+        db.prepare('UPDATE components SET status=?, updated_at=datetime(\'now\') WHERE id=?').run(newStatus, dep.component_id);
+        const dhId = uuidv4();
+        try {
+          db.prepare('INSERT INTO status_history (id,component_id,page_id,old_status,new_status) VALUES (?,?,?,?,?)').run(dhId, dep.component_id, null, depComp.status, newStatus);
+        } catch(e) {
+          if (!e.message.includes('FOREIGN KEY')) throw e;
+        }
+      }
+    }
+  }
+}
+
 // ===== PAGES =====
 module.exports.pages = {
   list(filters = {}) {
@@ -92,6 +110,8 @@ module.exports.components = {
       } catch(e) {
         if (!e.message.includes('FOREIGN KEY')) throw e;
       }
+      // Cascade to dependent components
+      cascadeStatusChange(id, data.status);
     }
     return this.get(id);
   },
@@ -148,6 +168,9 @@ module.exports.components = {
     }
     const email = require('../utils/email');
     email.notifyComponentStatusChange(comp.name, oldStatus, newStatus, pageTitle).catch(() => {});
+
+    // Cascade status to dependent components
+    cascadeStatusChange(componentId, newStatus);
 
     return {
       component: this.get(componentId),
@@ -637,6 +660,10 @@ module.exports.dependencies = {
   
   listByDependsOn(dependsOnId) {
     return db.prepare('SELECT * FROM component_dependencies WHERE depends_on=?').all(dependsOnId);
+  },
+  
+  listDependsOnComponent(componentId) {
+    return db.prepare('SELECT * FROM component_dependencies WHERE component_id=?').all(componentId);
   },
   
   create({ component_id, depends_on, cascade_status }) {
