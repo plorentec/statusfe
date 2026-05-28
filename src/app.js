@@ -90,10 +90,11 @@ app.get('/status/:slug', (req, res) => {
     FROM components c JOIN page_components pc ON c.id=pc.component_id WHERE pc.page_id=? ORDER BY pc.position,c.name
   `).all(page.id, page.id);
   
-  // Resolve dependencies
+  // Resolve dependencies: if a component depends on another and cascade_status=1,
+  // inherit the upstream's non-operational status
   const resolvedComps = pageComps.map(c => {
     const deps = dependencies.listByDependsOn(c.id);
-    if (deps.length > 0 && c.current_status === 'operational') {
+    if (deps.length > 0) {
       for (const dep of deps) {
         const depComp = components.get(dep.depends_on);
         if (depComp && depComp.status !== 'operational' && dep.cascade_status) {

@@ -238,7 +238,7 @@ module.exports.incidents = {
     
     db.prepare(`INSERT INTO incidents (id,component_id,page_id,name,status,impact,starts_at,resolved_at,message,visible)
       VALUES (?,?,?,?,?,?,?,?,?,?)`).run(id, component_id||null, resolvedPageId, name, status||'investigating', impact||'none',
-      starts_at||new Date().toISOString().slice(0,19).replace('T',' '), resolved_at||null, message, visible ? 1 : 1);
+      starts_at||new Date().toISOString().slice(0,19).replace('T',' '), resolved_at||null, message, visible ? 1 : 0);
     const inc = this.get(id);
     const page = module.exports.pages.getById(resolvedPageId);
     const comp = component_id ? module.exports.components.get(component_id) : null;
@@ -457,6 +457,10 @@ module.exports.analytics = {
     let operationalDays = 0;
     const dates = [];
     
+    // Get all components on this page
+    const pageCompIds = db.prepare('SELECT component_id FROM page_components WHERE page_id=?').all(pageId);
+    const allComponentIds = new Set(pageCompIds.map(pc => pc.component_id));
+    
     for (let i = 0; i < effectiveDays; i++) {
       const d = new Date();
       d.setDate(d.getDate() - i);
@@ -464,9 +468,15 @@ module.exports.analytics = {
       dates.push(dateStr);
       totalDays++;
       
-      const allOperational = Object.values(componentStatuses).every(statuses => 
-        statuses[dateStr] === 'operational'
-      );
+      let allOperational = true;
+      for (const compId of allComponentIds) {
+        const statuses = componentStatuses[compId];
+        const status = statuses ? statuses[dateStr] : 'operational';
+        if (status !== 'operational') {
+          allOperational = false;
+          break;
+        }
+      }
       if (allOperational) operationalDays++;
     }
     

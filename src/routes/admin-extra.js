@@ -57,11 +57,24 @@ router.get('/analytics', (req, res) => {
     diskInfo.dbSize = stat.size;
     try {
       const { execSync } = require('child_process');
-      const df = execSync(`df --block-size=1 "${path.join(__dirname, '..', '..')}" 2>/dev/null | tail -1`, { encoding: 'utf8' });
+      const rootPath = path.join(__dirname, '..', '..');
+      let df;
+      try {
+        df = execSync(`df -B1 "${rootPath}" 2>/dev/null | tail -1`, { encoding: 'utf8' });
+      } catch(e2) {
+        df = execSync(`df "${rootPath}" 2>/dev/null | tail -1`, { encoding: 'utf8' });
+      }
       const cols = df.trim().split(/\s+/);
       if (cols.length >= 5) {
-        diskInfo.total = parseInt(cols[1]);
-        diskInfo.used = parseInt(cols[2]);
+        const rawTotal = parseInt(cols[1]);
+        const rawUsed = parseInt(cols[2]);
+        if (rawTotal > 0 && rawTotal < 1000000000) {
+          diskInfo.total = rawTotal * 1024;
+          diskInfo.used = rawUsed * 1024;
+        } else {
+          diskInfo.total = rawTotal;
+          diskInfo.used = rawUsed;
+        }
         diskInfo.percentage = diskInfo.total > 0 ? ((diskInfo.used / diskInfo.total) * 100).toFixed(1) : 0;
       }
     } catch(e) {
@@ -191,7 +204,7 @@ router.get('/analytics-detail', (req, res) => {
         const d = new Date(now.getTime() - i * 3600000);
         const hk = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate() + '-' + d.getHours();
         const s = hourStatus[hk];
-        data.push(s === 'operational' ? 100 : (s ? 50 : 100));
+        data.push(s === 'operational' ? 100 : (s ? 50 : 0));
       }
       
       datasets.push({
@@ -225,7 +238,7 @@ router.get('/analytics-detail', (req, res) => {
       const d = new Date(now.getTime() - i * 3600000);
       const hk = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate() + '-' + d.getHours();
       const s = hourStatus[hk];
-      data.push(s === 'operational' ? 100 : (s ? 50 : 100));
+      data.push(s === 'operational' ? 100 : (s ? 50 : 0));
     }
     
     datasets.push({
