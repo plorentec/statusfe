@@ -27,7 +27,7 @@ Add Status
 </div>
 
 <!-- Add form (hidden by default) -->
-<div id="addForm" style="display:none;" class="card" id="addCard">
+<div id="addForm" style="display:none;" class="card">
 <h3 style="font-size:15px;margin-bottom:16px;">Add / Edit Status</h3>
 <form action="/admin/config/<%= type %>-statuses" method="post">
 <div class="form-row">
@@ -111,8 +111,8 @@ Add Status
 </div>
 </main>
 </div>
+<script src="/js/admin.js"></script>
 <script>
-// Handle edit form — pre-fill and show form
 document.querySelectorAll('.edit-form').forEach(function(form) {
   form.addEventListener('submit', function(e) {
     e.preventDefault();
@@ -123,9 +123,7 @@ document.querySelectorAll('.edit-form').forEach(function(form) {
     formEl.querySelector('input[name="label"]').value = fd.get('label');
     formEl.querySelector('input[name="color"]').value = fd.get('color');
     formEl.querySelector('input[name="position"]').value = fd.get('position');
-    // Remove the form element so it doesn't submit
     form.remove();
-    // Scroll to form
     formEl.scrollIntoView({ behavior: 'smooth' });
   });
 });
