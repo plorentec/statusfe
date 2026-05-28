@@ -1,8 +1,7 @@
-{"error":"no such column: \"resolved\" - should this be a string literal in single-quotes?"}
+{"error":"Cannot access 'activeIncidents' before initialization"}
 
-statusfe  | SqliteError: no such column: "resolved" - should this be a string literal in single-quotes?
-statusfe  |     at Database.prepare (/app/node_modules/better-sqlite3/lib/methods/wrappers.js:5:21)
-statusfe  |     at Object.update (/app/src/db/models.js:334:36)
+statusfe  | ReferenceError: Cannot access 'activeIncidents' before initialization
+statusfe  |     at Object.update (/app/src/db/models.js:369:94)
 statusfe  |     at /app/src/routes/admin.js:353:13
 statusfe  |     at Layer.handle [as handle_request] (/app/node_modules/express/lib/router/layer.js:95:5)
 statusfe  |     at next (/app/node_modules/express/lib/router/route.js:149:13)
@@ -10,10 +9,6 @@ statusfe  |     at Route.dispatch (/app/node_modules/express/lib/router/route.js
 statusfe  |     at Layer.handle [as handle_request] (/app/node_modules/express/lib/router/layer.js:95:5)
 statusfe  |     at /app/node_modules/express/lib/router/index.js:284:15
 statusfe  |     at param (/app/node_modules/express/lib/router/index.js:365:14)
-statusfe  |     at param (/app/node_modules/express/lib/router/index.js:376:14) {
-statusfe  |   code: 'SQLITE_ERROR'
-statusfe  | }
-statusfe  | Cascading status degraded_performance from 776aebb2-19a6-4125-9bfe-c35783189031 to e979f16f-ffc1-48ff-930c-cf2fc4287fa9
-statusfe  |   Cascade: API operational -> degraded_performance
-statusfe  | Cascading status operational from 776aebb2-19a6-4125-9bfe-c35783189031 to e979f16f-ffc1-48ff-930c-cf2fc4287fa9
-statusfe  |   Cascade: API degraded_performance -> operational
+statusfe  |     at param (/app/node_modules/express/lib/router/index.js:376:14)
+statusfe  |     at Function.process_params (/app/node_modules/express/lib/router/index.js:421:3)
+
