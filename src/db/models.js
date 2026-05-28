@@ -279,7 +279,7 @@ module.exports.incidents = {
     }
     if (!resolvedPageId) return null;
     
-    const cs = cascade_status || 'component';
+    const cs = cascade_status || 'same';
     db.prepare(`INSERT INTO incidents (id,component_id,page_id,name,status,impact,starts_at,resolved_at,message,visible,cascade_status)
       VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(id, component_id||null, resolvedPageId, name, status||'investigating', impact||'none',
       starts_at||nowInTZ(getServerTZ()), resolved_at||null, message, visible ? 1 : 0, cs);
@@ -289,7 +289,7 @@ module.exports.incidents = {
       const incidentStatus = status || 'investigating';
       const comp = this.get(component_id);
       let newStatus;
-      if (cs === 'component') {
+      if (cs === 'same') {
         // Same status as incident — use component status values
         if (incidentStatus === 'investigating') newStatus = 'major_outage';
         else if (incidentStatus === 'identified') newStatus = 'partial_outage';
@@ -339,11 +339,11 @@ module.exports.incidents = {
     }
     const inc = this.get(id);
     if (inc && inc.component_id) {
-      const cs = data.cascade_status || inc.cascade_status || 'component';
+      const cs = data.cascade_status || inc.cascade_status || 'same';
       // When incident status changes (not resolved), update component status and cascade
       if (data.status && data.status !== 'resolved' && cs !== 'none') {
         let newStatus;
-        if (cs === 'component') {
+        if (cs === 'same') {
           if (data.status === 'investigating') newStatus = 'major_outage';
           else if (data.status === 'identified') newStatus = 'partial_outage';
           else if (data.status === 'monitoring') newStatus = 'degraded_performance';
