@@ -269,11 +269,12 @@ try {
         page_id TEXT,
         old_status TEXT,
         new_status TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now')),
         FOREIGN KEY (component_id) REFERENCES components(id) ON DELETE CASCADE,
         FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE CASCADE
       );
     `);
-    db.prepare("INSERT INTO status_history SELECT * FROM status_history_old").run();
+    db.prepare("INSERT INTO status_history (id,component_id,page_id,old_status,new_status,created_at) SELECT id,component_id,page_id,old_status,new_status,created_at FROM status_history_old").run();
     db.prepare("DROP TABLE status_history_old").run();
   }
 } catch(e) {}
