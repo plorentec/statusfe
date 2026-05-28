@@ -269,7 +269,7 @@ module.exports.incidents = {
     return db.prepare('SELECT * FROM incidents WHERE component_id=? AND page_id=? AND status != \'resolved\' ORDER BY starts_at DESC LIMIT 1').get(componentId, pageId);
   },
 
-  create({ component_id, page_id, name, status, impact, starts_at, resolved_at, message, visible }) {
+  create({ component_id, page_id, name, status, impact, starts_at, resolved_at, message, visible, cascade_status }) {
     const id = uuidv4();
     // Incident is associated with component_id only, page_id is resolved from component
     let resolvedPageId = page_id;
@@ -279,19 +279,28 @@ module.exports.incidents = {
     }
     if (!resolvedPageId) return null;
     
-    db.prepare(`INSERT INTO incidents (id,component_id,page_id,name,status,impact,starts_at,resolved_at,message,visible)
-      VALUES (?,?,?,?,?,?,?,?,?,?)`).run(id, component_id||null, resolvedPageId, name, status||'investigating', impact||'none',
-      starts_at||nowInTZ(getServerTZ()), resolved_at||null, message, visible ? 1 : 0);
+    const cs = cascade_status || 'component';
+    db.prepare(`INSERT INTO incidents (id,component_id,page_id,name,status,impact,starts_at,resolved_at,message,visible,cascade_status)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(id, component_id||null, resolvedPageId, name, status||'investigating', impact||'none',
+      starts_at||nowInTZ(getServerTZ()), resolved_at||null, message, visible ? 1 : 0, cs);
     
     // When creating an incident on a component, change component status and cascade
-    if (component_id && status !== 'resolved') {
+    if (component_id && status !== 'resolved' && cs !== 'none') {
       const incidentStatus = status || 'investigating';
       const comp = this.get(component_id);
-      const newStatus = incidentStatus === 'investigating' ? 'major_outage'
-        : incidentStatus === 'identified' ? 'partial_outage'
-        : 'degraded_performance';
+      let newStatus;
+      if (cs === 'component') {
+        // Same status as incident — use component status values
+        if (incidentStatus === 'investigating') newStatus = 'major_outage';
+        else if (incidentStatus === 'identified') newStatus = 'partial_outage';
+        else if (incidentStatus === 'monitoring') newStatus = 'degraded_performance';
+        else if (incidentStatus === 'resolved') newStatus = 'operational';
+      } else {
+        // Map by criticality — always use the incident status string
+        newStatus = incidentStatus;
+      }
       const oldStatus = comp ? comp.status : 'operational';
-      if (oldStatus !== newStatus) {
+      if (newStatus && oldStatus !== newStatus) {
         db.prepare('UPDATE components SET status=?, updated_at=datetime(\'now\') WHERE id=?').run(newStatus, component_id);
         const hId = uuidv4();
         try {
@@ -315,7 +324,7 @@ module.exports.incidents = {
   update(id, data) {
     const fields = [];
     const params = [];
-    const allowed = ['name','status','impact','starts_at','resolved_at','message','visible','component_id'];
+    const allowed = ['name','status','impact','starts_at','resolved_at','message','visible','component_id','cascade_status'];
     for (const k of allowed) {
       if (data[k] !== undefined) { fields.push(k+'=?'); params.push(data[k]); }
     }
@@ -330,13 +339,19 @@ module.exports.incidents = {
     }
     const inc = this.get(id);
     if (inc && inc.component_id) {
+      const cs = data.cascade_status || inc.cascade_status || 'component';
       // When incident status changes (not resolved), update component status and cascade
-      if (data.status && data.status !== 'resolved') {
-        const newStatus = data.status === 'investigating' ? 'major_outage'
-          : data.status === 'identified' ? 'partial_outage'
-          : 'degraded_performance';
+      if (data.status && data.status !== 'resolved' && cs !== 'none') {
+        let newStatus;
+        if (cs === 'component') {
+          if (data.status === 'investigating') newStatus = 'major_outage';
+          else if (data.status === 'identified') newStatus = 'partial_outage';
+          else if (data.status === 'monitoring') newStatus = 'degraded_performance';
+        } else {
+          newStatus = data.status;
+        }
         const comp = this.get(inc.component_id);
-        if (comp && comp.status !== newStatus) {
+        if (newStatus && comp && comp.status !== newStatus) {
           db.prepare('UPDATE components SET status=?, updated_at=datetime(\'now\') WHERE id=?').run(newStatus, inc.component_id);
           const hId = uuidv4();
           try {
