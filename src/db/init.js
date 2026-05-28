@@ -34,14 +34,6 @@ try {
   db.prepare('ALTER TABLE users ADD COLUMN email_notifications INTEGER DEFAULT 1').run();
 } catch(e) { /* column may already exist */ }
 
-// Regenerate keys that don't have a stored key value
-const rowsWithoutKey = db.prepare("SELECT id FROM api_keys WHERE key IS NULL").all();
-for (const row of rowsWithoutKey) {
-  const newKey = uuidv4() + '-' + uuidv4();
-  const hash = bcrypt.hashSync(newKey, 10);
-  db.prepare('UPDATE api_keys SET key_hash=?, key=?, key_prefix=? WHERE id=?').run(hash, newKey, newKey.substring(0,8), row.id);
-}
-
 // Create tables
 db.exec(`
   CREATE TABLE IF NOT EXISTS pages (
@@ -240,6 +232,25 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_page_views_page ON page_views(page_id);
   CREATE INDEX IF NOT EXISTS idx_page_views_date ON page_views(created_at);
 `);
+
+// Migrate: add missing columns to api_keys for old databases
+try { db.prepare("ALTER TABLE api_keys ADD COLUMN key TEXT").run(); } catch(e) {}
+try { db.prepare("ALTER TABLE api_keys ADD COLUMN key_prefix TEXT").run(); } catch(e) {}
+try { db.prepare("ALTER TABLE api_keys ADD COLUMN page_id TEXT").run(); } catch(e) {}
+try { db.prepare("ALTER TABLE api_keys ADD COLUMN rate_limit INTEGER DEFAULT 100").run(); } catch(e) {}
+try { db.prepare("ALTER TABLE api_keys ADD COLUMN is_active INTEGER DEFAULT 1").run(); } catch(e) {}
+try { db.prepare("ALTER TABLE api_keys ADD COLUMN last_used_at TEXT").run(); } catch(e) {}
+try { db.prepare("ALTER TABLE api_keys ADD COLUMN expires_at TEXT").run(); } catch(e) {}
+
+// Regenerate keys that don't have a stored key value
+try {
+  const rowsWithoutKey = db.prepare("SELECT id FROM api_keys WHERE key IS NULL").all();
+  for (const row of rowsWithoutKey) {
+    const newKey = uuidv4() + '-' + uuidv4();
+    const hash = bcrypt.hashSync(newKey, 10);
+    db.prepare('UPDATE api_keys SET key_hash=?, key=?, key_prefix=? WHERE id=?').run(hash, newKey, newKey.substring(0,8), row.id);
+  }
+} catch(e) { /* api_keys table may not exist yet */ }
 
 // Migrations
 try { db.prepare("ALTER TABLE incidents ADD COLUMN component_id TEXT").run(); } catch(e) {}
