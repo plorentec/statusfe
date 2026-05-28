@@ -1,6 +1,8 @@
 FROM node:20-alpine
 
-RUN apk add --no-cache dumb-init
+RUN echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
+    echo "nameserver 8.8.4.4" >> /etc/resolv.conf && \
+    apk add --no-cache dumb-init
 
 WORKDIR /app
 
