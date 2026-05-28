@@ -349,8 +349,8 @@ router.put('/incidents/:id', (req, res) => {
   if (!inc) {
     return res.redirect('/admin/incidents?msg=error&type=error');
   }
-  const { component_id, name, status, impact, starts_at, resolved_at, message, visible } = req.body;
-  incidents.update(req.params.id, { component_id, name, status, impact, starts_at, resolved_at, message, visible: visible ? 1 : 0 });
+  const { component_id, name, status, impact, starts_at, resolved_at, message, visible, cascade_status } = req.body;
+  incidents.update(req.params.id, { component_id, name, status, impact, starts_at, resolved_at, message, visible: visible ? 1 : 0, cascade_status });
   res.redirect('/admin/incidents?msg=success&type=success');
 });
 
