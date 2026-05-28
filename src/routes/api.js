@@ -1,15 +1,18 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db/init');
-const { pages, components, incidents, apiKeys, webhooks, maintenance } = require('../db/models');
+const { pages, components, incidents, apiKeys, webhooks, maintenance, notifications, analytics, dependencies, settings } = require('../db/models');
 const { auth, requirePerm } = require('../middleware/auth');
 const triggerWebhook = require('../utils/webhooks');
 
 // ===== PUBLIC (no auth) =====
+
+// Public: list pages (only public ones)
 router.get('/pages', (req, res) => {
   res.json({ pages: pages.list({ is_public: 1 }), total: pages.list({ is_public: 1 }).length });
 });
 
+// Public: get page by slug with components and incidents
 router.get('/pages/:slug', (req, res) => {
   const page = pages.getBySlug(req.params.slug);
   if (!page) return res.status(404).json({ error: 'Not found' });
@@ -29,6 +32,7 @@ router.get('/pages/:slug', (req, res) => {
   res.json({ page, components: comps, incidents: incs, incidentsByComponent });
 });
 
+// Public: list components
 router.get('/components', (req, res) => {
   const f = {};
   if (req.query.status) f.status = req.query.status;
@@ -36,6 +40,7 @@ router.get('/components', (req, res) => {
   res.json({ components: components.list(f), total: components.list(f).length });
 });
 
+// Public: list incidents
 router.get('/incidents', (req, res) => {
   const f = { visible: 1 };
   if (req.query.page_id) f.page_id = req.query.page_id;
@@ -44,6 +49,7 @@ router.get('/incidents', (req, res) => {
   res.json({ incidents: incidents.list(f), total: incidents.list(f).length });
 });
 
+// Public: status page data (JSON)
 router.get('/status/:slug', (req, res) => {
   const page = pages.getBySlug(req.params.slug);
   if (!page) return res.status(404).json({ error: 'Not found' });
@@ -53,7 +59,6 @@ router.get('/status/:slug', (req, res) => {
     FROM components c JOIN page_components pc ON c.id=pc.component_id WHERE pc.page_id=? ORDER BY pc.position,c.name
   `).all(page.id, page.id);
   
-  // Get incidents for this page, grouped by component
   const allIncs = incidents.list({ page_id: page.id, visible: 1 });
   const incidentsByComponent = {};
   comps.forEach(c => { incidentsByComponent[c.id] = []; });
@@ -66,13 +71,13 @@ router.get('/status/:slug', (req, res) => {
   res.json({ page: { id: page.id, name: page.name, slug: page.slug, status: page.status, description: page.description }, components: comps, incidents: allIncs, incidentsByComponent });
 });
 
-// ===== PROTECTED =====
+// ===== PROTECTED (requires auth) =====
 router.use(auth);
 
 router.get('/info', (req, res) => res.json({ name: 'StatusFe API', version: '1.0', user: req.user.name, permissions: req.user.permissions }));
 
-// Pages
-router.get('/pages', (req, res) => res.json({ pages: pages.list(), total: pages.list().length }));
+// Pages (admin - requires auth)
+router.get('/pages/admin', (req, res) => res.json({ pages: pages.list(), total: pages.list().length }));
 router.get('/pages/:id', (req, res) => { const p = pages.getById(req.params.id) || pages.getBySlug(req.params.id); if (!p) return res.status(404).json({ error: 'Not found' }); res.json({ page: p }); });
 router.post('/pages', requirePerm('write'), async (req, res) => {
   const { name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public } = req.body;
@@ -84,8 +89,8 @@ router.post('/pages', requirePerm('write'), async (req, res) => {
 router.put('/pages/:id', requirePerm('write'), (req, res) => { res.json({ page: pages.update(req.params.id, req.body) }); });
 router.delete('/pages/:id', requirePerm('admin'), (req, res) => { pages.delete(req.params.id); res.json({ message: 'Deleted' }); });
 
-// Components
-router.get('/components', (req, res) => {
+// Components (admin - requires auth)
+router.get('/components/admin', (req, res) => {
   const f = {};
   if (req.query.status) f.status = req.query.status;
   if (req.query.group) f.group = req.query.group;
@@ -157,8 +162,8 @@ router.get('/components/:id/history', (req, res) => {
   res.json({ history: h, total: h.length });
 });
 
-// Incidents
-router.get('/incidents', (req, res) => {
+// Incidents (admin - requires auth)
+router.get('/incidents/admin', (req, res) => {
   const f = { visible: 1 };
   if (req.query.page_id) f.page_id = req.query.page_id;
   if (req.query.status) f.status = req.query.status;
@@ -224,6 +229,142 @@ router.delete('/webhooks/:id', requirePerm('admin'), (req, res) => { webhooks.de
 
 // Settings (placeholder)
 router.get('/settings', requirePerm('admin'), (req, res) => { res.json({ settings: {} }); });
+
+// Notifications (admin only)
+router.get('/notifications', requirePerm('admin'), (req, res) => {
+  const admin = db.prepare("SELECT id FROM users WHERE role='admin' ORDER BY created_at ASC LIMIT 1").get();
+  if (!admin) return res.json({ notifications: [], total: 0 });
+  const notifs = notifications.list(admin.id, 50);
+  const unread = notifications.listUnread(admin.id);
+  res.json({ notifications: notifs, total: notifs.length, unread });
+});
+router.post('/notifications/:id/read', requirePerm('admin'), (req, res) => {
+  notifications.markRead(req.params.id);
+  res.json({ message: 'Marked read' });
+});
+router.post('/notifications/read-all', requirePerm('admin'), (req, res) => {
+  const admin = db.prepare("SELECT id FROM users WHERE role='admin' ORDER BY created_at ASC LIMIT 1").get();
+  if (admin) notifications.markAllRead(admin.id);
+  res.json({ message: 'All marked read' });
+});
+router.delete('/notifications/:id', requirePerm('admin'), (req, res) => {
+  notifications.delete(req.params.id);
+  res.json({ message: 'Deleted' });
+});
+
+// Maintenance windows
+router.get('/maintenance', requirePerm('read'), (req, res) => {
+  const f = {};
+  if (req.query.page_id) f.page_id = req.query.page_id;
+  if (req.query.status) f.status = req.query.status;
+  const list = maintenance.list(f);
+  res.json({ maintenance: list, total: list.length });
+});
+router.get('/maintenance/:id', requirePerm('read'), (req, res) => {
+  const m = maintenance.get(req.params.id);
+  if (!m) return res.status(404).json({ error: 'Not found' });
+  res.json({ maintenance: m });
+});
+router.post('/maintenance', requirePerm('write'), (req, res) => {
+  const { page_id, component_id, title, description, starts_at, ends_at } = req.body;
+  if (!title || !starts_at || !ends_at) return res.status(400).json({ error: 'title, starts_at and ends_at required' });
+  let m;
+  try {
+    m = maintenance.create({ page_id, component_id, title, description, starts_at, ends_at });
+  } catch(e) {
+    if (e.message.includes('FOREIGN KEY')) return res.status(400).json({ error: 'Invalid page_id or component_id' });
+    throw e;
+  }
+  res.status(201).json({ maintenance: m });
+});
+router.put('/maintenance/:id', requirePerm('write'), (req, res) => {
+  const m = maintenance.update(req.params.id, req.body);
+  if (!m) return res.status(404).json({ error: 'Not found' });
+  res.json({ maintenance: m });
+});
+router.delete('/maintenance/:id', requirePerm('admin'), (req, res) => {
+  maintenance.delete(req.params.id);
+  res.json({ message: 'Deleted' });
+});
+
+// Analytics
+router.get('/analytics', requirePerm('read'), (req, res) => {
+  const pagesList = pages.list();
+  const componentsList = components.list();
+  const retention = settings.get('analytics_retention_days') || '365';
+  
+  const pageData = pagesList.map(p => ({
+    id: p.id,
+    name: p.name,
+    slug: p.slug,
+    totalViews: analytics.getTotalViews(p.id),
+    uptime: analytics.getUptime(p.id, 30)
+  }));
+  
+  const componentData = componentsList.map(c => ({
+    id: c.id,
+    name: c.name,
+    uptime: analytics.getComponentUptime(c.id, 30)
+  }));
+  
+  res.json({ pages: pageData, components: componentData, retention });
+});
+
+// Dependencies
+router.get('/dependencies', requirePerm('read'), (req, res) => {
+  const allComponents = components.list();
+  const allDeps = db.prepare(`
+    SELECT cd.*, 
+      c1.name as componentName, c2.name as dependsOnName
+    FROM component_dependencies cd
+    JOIN components c1 ON cd.component_id = c1.id
+    JOIN components c2 ON cd.depends_on = c2.id
+    ORDER BY c1.name
+  `).all();
+  res.json({ dependencies: allDeps, total: allDeps.length, components: allComponents });
+});
+router.post('/dependencies', requirePerm('write'), (req, res) => {
+  const { component_id, depends_on, cascade_status } = req.body;
+  if (!component_id || !depends_on) return res.status(400).json({ error: 'component_id and depends_on required' });
+  if (component_id === depends_on) return res.status(400).json({ error: 'Cannot depend on itself' });
+  const existing = db.prepare('SELECT id FROM component_dependencies WHERE component_id=? AND depends_on=?').get(component_id, depends_on);
+  if (existing) return res.status(409).json({ error: 'Dependency already exists' });
+  const dep = dependencies.create({ component_id, depends_on, cascade_status });
+  res.status(201).json({ dependency: dep });
+});
+router.delete('/dependencies/:id', requirePerm('admin'), (req, res) => {
+  dependencies.delete(req.params.id);
+  res.json({ message: 'Deleted' });
+});
+
+// Users (admin only)
+router.get('/users', requirePerm('admin'), (req, res) => {
+  const users = db.prepare("SELECT id, email, name, role, created_at FROM users ORDER BY created_at").all();
+  res.json({ users, total: users.length });
+});
+router.get('/users/:id', requirePerm('admin'), (req, res) => {
+  const user = db.prepare("SELECT id, email, name, role, created_at FROM users WHERE id=?").get(req.params.id);
+  if (!user) return res.status(404).json({ error: 'Not found' });
+  res.json({ user });
+});
+router.put('/users/:id', requirePerm('admin'), (req, res) => {
+  const { name, role } = req.body;
+  if (!name && !role) return res.status(400).json({ error: 'name or role required' });
+  const fields = [];
+  const params = [];
+  if (name) { fields.push('name=?'); params.push(name); }
+  if (role) { fields.push('role=?'); params.push(role); }
+  params.push(req.params.id);
+  db.prepare(`UPDATE users SET ${fields.join(',')}, updated_at=datetime('now') WHERE id=?`).run(...params);
+  const user = db.prepare("SELECT id, email, name, role, created_at FROM users WHERE id=?").get(req.params.id);
+  res.json({ user });
+});
+
+router.get('/users/:id', requirePerm('admin'), (req, res) => {
+  const user = db.prepare("SELECT id, email, name, role, created_at FROM users WHERE id=?").get(req.params.id);
+  if (!user) return res.status(404).json({ error: 'Not found' });
+  res.json({ user });
+});
 
 // Analytics detail for admin UI
 router.get('/analytics-detail', requirePerm('read'), (req, res) => {

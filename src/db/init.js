@@ -277,13 +277,16 @@ try { db.prepare("ALTER TABLE api_keys ADD COLUMN is_active INTEGER DEFAULT 1").
 try { db.prepare("ALTER TABLE api_keys ADD COLUMN last_used_at TEXT").run(); } catch(e) {}
 try { db.prepare("ALTER TABLE api_keys ADD COLUMN expires_at TEXT").run(); } catch(e) {}
 
-// Regenerate keys that don't have a stored key value
+// Regenerate keys that don't have a stored key value (only if no keys exist yet)
 try {
-  const rowsWithoutKey = db.prepare("SELECT id FROM api_keys WHERE key IS NULL").all();
-  for (const row of rowsWithoutKey) {
-    const newKey = uuidv4() + '-' + uuidv4();
-    const hash = bcrypt.hashSync(newKey, 10);
-    db.prepare('UPDATE api_keys SET key_hash=?, key=?, key_prefix=? WHERE id=?').run(hash, newKey, newKey.substring(0,8), row.id);
+  const keyCount = db.prepare("SELECT COUNT(*) as count FROM api_keys").get().count;
+  if (keyCount === 0) {
+    const rowsWithoutKey = db.prepare("SELECT id FROM api_keys WHERE key IS NULL").all();
+    for (const row of rowsWithoutKey) {
+      const newKey = uuidv4() + '-' + uuidv4();
+      const hash = bcrypt.hashSync(newKey, 10);
+      db.prepare('UPDATE api_keys SET key_hash=?, key=?, key_prefix=? WHERE id=?').run(hash, newKey, newKey.substring(0,8), row.id);
+    }
   }
 } catch(e) { /* api_keys table may not exist yet */ }
 
@@ -292,6 +295,9 @@ try { db.prepare("ALTER TABLE incidents ADD COLUMN component_id TEXT").run(); } 
 try { db.prepare("ALTER TABLE incidents ADD COLUMN created_at TEXT DEFAULT (datetime('now'))").run(); } catch(e) {}
 try { db.prepare("ALTER TABLE incidents ADD COLUMN updated_at TEXT DEFAULT (datetime('now'))").run(); } catch(e) {}
 try { db.prepare("ALTER TABLE incidents ADD COLUMN cascade_status TEXT DEFAULT 'same'").run(); } catch(e) {}
+
+// Migrate: add updated_at to users if missing
+try { db.prepare("ALTER TABLE users ADD COLUMN updated_at TEXT").run(); } catch(e) {}
 
 // Migrate: allow NULL page_id in status_history for global tracking
 try {
