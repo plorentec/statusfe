@@ -329,9 +329,26 @@ module.exports.incidents = {
       db.prepare(`UPDATE incidents SET ${fields.join(',')}, updated_at=datetime('now') WHERE id=?`).run(...params);
     }
     const inc = this.get(id);
-    if (inc) {
+    if (inc && inc.component_id) {
+      // When incident status changes (not resolved), update component status and cascade
+      if (data.status && data.status !== 'resolved') {
+        const newStatus = data.status === 'investigating' ? 'major_outage'
+          : data.status === 'identified' ? 'partial_outage'
+          : 'degraded_performance';
+        const comp = this.get(inc.component_id);
+        if (comp && comp.status !== newStatus) {
+          db.prepare('UPDATE components SET status=?, updated_at=datetime(\'now\') WHERE id=?').run(newStatus, inc.component_id);
+          const hId = uuidv4();
+          try {
+            db.prepare('INSERT INTO status_history (id,component_id,page_id,old_status,new_status) VALUES (?,?,?,?,?)').run(hId, inc.component_id, inc.page_id, comp.status, newStatus);
+          } catch(e) {
+            if (!e.message.includes('FOREIGN KEY')) throw e;
+          }
+          cascadeStatusChange(inc.component_id, newStatus);
+        }
+      }
       // When incident is resolved and no active incidents on this component, restore component to operational
-      if (data.status === 'resolved' && inc.component_id) {
+      if (data.status === 'resolved') {
         const activeIncidents = db.prepare('SELECT id FROM incidents WHERE component_id=? AND status != \'resolved\'').all(inc.component_id);
         if (activeIncidents.length === 0) {
           const comp = this.get(inc.component_id);
@@ -343,7 +360,6 @@ module.exports.incidents = {
             } catch(e) {
               if (!e.message.includes('FOREIGN KEY')) throw e;
             }
-            // Cascade operational status back
             cascadeStatusChange(inc.component_id, 'operational');
           }
         }
