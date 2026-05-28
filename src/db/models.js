@@ -5,8 +5,9 @@ function isUUID(str) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 }
 
-function cascadeStatusChange(componentId, newStatus) {
-  const dependents = db.prepare('SELECT * FROM component_dependencies WHERE component_id=?').all(componentId);
+function cascadeStatusChange(upstreamComponentId, newStatus) {
+  // Find all components that depend on upstreamComponentId
+  const dependents = db.prepare('SELECT * FROM component_dependencies WHERE depends_on=?').all(upstreamComponentId);
   for (const dep of dependents) {
     if (dep.cascade_status) {
       const depComp = db.prepare('SELECT * FROM components WHERE id=?').get(dep.component_id);
@@ -277,6 +278,11 @@ module.exports.incidents = {
     const allowed = ['name','status','impact','starts_at','resolved_at','message','visible','component_id'];
     for (const k of allowed) {
       if (data[k] !== undefined) { fields.push(k+'=?'); params.push(data[k]); }
+    }
+    // Auto-set resolved_at when status changes to resolved
+    if (data.status === 'resolved' && !data.resolved_at) {
+      fields.push('resolved_at=?');
+      params.push(new Date().toISOString().slice(0,19).replace('T',' '));
     }
     if (fields.length) {
       params.push(id);
