@@ -97,7 +97,7 @@ db.exec(`
     resolved_at TEXT,
     message TEXT NOT NULL,
     visible INTEGER DEFAULT 1,
-    cascade_status TEXT DEFAULT 'component',
+    cascade_status TEXT DEFAULT 'same',
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now')),
     FOREIGN KEY (component_id) REFERENCES components(id) ON DELETE SET NULL,
@@ -257,7 +257,7 @@ try {
 try { db.prepare("ALTER TABLE incidents ADD COLUMN component_id TEXT").run(); } catch(e) {}
 try { db.prepare("ALTER TABLE incidents ADD COLUMN created_at TEXT DEFAULT (datetime('now'))").run(); } catch(e) {}
 try { db.prepare("ALTER TABLE incidents ADD COLUMN updated_at TEXT DEFAULT (datetime('now'))").run(); } catch(e) {}
-try { db.prepare("ALTER TABLE incidents ADD COLUMN cascade_status TEXT DEFAULT 'component'").run(); } catch(e) {}
+try { db.prepare("ALTER TABLE incidents ADD COLUMN cascade_status TEXT DEFAULT 'same'").run(); } catch(e) {}
 
 // Migrate: allow NULL page_id in status_history for global tracking
 try {

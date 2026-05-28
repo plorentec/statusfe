@@ -55,8 +55,8 @@
 <div class="form-group">
 <label for="cascade_status">Cascade to dependent components</label>
 <select id="cascade_status" name="cascade_status">
-<option value="component" <%= (!incident.cascade_status || incident.cascade_status === 'component') ? 'selected' : '' %>>Same status as incident</option>
-<option value="criticality" <%= incident.cascade_status === 'criticality' ? 'selected' : '' %>>Map by criticality</option>
+<option value="same" <%= (!incident.cascade_status || incident.cascade_status === 'same') ? 'selected' : '' %>>Same status (e.g. monitoring → monitoring)</option>
+<option value="criticality" <%= incident.cascade_status === 'criticality' ? 'selected' : '' %>>Map by criticality (e.g. monitoring → degraded_performance)</option>
 <option value="none" <%= incident.cascade_status === 'none' ? 'selected' : '' %>>None (components unchanged)</option>
 </select>
 </div>

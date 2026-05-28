@@ -124,7 +124,7 @@ router.delete('/pages/:pageId/components/:componentId', requirePerm('write'), as
 router.put('/components/:id/status', requirePerm('write'), async (req, res) => {
   const { status, page_id } = req.body;
   if (!status) return res.status(400).json({ error: 'status required' });
-  const valid = ['operational','degraded_performance','partial_outage','major_outage','under_maintenance'];
+  const valid = ['operational','degraded_performance','partial_outage','major_outage','under_maintenance','investigating','identified','monitoring'];
   if (!valid.includes(status)) return res.status(400).json({ error: `Invalid. Use: ${valid.join(', ')}` });
   
   const result = components.updateStatus(req.params.id, status, page_id);
