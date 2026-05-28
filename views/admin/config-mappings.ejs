@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title><%= title %> - StatusFe Admin</title>
+<link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+<div class="admin-layout">
+<%- include('../partials/_sidebar'); %>
+<main class="admin-main">
+<div class="admin-header">
+<h1><%= title %></h1>
+<% if (message) { %>
+<div class="flash flash-<%= messageType %>"><%= message %></div>
+<% } %>
+</div>
+
+<div class="card">
+<div class="card-header-row">
+<h2>Incident → Component Status Mappings</h2>
+<button class="btn btn-primary" onclick="document.getElementById('addForm').style.display='block'">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+Add Mapping
+</button>
+</div>
+
+<!-- Add/Edit form -->
+<div id="addForm" style="display:none;" class="card">
+<h3 style="font-size:15px;margin-bottom:16px;">Add / Edit Mapping</h3>
+<form action="/admin/config/mappings" method="post">
+<div class="form-row">
+<div class="form-group">
+<label>Incident Status</label>
+<select name="incident_status" required>
+<option value="">Select...</option>
+<% incidentStatuses.forEach(s => { %>
+<option value="<%= s.value %>"><%= s.label %></option>
+<% }); %>
+</select>
+</div>
+<div class="form-group">
+<label>Component Status</label>
+<select name="component_status" required>
+<option value="">Select...</option>
+<% componentStatuses.forEach(s => { %>
+<option value="<%= s.value %>"><%= s.label %></option>
+<% }); %>
+</select>
+</div>
+</div>
+<div class="form-actions">
+<button type="submit" class="btn btn-primary">Save</button>
+<button type="button" class="btn" onclick="document.getElementById('addForm').style.display='none'">Cancel</button>
+</div>
+</form>
+</div>
+
+<!-- Mappings table -->
+<div class="table-container" style="margin-top:20px;">
+<table class="admin-table">
+<thead>
+<tr>
+<th>Incident Status</th>
+<th>Arrow</th>
+<th>Component Status</th>
+<th>Actions</th>
+</tr>
+</thead>
+<tbody>
+<% if (mappings.length === 0) { %>
+<tr><td colspan="4" class="empty-cell">No mappings configured. Use "Add Mapping" to create one.</td></tr>
+<% } else { %>
+<% mappings.forEach(m => { %>
+<tr>
+<td>
+<span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:<%= m.incident_color || '#94a3b8' %>;margin-right:8px;vertical-align:middle;"></span>
+<%= m.incident_label || m.incident_status %>
+</td>
+<td style="text-align:center;color:var(--text-muted);font-size:18px;">→</td>
+<td>
+<span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:<%= m.component_color || '#94a3b8' %>;margin-right:8px;vertical-align:middle;"></span>
+<%= m.component_label || m.component_status %>
+</td>
+<td>
+<form action="/admin/config/mappings/<%= m.incident_status %>/<%= m.component_status %>" method="post" style="display:inline;" class="delete-form">
+<input type="hidden" name="_method" value="DELETE">
+<button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete this mapping?')">🗑️</button>
+</form>
+</td>
+</tr>
+<% }); %>
+<% } %>
+</tbody>
+</table>
+</div>
+</div>
+</main>
+</div>
+</body>
+</html>

@@ -942,3 +942,48 @@ body.dark .no {
 .notif-maintenance { background: #fff3cd; color: #856404; }
 .sidebar-nav .notif-badge { position: absolute; right: 16px; }
 .sidebar-nav a { position: relative; }
+
+/* ===== SUBMENU ===== */
+.sidebar-parent {
+  justify-content: space-between;
+}
+.sidebar-parent .submenu-arrow {
+  margin-left: auto;
+  transition: transform 0.2s ease;
+  opacity: 0.5;
+}
+.sidebar-parent.open .submenu-arrow {
+  transform: rotate(90deg);
+  opacity: 1;
+}
+.sidebar-submenu {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease;
+  background: rgba(0,0,0,0.15);
+}
+.sidebar-submenu.open {
+  max-height: 300px;
+}
+.sidebar-submenu a {
+  padding: 8px 20px 8px 52px;
+  font-size: 13px;
+  border-left: none;
+  color: rgba(160,163,181,0.7);
+}
+.sidebar-submenu a:hover {
+  background: rgba(255,255,255,0.03);
+  color: #fff;
+}
+.sidebar-submenu a.active {
+  background: rgba(99,102,241,0.1);
+  color: #fff;
+  border-left-color: transparent;
+}
+
+/* ===== RESPONSIVE SUBMENU ===== */
+@media (max-width: 768px) {
+  .sidebar-submenu a {
+    padding-left: 52px;
+  }
+}

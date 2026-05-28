@@ -232,6 +232,40 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(is_read);
   CREATE INDEX IF NOT EXISTS idx_page_views_page ON page_views(page_id);
   CREATE INDEX IF NOT EXISTS idx_page_views_date ON page_views(created_at);
+
+  -- Component Statuses (configurable)
+  CREATE TABLE IF NOT EXISTS component_statuses (
+    id TEXT PRIMARY KEY,
+    value TEXT UNIQUE NOT NULL,
+    label TEXT NOT NULL,
+    color TEXT DEFAULT '#10b981',
+    position INTEGER DEFAULT 0,
+    is_system INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  -- Incident Statuses (configurable)
+  CREATE TABLE IF NOT EXISTS incident_statuses (
+    id TEXT PRIMARY KEY,
+    value TEXT UNIQUE NOT NULL,
+    label TEXT NOT NULL,
+    color TEXT DEFAULT '#10b981',
+    position INTEGER DEFAULT 0,
+    is_system INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  -- Status Mappings (incident -> component)
+  CREATE TABLE IF NOT EXISTS status_mappings (
+    id TEXT PRIMARY KEY,
+    incident_status TEXT NOT NULL,
+    component_status TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_component_statuses_pos ON component_statuses(position);
+  CREATE INDEX IF NOT EXISTS idx_incident_statuses_pos ON incident_statuses(position);
+  CREATE INDEX IF NOT EXISTS idx_status_mappings_incident ON status_mappings(incident_status);
 `);
 
 // Migrate: add missing columns to api_keys for old databases
@@ -329,6 +363,58 @@ if (!adminUser) {
   );
   console.log('Seeded: default admin user (admin@status.local / admin123)');
 }
+
+// Seed default component statuses
+const defaultCompStatuses = [
+  { value: 'operational', label: 'Operational', color: '#10b981', pos: 0 },
+  { value: 'under_maintenance', label: 'Under Maintenance', color: '#f59e0b', pos: 1 },
+  { value: 'degraded_performance', label: 'Degraded Performance', color: '#f59e0b', pos: 2 },
+  { value: 'partial_outage', label: 'Partial Outage', color: '#f97316', pos: 3 },
+  { value: 'major_outage', label: 'Major Outage', color: '#ef4444', pos: 4 },
+  { value: 'investigating', label: 'Investigating', color: '#ef4444', pos: 5 },
+  { value: 'identified', label: 'Identified', color: '#f97316', pos: 6 },
+  { value: 'monitoring', label: 'Monitoring', color: '#f59e0b', pos: 7 },
+];
+defaultCompStatuses.forEach(s => {
+  const exists = db.prepare('SELECT id FROM component_statuses WHERE value=?').get(s.value);
+  if (!exists) {
+    db.prepare('INSERT INTO component_statuses (id,value,label,color,position,is_system) VALUES (?,?,?,?,?,?)').run(
+      uuidv4(), s.value, s.label, s.color, s.pos, 1
+    );
+  }
+});
+
+// Seed default incident statuses
+const defaultIncidentStatuses = [
+  { value: 'investigating', label: 'Investigating', color: '#ef4444', pos: 0 },
+  { value: 'identified', label: 'Identified', color: '#f97316', pos: 1 },
+  { value: 'monitoring', label: 'Monitoring', color: '#f59e0b', pos: 2 },
+  { value: 'resolved', label: 'Resolved', color: '#10b981', pos: 3 },
+];
+defaultIncidentStatuses.forEach(s => {
+  const exists = db.prepare('SELECT id FROM incident_statuses WHERE value=?').get(s.value);
+  if (!exists) {
+    db.prepare('INSERT INTO incident_statuses (id,value,label,color,position,is_system) VALUES (?,?,?,?,?,?)').run(
+      uuidv4(), s.value, s.label, s.color, s.pos, 1
+    );
+  }
+});
+
+// Seed default status mappings
+const defaultMappings = [
+  { incident: 'investigating', component: 'major_outage' },
+  { incident: 'identified', component: 'partial_outage' },
+  { incident: 'monitoring', component: 'degraded_performance' },
+  { incident: 'resolved', component: 'operational' },
+];
+defaultMappings.forEach(m => {
+  const exists = db.prepare('SELECT id FROM status_mappings WHERE incident_status=? AND component_status=?').get(m.incident, m.component);
+  if (!exists) {
+    db.prepare('INSERT INTO status_mappings (id,incident_status,component_status) VALUES (?,?,?)').run(
+      uuidv4(), m.incident, m.component
+    );
+  }
+});
 
 // Export db instance
 module.exports = db;

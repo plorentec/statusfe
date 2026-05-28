@@ -3,7 +3,7 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const { requireAuth } = require('../middleware/session');
-const { notifications, analytics, dependencies, settings, pages, components } = require('../db/models');
+const { notifications, analytics, dependencies, settings, pages, components, componentStatuses, incidentStatuses, statusMappings } = require('../db/models');
 const db = require('../db/init');
 
 router.use(requireAuth);
@@ -333,6 +333,107 @@ router.post('/customize', (req, res) => {
   settings.set('custom_page_structure', page_structure);
   settings.set('custom_border_radius', border_radius);
   res.redirect('/admin/customize?msg=success&type=success');
+});
+
+// ===== CONFIGURATION: Component Statuses =====
+router.get('/config/component-statuses', (req, res) => {
+  const statuses = componentStatuses.list();
+  res.render('admin/config-statuses', {
+    title: 'Component Statuses',
+    user: req.user,
+    statuses,
+    type: 'component',
+    message: req.query.msg,
+    messageType: req.query.type
+  });
+});
+
+router.post('/config/component-statuses', (req, res) => {
+  const { value, label, color, position } = req.body;
+  if (!value || !label) {
+    return res.redirect('/admin/config/component-statuses?msg=error&type=error');
+  }
+  const existing = componentStatuses.get(value);
+  if (existing) {
+    componentStatuses.update(value, { label, color, position: parseInt(position) || 0 });
+  } else {
+    componentStatuses.create({ value, label, color, position: parseInt(position) || 0 });
+  }
+  res.redirect('/admin/config/component-statuses?msg=success&type=success');
+});
+
+router.delete('/config/component-statuses/:value', (req, res) => {
+  const ok = componentStatuses.delete(req.params.value);
+  if (!ok) return res.redirect('/admin/config/component-statuses?msg=system&type=error');
+  res.redirect('/admin/config/component-statuses?msg=deleted&type=success');
+});
+
+// ===== CONFIGURATION: Incident Statuses =====
+router.get('/config/incident-statuses', (req, res) => {
+  const statuses = incidentStatuses.list();
+  res.render('admin/config-statuses', {
+    title: 'Incident Statuses',
+    user: req.user,
+    statuses,
+    type: 'incident',
+    message: req.query.msg,
+    messageType: req.query.type
+  });
+});
+
+router.post('/config/incident-statuses', (req, res) => {
+  const { value, label, color, position } = req.body;
+  if (!value || !label) {
+    return res.redirect('/admin/config/incident-statuses?msg=error&type=error');
+  }
+  const existing = incidentStatuses.get(value);
+  if (existing) {
+    incidentStatuses.update(value, { label, color, position: parseInt(position) || 0 });
+  } else {
+    incidentStatuses.create({ value, label, color, position: parseInt(position) || 0 });
+  }
+  res.redirect('/admin/config/incident-statuses?msg=success&type=success');
+});
+
+router.delete('/config/incident-statuses/:value', (req, res) => {
+  const ok = incidentStatuses.delete(req.params.value);
+  if (!ok) return res.redirect('/admin/config/incident-statuses?msg=system&type=error');
+  res.redirect('/admin/config/incident-statuses?msg=deleted&type=success');
+});
+
+// ===== CONFIGURATION: Status Mappings =====
+router.get('/config/mappings', (req, res) => {
+  const mappings = statusMappings.list();
+  const compStatuses = componentStatuses.list();
+  const incStatuses = incidentStatuses.list();
+  res.render('admin/config-mappings', {
+    title: 'Status Mappings',
+    user: req.user,
+    mappings,
+    componentStatuses: compStatuses,
+    incidentStatuses: incStatuses,
+    message: req.query.msg,
+    messageType: req.query.type
+  });
+});
+
+router.post('/config/mappings', (req, res) => {
+  const { incident_status, component_status } = req.body;
+  if (!incident_status || !component_status) {
+    return res.redirect('/admin/config/mappings?msg=error&type=error');
+  }
+  const existing = statusMappings.get(incident_status, component_status);
+  if (existing) {
+    statusMappings.update(incident_status, component_status, { component_status });
+  } else {
+    statusMappings.create({ incident_status, component_status });
+  }
+  res.redirect('/admin/config/mappings?msg=success&type=success');
+});
+
+router.delete('/config/mappings/:incidentStatus/:componentStatus', (req, res) => {
+  statusMappings.delete(req.params.incidentStatus, req.params.componentStatus);
+  res.redirect('/admin/config/mappings?msg=deleted&type=success');
 });
 
 module.exports = router;
