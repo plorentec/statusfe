@@ -292,12 +292,16 @@ module.exports.incidents = {
       if (cs === 'same') {
         // Same status as incident
         newStatus = incidentStatus;
-      } else {
-        // Map by criticality
-        if (incidentStatus === 'investigating') newStatus = 'major_outage';
-        else if (incidentStatus === 'identified') newStatus = 'partial_outage';
-        else if (incidentStatus === 'monitoring') newStatus = 'degraded_performance';
-        else if (incidentStatus === 'resolved') newStatus = 'operational';
+      } else if (cs === 'criticality') {
+        // Map by criticality using status_mappings table
+        newStatus = statusMappings.resolve(incidentStatus);
+        // Fallback to hardcoded mapping if no mapping exists
+        if (!newStatus) {
+          if (incidentStatus === 'investigating') newStatus = 'major_outage';
+          else if (incidentStatus === 'identified') newStatus = 'partial_outage';
+          else if (incidentStatus === 'monitoring') newStatus = 'degraded_performance';
+          else if (incidentStatus === 'resolved') newStatus = 'operational';
+        }
       }
       const oldStatus = comp ? comp.status : 'operational';
       if (newStatus && oldStatus !== newStatus) {
@@ -348,10 +352,14 @@ module.exports.incidents = {
           // Same status as incident
           newStatus = data.status;
         } else {
-          // Map by criticality
-          if (data.status === 'investigating') newStatus = 'major_outage';
-          else if (data.status === 'identified') newStatus = 'partial_outage';
-          else if (data.status === 'monitoring') newStatus = 'degraded_performance';
+          // Map by criticality using status_mappings table
+          newStatus = statusMappings.resolve(data.status);
+          // Fallback to hardcoded mapping if no mapping exists
+          if (!newStatus) {
+            if (data.status === 'investigating') newStatus = 'major_outage';
+            else if (data.status === 'identified') newStatus = 'partial_outage';
+            else if (data.status === 'monitoring') newStatus = 'degraded_performance';
+          }
         }
         const comp = this.get(inc.component_id);
         if (newStatus && comp && comp.status !== newStatus) {
@@ -804,6 +812,141 @@ module.exports.passwordResets = {
   
   deleteToken(token) {
     db.prepare('DELETE FROM password_resets WHERE token=?').run(token);
+  }
+};
+
+// ===== COMPONENT STATUSES =====
+module.exports.componentStatuses = {
+  list() {
+    return db.prepare('SELECT * FROM component_statuses ORDER BY position, value').all();
+  },
+  
+  get(value) {
+    return db.prepare('SELECT * FROM component_statuses WHERE value=?').get(value);
+  },
+  
+  create({ value, label, color, position, is_system }) {
+    const id = uuidv4();
+    db.prepare('INSERT INTO component_statuses (id,value,label,color,position,is_system) VALUES (?,?,?,?,?,?)').run(
+      id, value, label, color||'#10b981', position||0, is_system ? 1 : 0
+    );
+    return this.get(value);
+  },
+  
+  update(value, data) {
+    const fields = [];
+    const params = [];
+    const allowed = ['label','color','position'];
+    for (const k of allowed) {
+      if (data[k] !== undefined) { fields.push(k+'=?'); params.push(data[k]); }
+    }
+    if (fields.length) {
+      params.push(value);
+      db.prepare(`UPDATE component_statuses SET ${fields.join(',')}, updated_at=datetime('now') WHERE value=?`).run(...params);
+    }
+    return this.get(value);
+  },
+  
+  delete(value) {
+    const s = this.get(value);
+    if (s && s.is_system) return false;
+    db.prepare('DELETE FROM component_statuses WHERE value=?').run(value);
+    return true;
+  }
+};
+
+// ===== INCIDENT STATUSES =====
+module.exports.incidentStatuses = {
+  list() {
+    return db.prepare('SELECT * FROM incident_statuses ORDER BY position, value').all();
+  },
+  
+  get(value) {
+    return db.prepare('SELECT * FROM incident_statuses WHERE value=?').get(value);
+  },
+  
+  create({ value, label, color, position, is_system }) {
+    const id = uuidv4();
+    db.prepare('INSERT INTO incident_statuses (id,value,label,color,position,is_system) VALUES (?,?,?,?,?,?)').run(
+      id, value, label, color||'#10b981', position||0, is_system ? 1 : 0
+    );
+    return this.get(value);
+  },
+  
+  update(value, data) {
+    const fields = [];
+    const params = [];
+    const allowed = ['label','color','position'];
+    for (const k of allowed) {
+      if (data[k] !== undefined) { fields.push(k+'=?'); params.push(data[k]); }
+    }
+    if (fields.length) {
+      params.push(value);
+      db.prepare(`UPDATE incident_statuses SET ${fields.join(',')}, updated_at=datetime('now') WHERE value=?`).run(...params);
+    }
+    return this.get(value);
+  },
+  
+  delete(value) {
+    const s = this.get(value);
+    if (s && s.is_system) return false;
+    db.prepare('DELETE FROM incident_statuses WHERE value=?').run(value);
+    return true;
+  }
+};
+
+// ===== STATUS MAPPINGS =====
+module.exports.statusMappings = {
+  list() {
+    return db.prepare(`
+      SELECT sm.*, 
+        i.label as incident_label, i.color as incident_color,
+        cs.label as component_label, cs.color as component_color
+      FROM status_mappings sm
+      LEFT JOIN incident_statuses i ON sm.incident_status = i.value
+      LEFT JOIN component_statuses cs ON sm.component_status = cs.value
+      ORDER BY i.position, sm.incident_status
+    `).all();
+  },
+  
+  get(incidentStatus, componentStatus) {
+    return db.prepare('SELECT * FROM status_mappings WHERE incident_status=? AND component_status=?').get(incidentStatus, componentStatus);
+  },
+  
+  getByIncident(incidentStatus) {
+    return db.prepare('SELECT * FROM status_mappings WHERE incident_status=?').all(incidentStatus);
+  },
+  
+  create({ incident_status, component_status }) {
+    const id = uuidv4();
+    db.prepare('INSERT INTO status_mappings (id,incident_status,component_status) VALUES (?,?,?)').run(
+      id, incident_status, component_status
+    );
+    return this.get(incident_status, component_status);
+  },
+  
+  update(incidentStatus, componentStatus, data) {
+    const fields = [];
+    const params = [];
+    const allowed = ['component_status'];
+    for (const k of allowed) {
+      if (data[k] !== undefined) { fields.push(k+'=?'); params.push(data[k]); }
+    }
+    if (fields.length) {
+      params.push(incidentStatus, componentStatus);
+      db.prepare(`UPDATE status_mappings SET ${fields.join(',')}, updated_at=datetime('now') WHERE incident_status=? AND component_status=?`).run(...params);
+    }
+    return this.get(incidentStatus, componentStatus);
+  },
+  
+  delete(incidentStatus, componentStatus) {
+    db.prepare('DELETE FROM status_mappings WHERE incident_status=? AND component_status=?').run(incidentStatus, componentStatus);
+    return true;
+  },
+
+  resolve(incidentStatus) {
+    const row = db.prepare('SELECT component_status FROM status_mappings WHERE incident_status=?').get(incidentStatus);
+    return row ? row.component_status : null;
   }
 };
 

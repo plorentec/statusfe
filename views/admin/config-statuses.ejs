@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title><%= title %> - StatusFe Admin</title>
+<link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+<div class="admin-layout">
+<%- include('../partials/_sidebar'); %>
+<main class="admin-main">
+<div class="admin-header">
+<h1><%= title %></h1>
+<% if (message) { %>
+<div class="flash flash-<%= messageType %>"><%= message %></div>
+<% } %>
+</div>
+
+<div class="card">
+<div class="card-header-row">
+<h2>Manage <%= type === 'component' ? 'Component' : 'Incident' %> Statuses</h2>
+<button class="btn btn-primary" onclick="document.getElementById('addForm').style.display='block'">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+Add Status
+</button>
+</div>
+
+<!-- Add form (hidden by default) -->
+<div id="addForm" style="display:none;" class="card" id="addCard">
+<h3 style="font-size:15px;margin-bottom:16px;">Add / Edit Status</h3>
+<form action="/admin/config/<%= type %>-statuses" method="post">
+<div class="form-row">
+<div class="form-group">
+<label>Status Key (value)</label>
+<input type="text" name="value" placeholder="e.g. operational" required>
+</div>
+<div class="form-group">
+<label>Display Label</label>
+<input type="text" name="label" placeholder="e.g. Operational" required>
+</div>
+</div>
+<div class="form-row">
+<div class="form-group">
+<label>Color</label>
+<input type="text" name="color" value="#10b981" placeholder="#10b981">
+</div>
+<div class="form-group">
+<label>Position</label>
+<input type="number" name="position" value="0" min="0">
+</div>
+</div>
+<div class="form-actions">
+<button type="submit" class="btn btn-primary">Save</button>
+<button type="button" class="btn" onclick="document.getElementById('addForm').style.display='none'">Cancel</button>
+</div>
+</form>
+</div>
+
+<!-- Statuses table -->
+<div class="table-container" style="margin-top:20px;">
+<table class="admin-table">
+<thead>
+<tr>
+<th>Color</th>
+<th>Key</th>
+<th>Label</th>
+<th>Position</th>
+<th>Type</th>
+<th>Actions</th>
+</tr>
+</thead>
+<tbody>
+<% if (statuses.length === 0) { %>
+<tr><td colspan="6" class="empty-cell">No statuses configured</td></tr>
+<% } else { %>
+<% statuses.forEach(s => { %>
+<tr>
+<td>
+<span style="display:inline-block;width:20px;height:20px;border-radius:4px;background:<%= s.color %>;border:1px solid var(--border);"></span>
+</td>
+<td><code><%= s.value %></code></td>
+<td><%= s.label %></td>
+<td><%= s.position %></td>
+<td><% if (s.is_system) { %><span class="status-badge status-operational">System</span><% } else { %><span class="status-badge status-investigating">Custom</span><% } %></td>
+<td>
+<div class="actions">
+<form action="/admin/config/<%= type %>-statuses" method="post" style="display:inline;" class="edit-form">
+<input type="hidden" name="value" value="<%= s.value %>">
+<input type="hidden" name="label" value="<%= s.label %>">
+<input type="hidden" name="color" value="<%= s.color %>">
+<input type="hidden" name="position" value="<%= s.position %>">
+<button type="submit" class="btn btn-sm" title="Edit" style="padding:4px 8px;font-size:12px;">✏️</button>
+</form>
+<% if (!s.is_system) { %>
+<form action="/admin/config/<%= type %>-statuses/<%= s.value %>" method="post" style="display:inline;" class="delete-form">
+<input type="hidden" name="_method" value="DELETE">
+<button type="submit" class="btn btn-sm btn-danger" title="Delete" onclick="return confirm('Delete this status?')">🗑️</button>
+</form>
+<% } else { %>
+<span style="color:var(--text-muted);font-size:12px;">Protected</span>
+<% } %>
+</div>
+</td>
+</tr>
+<% }); %>
+<% } %>
+</tbody>
+</table>
+</div>
+</div>
+</main>
+</div>
+<script>
+// Handle edit form — pre-fill and show form
+document.querySelectorAll('.edit-form').forEach(function(form) {
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    var fd = new FormData(form);
+    var formEl = document.getElementById('addForm');
+    formEl.style.display = 'block';
+    formEl.querySelector('input[name="value"]').value = fd.get('value');
+    formEl.querySelector('input[name="label"]').value = fd.get('label');
+    formEl.querySelector('input[name="color"]').value = fd.get('color');
+    formEl.querySelector('input[name="position"]').value = fd.get('position');
+    // Remove the form element so it doesn't submit
+    form.remove();
+    // Scroll to form
+    formEl.scrollIntoView({ behavior: 'smooth' });
+  });
+});
+</script>
+</body>
+</html>
