@@ -5,3 +5,14 @@ data/*.db-shm
 .env
 *.log
 .DS_Store
+
+# Sensitive files
+token.txt
+opencode.json
+
+# Screenshots / local artifacts
+Screenshot_*.png
+*.log
+
+# Debug files
+fallo.txt
