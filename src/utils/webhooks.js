@@ -15,9 +15,9 @@ module.exports = async function(pageId, event, data) {
       const req = client.request({
         hostname: url.hostname, port: url.port || (url.protocol === 'https:' ? 443 : 80),
         path: url.pathname + url.search, method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'User-Agent': 'StatusPage/1.0',
-          ...(sign && { 'X-StatusPage-Signature': sign }),
-          'X-StatusPage-Event': event }
+        headers: { 'Content-Type': 'application/json', 'User-Agent': 'StatusFe/1.0',
+          ...(sign && { 'X-StatusFe-Signature': sign }),
+          'X-StatusFe-Event': event }
       }, res => {
         db.prepare('UPDATE webhooks SET last_triggered_at=datetime(\'now\') WHERE id=?').run(wh.id);
         res.on('data', () => {});

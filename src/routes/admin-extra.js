@@ -1,7 +1,10 @@
 const express = require('express');
 const router = express.Router();
+const fs = require('fs');
+const path = require('path');
 const { requireAuth } = require('../middleware/session');
-const { notifications, analytics, dependencies } = require('../db/models');
+const { notifications, analytics, dependencies, settings, pages, components } = require('../db/models');
+const db = require('../db/init');
 
 router.use(requireAuth);
 
@@ -9,13 +12,14 @@ router.use(requireAuth);
 router.get('/notifications', (req, res) => {
   const notifs = notifications.list(req.user.id, 50);
   const unread = notifications.listUnread(req.user.id);
-  const uptime = analytics.getUptime('all', 30);
+  const smtp = settings.getSMTP();
   res.render('admin/notifications', {
     title: 'Notifications',
     user: req.user,
     notifications: notifs,
     unread,
-    hasNotifications: notifs.length > 0
+    hasNotifications: notifs.length > 0,
+    smtp
   });
 });
 
@@ -41,49 +45,281 @@ router.delete('/notifications/:id', (req, res) => {
 router.get('/analytics', (req, res) => {
   const db = require('../db/init');
   const pages = require('../db/models').pages.list();
-  const analyticsData = pages.map(p => ({
-    page: p,
-    totalViews: analytics.getTotalViews(p.id),
-    views: analytics.getViews(p.id, 30),
-    uptime: analytics.getUptime(p.id, 30)
-  }));
+  const allComponents = require('../db/models').components.list();
+  const componentUptime = analytics.getAllComponentsUptime(30);
+  const retention = settings.get('analytics_retention_days') || '365';
+
+  // Disk usage
+  const dbPath = path.join(__dirname, '..', '..', 'data', 'statusfe.db');
+  let diskInfo = { percentage: 0, total: 0, used: 0, dbSize: 0, dbOnly: false };
+  try {
+    const stat = fs.statSync(dbPath);
+    diskInfo.dbSize = stat.size;
+    try {
+      const { execSync } = require('child_process');
+      const df = execSync(`df --block-size=1 "${path.join(__dirname, '..', '..')}" 2>/dev/null | tail -1`, { encoding: 'utf8' });
+      const cols = df.trim().split(/\s+/);
+      if (cols.length >= 5) {
+        diskInfo.total = parseInt(cols[1]);
+        diskInfo.used = parseInt(cols[2]);
+        diskInfo.percentage = diskInfo.total > 0 ? ((diskInfo.used / diskInfo.total) * 100).toFixed(1) : 0;
+      }
+    } catch(e) {
+      diskInfo.dbOnly = true;
+    }
+  } catch(e) {}
+
+  // Build page->components mapping
+  const pageComponents = {};
+  pages.forEach(p => {
+    pageComponents[p.id] = allComponents.map(c => ({
+      ...c,
+      status_history: db.prepare(`
+        SELECT new_status, created_at FROM status_history
+        WHERE component_id=? AND created_at >= datetime('now', ?)
+        ORDER BY created_at DESC LIMIT 30
+      `).all(c.id, '-30 days')
+    }));
+  });
+
+  // Add total views to pages
+  pages.forEach(p => {
+    p.totalViews = analytics.getTotalViews(p.id);
+  });
+
   res.render('admin/analytics', {
     title: 'Analytics',
     user: req.user,
-    pages: analyticsData
+    pages,
+    components: allComponents,
+    componentUptime,
+    pageComponents,
+    retention,
+    diskInfo
   });
 });
 
-// GET /admin/dependencies
+// POST /admin/analytics/retention
+router.post('/analytics/retention', (req, res) => {
+  const { retention_days } = req.body;
+  const val = parseInt(retention_days);
+  if (!val || val < 30 || val > 3650) {
+    return res.redirect('/admin/analytics?msg=invalid&type=error');
+  }
+  settings.set('analytics_retention_days', String(val));
+  res.redirect('/admin/analytics?msg=success&type=success');
+});
+
+// POST /admin/analytics/cleanup
+router.post('/analytics/cleanup', (req, res) => {
+  const deleted = analytics.cleanOldData();
+  res.json({ ok: true, deleted });
+});
+
+// GET /admin/analytics-detail — admin-only endpoint for chart data
+router.get('/analytics-detail', (req, res) => {
+  const { id, type, hours } = req.query;
+  if (!id || !type) return res.status(400).json({ error: 'id and type required' });
+  
+  // Default 72h if not specified
+  const h = parseInt(hours) || 72;
+  
+  // Build labels array for the selected time range
+  const labels = [];
+  const now = new Date();
+  
+  for (let i = h - 1; i >= 0; i--) {
+    const d = new Date(now.getTime() - i * 3600000);
+    labels.push(d.toLocaleDateString('en', { month: 'short', day: 'numeric' }) + ' ' + d.getHours().toString().padStart(2, '0') + ':00');
+  }
+  
+  // Build a map from hour key to index
+  const hourMap = {};
+  for (let i = 0; i < h; i++) {
+    const d = new Date(now.getTime() - i * 3600000);
+    const key = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate() + '-' + d.getHours();
+    hourMap[key] = h - 1 - i;
+  }
+  
+  const datasets = [];
+  
+  if (type === 'page') {
+    const page = pages.getById(id) || pages.getBySlug(id);
+    if (!page) return res.status(404).json({ error: 'Page not found' });
+    
+    const views = db.prepare(`
+      SELECT strftime('%Y-%m-%H', created_at) as hour, COUNT(*) as cnt
+      FROM page_views WHERE page_id=? AND created_at >= datetime('now', ? || ' hours')
+      GROUP BY hour ORDER BY hour
+    `).all(id, String(h));
+    
+    const viewData = new Array(h).fill(0);
+    views.forEach(v => {
+      const idx = hourMap[v.hour];
+      if (idx !== undefined) viewData[idx] = v.cnt;
+    });
+    
+    datasets.push({
+      label: 'Page Views',
+      data: viewData,
+      borderColor: 'rgb(99,102,241)',
+      backgroundColor: 'rgba(99,102,241,0.1)',
+      fill: true,
+      tension: 0.4,
+      borderWidth: 2
+    });
+    
+    const pageComps = db.prepare(`
+      SELECT c.id, c.name
+      FROM components c JOIN page_components pc ON c.id = pc.component_id
+      WHERE pc.page_id=?
+    `).all(id);
+    
+    const colors = ['rgb(16,185,129)','rgb(245,158,11)','rgb(239,68,68)','rgb(139,92,246)','rgb(14,165,233)','rgb(236,72,153)'];
+    pageComps.forEach((c, ci) => {
+      const history = db.prepare(`
+        SELECT new_status, strftime('%Y-%m-%H', created_at) as hour
+        FROM status_history WHERE component_id=? AND created_at >= datetime('now', ? || ' hours')
+        ORDER BY created_at DESC
+      `).all(c.id, String(h));
+      
+      const hourStatus = {};
+      history.forEach(hs => { if (!hourStatus[hs.hour]) hourStatus[hs.hour] = hs.new_status; });
+      
+      const data = [];
+      for (let i = 0; i < h; i++) {
+        const d = new Date(now.getTime() - i * 3600000);
+        const hk = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate() + '-' + d.getHours();
+        const s = hourStatus[hk];
+        data.push(s === 'operational' ? 100 : (s ? 50 : 100));
+      }
+      
+      datasets.push({
+        label: c.name + ' uptime',
+        data: data,
+        borderColor: colors[ci % colors.length],
+        backgroundColor: 'transparent',
+        tension: 0.3,
+        borderWidth: 1.5,
+        pointRadius: 0
+      });
+    });
+    
+    res.json({ name: page.name, type: 'page', labels, datasets, hours: h });
+    
+  } else if (type === 'component') {
+    const comp = components.get(id);
+    if (!comp) return res.status(404).json({ error: 'Component not found' });
+    
+    const history = db.prepare(`
+      SELECT new_status, strftime('%Y-%m-%H', created_at) as hour
+      FROM status_history WHERE component_id=? AND created_at >= datetime('now', ? || ' hours')
+      ORDER BY created_at DESC
+    `).all(id, String(h));
+    
+    const hourStatus = {};
+    history.forEach(hs => { if (!hourStatus[hs.hour]) hourStatus[hs.hour] = hs.new_status; });
+    
+    const data = [];
+    for (let i = 0; i < h; i++) {
+      const d = new Date(now.getTime() - i * 3600000);
+      const hk = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate() + '-' + d.getHours();
+      const s = hourStatus[hk];
+      data.push(s === 'operational' ? 100 : (s ? 50 : 100));
+    }
+    
+    datasets.push({
+      label: comp.name + ' uptime',
+      data: data,
+      borderColor: 'rgb(99,102,241)',
+      backgroundColor: 'rgba(99,102,241,0.1)',
+      fill: true,
+      tension: 0.3,
+      borderWidth: 2
+    });
+    
+    res.json({ name: comp.name, type: 'component', labels, datasets, hours: h });
+  }
+});
+
+// ===== DEPENDENCIES =====
 router.get('/dependencies', (req, res) => {
-  const db = require('../db/init');
-  const components = require('../db/models').components.list();
-  const deps = components.map(c => ({
-    component: c,
-    dependencies: dependencies.list(c.id),
-    dependedBy: dependencies.listByDependsOn(c.id)
-  }));
+  const allComponents = components.list();
+  const allDeps = db.prepare(`
+    SELECT cd.*, 
+      c1.name as componentName, c2.name as dependsOnName
+    FROM component_dependencies cd
+    JOIN components c1 ON cd.component_id = c1.id
+    JOIN components c2 ON cd.depends_on = c2.id
+    ORDER BY c1.name
+  `).all();
+  
   res.render('admin/dependencies', {
     title: 'Dependencies',
     user: req.user,
-    components: deps
+    components: allComponents,
+    allDeps
   });
 });
 
-// POST /admin/dependencies
-router.post('/admin/dependencies', (req, res) => {
+router.post('/dependencies', (req, res) => {
   const { component_id, depends_on, cascade_status } = req.body;
   if (!component_id || !depends_on) {
     return res.redirect('/admin/dependencies?msg=error&type=error');
   }
-  dependencies.create({ component_id, depends_on, cascade_status: !!cascade_status });
+  if (component_id === depends_on) {
+    return res.redirect('/admin/dependencies?msg=self_dep&type=error');
+  }
+  // Check for circular deps
+  const existing = db.prepare('SELECT id FROM component_dependencies WHERE component_id=? AND depends_on=?').get(component_id, depends_on);
+  if (existing) {
+    return res.redirect('/admin/dependencies?msg=exists&type=error');
+  }
+  dependencies.create({ component_id, depends_on, cascade_status });
   res.redirect('/admin/dependencies?msg=success&type=success');
 });
 
-// DELETE /admin/dependencies/:id
-router.delete('/admin/dependencies/:id', (req, res) => {
+router.delete('/dependencies/:id', (req, res) => {
   dependencies.delete(req.params.id);
-  res.redirect('/admin/dependencies');
+  res.redirect('/admin/dependencies?msg=deleted&type=success');
+});
+
+// ===== PAGE CUSTOMIZATION =====
+router.get('/customize', (req, res) => {
+  const settings = require('../db/models').settings;
+  const customization = {
+    primary_color: settings.get('custom_primary_color') || '#10b981',
+    secondary_color: settings.get('custom_secondary_color') || '#059669',
+    bg_color: settings.get('custom_bg_color') || '#f8f9fb',
+    text_color: settings.get('custom_text_color') || '#1a1a2e',
+    font_family: settings.get('custom_font_family') || '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    logo_text: settings.get('custom_logo_text') || 'StatusFe',
+    logo_color: settings.get('custom_logo_color') || '#10b981',
+    page_structure: settings.get('custom_page_structure') || 'default',
+    border_radius: settings.get('custom_border_radius') || '12',
+  };
+  res.render('admin/customize', {
+    title: 'Customize',
+    user: req.user,
+    customization,
+    message: req.query.msg,
+    messageType: req.query.type
+  });
+});
+
+router.post('/customize', (req, res) => {
+  const { primary_color, secondary_color, bg_color, text_color, font_family, logo_text, logo_color, page_structure, border_radius } = req.body;
+  const settings = require('../db/models').settings;
+  settings.set('custom_primary_color', primary_color);
+  settings.set('custom_secondary_color', secondary_color);
+  settings.set('custom_bg_color', bg_color);
+  settings.set('custom_text_color', text_color);
+  settings.set('custom_font_family', font_family);
+  settings.set('custom_logo_text', logo_text);
+  settings.set('custom_logo_color', logo_color);
+  settings.set('custom_page_structure', page_structure);
+  settings.set('custom_border_radius', border_radius);
+  res.redirect('/admin/customize?msg=success&type=success');
 });
 
 module.exports = router;

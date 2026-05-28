@@ -3,14 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><%= title %> - StatusPage</title>
+<title><%= title %> - StatusFe</title>
 <link rel="stylesheet" href="/css/admin.css">
 </head>
 <body>
 <div class="auth-container">
 <div class="auth-card">
 <div class="auth-header">
-<h1>StatusPage</h1>
+<a href="/status/admin" style="text-decoration:none;color:inherit;">
+<h1 style="display:flex;align-items:center;justify-content:center;gap:10px;">
+<span style="display:inline-flex;align-items:center;gap:8px;font-weight:800;font-size:28px;letter-spacing:-0.5px;"><span style="display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;background:linear-gradient(135deg,#10b981,#059669);border-radius:10px;color:#fff;font-size:22px;font-weight:900;line-height:1;">S</span><span>Status<span style="color:#10b981;">Fe</span></span></span>
+</h1>
+</a>
 <p>Sign in to your account</p>
 </div>
 <% if (message) { %>

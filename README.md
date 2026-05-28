@@ -56,13 +56,13 @@ cp .env.example .env
 npm install --production
 
 # Copy systemd service / Copiar servicio systemd
-sudo cp systemd/statuspage.service /etc/systemd/system/
+sudo cp systemd/statusfe.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable statuspage
-sudo systemctl start statuspage
+sudo systemctl enable statusfe
+sudo systemctl start statusfe
 
 # Check status / Verificar estado
-sudo systemctl status statuspage
+sudo systemctl status statusfe
 ```
 
 ## Updating / Actualizando
@@ -82,7 +82,7 @@ docker compose up -d --build
 cd /var/www/statusfe
 git pull
 npm install --production
-sudo systemctl restart statuspage
+sudo systemctl restart statusfe
 ```
 
 ## Configuration / Configuración

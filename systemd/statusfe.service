@@ -1,16 +1,16 @@
 [Unit]
-Description=StatusPage - Open Source Status Page System
+Description=StatusFe - Open Source Status Page System
 After=network.target
 
 [Service]
 Type=simple
 User=www-data
-WorkingDirectory=/var/www/statuspage
+WorkingDirectory=/var/www/statusfe
 ExecStart=/usr/bin/node src/app.js
 Restart=on-failure
 RestartSec=5
 Environment=NODE_ENV=production
-EnvironmentFile=/var/www/statuspage/.env
+EnvironmentFile=/var/www/statusfe/.env
 
 [Install]
 WantedBy=multi-user.target

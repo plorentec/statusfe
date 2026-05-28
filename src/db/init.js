@@ -4,7 +4,7 @@ const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 
-const DB_PATH = path.join(__dirname, '..', '..', 'data', 'statuspage.db');
+const DB_PATH = path.join(__dirname, '..', '..', 'data', 'statusfe.db');
 
 // Ensure data directory exists
 const dir = path.dirname(DB_PATH);
@@ -96,6 +96,7 @@ db.exec(`
   -- Incidents
   CREATE TABLE IF NOT EXISTS incidents (
     id TEXT PRIMARY KEY,
+    component_id TEXT,
     page_id TEXT NOT NULL,
     name TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'investigating',
@@ -106,6 +107,7 @@ db.exec(`
     visible INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (component_id) REFERENCES components(id) ON DELETE SET NULL,
     FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE CASCADE
   );
 
@@ -193,6 +195,19 @@ db.exec(`
     FOREIGN KEY (component_id) REFERENCES components(id) ON DELETE CASCADE
   );
 
+  -- Password Reset Tokens
+  CREATE TABLE IF NOT EXISTS password_resets (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    token TEXT NOT NULL UNIQUE,
+    expires_at TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_password_resets_token ON password_resets(token);
+  CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id);
+
   -- Analytics
   CREATE TABLE IF NOT EXISTS page_views (
     id TEXT PRIMARY KEY,
@@ -214,11 +229,22 @@ db.exec(`
     FOREIGN KEY (depends_on) REFERENCES components(id) ON DELETE CASCADE
   );
 
+  -- Settings
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL DEFAULT ''
+  );
+
   CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
   CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(is_read);
   CREATE INDEX IF NOT EXISTS idx_page_views_page ON page_views(page_id);
   CREATE INDEX IF NOT EXISTS idx_page_views_date ON page_views(created_at);
 `);
+
+// Migrations
+try { db.prepare("ALTER TABLE incidents ADD COLUMN component_id TEXT").run(); } catch(e) {}
+try { db.prepare("ALTER TABLE incidents ADD COLUMN created_at TEXT DEFAULT (datetime('now'))").run(); } catch(e) {}
+try { db.prepare("ALTER TABLE incidents ADD COLUMN updated_at TEXT DEFAULT (datetime('now'))").run(); } catch(e) {}
 
 // Seed data
 const adminPage = db.prepare('SELECT id FROM pages WHERE slug = ?').get('admin');

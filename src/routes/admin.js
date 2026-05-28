@@ -3,7 +3,9 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
 const db = require('../db/init');
-const { pages, components, apiKeys, incidents, maintenance, notifications } = require('../db/models');
+const fs = require('fs');
+const path = require('path');
+const { pages, components, apiKeys, incidents, maintenance, notifications, settings } = require('../db/models');
 const { requireAuth } = require('../middleware/session');
 
 router.use(requireAuth);
@@ -29,6 +31,43 @@ router.get('/', (req, res) => {
 
   const unread = notifications.listUnread(req.user.id);
 
+  // Disk usage
+  const dbPath = path.join(__dirname, '..', '..', 'data', 'statusfe.db');
+  let diskUsed = 0;
+  let diskTotal = 0;
+  let diskAvailable = 0;
+  try {
+    const stat = fs.statSync(dbPath);
+    diskUsed = stat.size;
+    const { total, available } = require('fs').totaldiskusage ? { total: 0, available: 0 } : { total: 0, available: 0 };
+    // Use /proc if available (Linux)
+    try {
+      const procStat = require('fs').readFileSync('/proc/stat', 'utf8');
+    } catch(e) {}
+  } catch(e) {}
+
+  let diskInfo = { used: 0, total: 0, percentage: 0, dbSize: 0 };
+  try {
+    const stat = fs.statSync(dbPath);
+    diskInfo.dbSize = stat.size;
+    
+    // Read from /proc/meminfo and df-like info from /proc on Linux
+    try {
+      const { execSync } = require('child_process');
+      const df = execSync(`df --block-size=1 "${path.join(__dirname, '..', '..')}" 2>/dev/null | tail -1`, { encoding: 'utf8' });
+      const cols = df.trim().split(/\s+/);
+      if (cols.length >= 5) {
+        diskInfo.total = parseInt(cols[1]);
+        diskInfo.used = parseInt(cols[2]);
+        diskInfo.available = parseInt(cols[3]);
+        diskInfo.percentage = diskInfo.total > 0 ? ((diskInfo.used / diskInfo.total) * 100).toFixed(1) : 0;
+      }
+    } catch(e) {
+      // fallback: just show DB size
+      diskInfo = { used: stat.size, total: 0, percentage: 0, dbSize: stat.size, dbOnly: true };
+    }
+  } catch(e) {}
+
   res.render('admin/dashboard', {
     title: 'Dashboard',
     user: req.user,
@@ -37,7 +76,8 @@ router.get('/', (req, res) => {
     stats: { pageCount, componentCount, incidentCount, userCount, operationalCount, openIncidents },
     recentIncidents,
     pageStatuses,
-    unread
+    unread,
+    diskInfo
   });
 });
 
@@ -152,6 +192,15 @@ router.delete('/pages/:id', (req, res) => {
 // ===== COMPONENTS CRUD =====
 router.get('/components', (req, res) => {
   const allComponents = components.list();
+  allComponents.forEach(c => {
+    c.activeIncidents = components.getActiveIncidents(c.id);
+    const activeInc = components.getActiveIncidentForComponent(c.id);
+    if (activeInc) {
+      c.status = activeInc.status;
+      c.incidentName = activeInc.name;
+      c.incidentImpact = activeInc.impact;
+    }
+  });
   res.render('admin/components', {
     title: 'Components',
     user: req.user,
@@ -212,6 +261,24 @@ router.put('/components/:id', (req, res) => {
   res.redirect('/admin/components?msg=success&type=success');
 });
 
+// Quick status change from component list
+router.post('/components/:id/status', (req, res) => {
+  const { status } = req.body;
+  const valid = ['operational','degraded_performance','partial_outage','major_outage','under_maintenance'];
+  if (!valid.includes(status)) {
+    return res.redirect('/admin/components?msg=invalid_status&type=error');
+  }
+  const comp = components.get(req.params.id);
+  if (!comp) {
+    return res.redirect('/admin/components?msg=error&type=error');
+  }
+  if (comp.status === status) {
+    return res.redirect('/admin/components?msg=success&type=success');
+  }
+  components.updateStatus(req.params.id, status);
+  res.redirect('/admin/components?msg=status_updated&type=success');
+});
+
 router.delete('/components/:id', (req, res) => {
   const comp = components.get(req.params.id);
   if (!comp) {
@@ -236,7 +303,7 @@ router.get('/incidents', (req, res) => {
 });
 
 router.get('/incidents/new', (req, res) => {
-  const allPages = pages.list();
+  const allComponents = components.list();
   res.render('admin/incident-form', {
     title: 'New Incident',
     user: req.user,
@@ -244,20 +311,16 @@ router.get('/incidents/new', (req, res) => {
     messageType: res.locals.messageType,
     pageMode: 'create',
     incident: {},
-    pages: allPages
+    components: allComponents
   });
 });
 
 router.post('/incidents', (req, res) => {
-  const { page_id, name, status, impact, starts_at, resolved_at, message, visible } = req.body;
-  if (!page_id || !name || !message) {
+  const { component_id, name, status, impact, starts_at, resolved_at, message, visible } = req.body;
+  if (!component_id || !name || !message) {
     return res.redirect('/admin/incidents/new?msg=error&type=error');
   }
-  const page = pages.getById(page_id) || pages.getBySlug(page_id);
-  if (!page) {
-    return res.redirect('/admin/incidents/new?msg=error&type=error');
-  }
-  incidents.create({ page_id: page.id, name, status, impact, starts_at, resolved_at, message, visible: visible ? 1 : 0 });
+  incidents.create({ component_id, name, status, impact, starts_at, resolved_at, message, visible: visible ? 1 : 0 });
   res.redirect('/admin/incidents?msg=success&type=success');
 });
 
@@ -266,7 +329,7 @@ router.get('/incidents/:id/edit', (req, res) => {
   if (!inc) {
     return res.redirect('/admin/incidents?msg=error&type=error');
   }
-  const allPages = pages.list();
+  const allComponents = components.list();
   res.render('admin/incident-form', {
     title: 'Edit Incident',
     user: req.user,
@@ -274,7 +337,7 @@ router.get('/incidents/:id/edit', (req, res) => {
     messageType: res.locals.messageType,
     pageMode: 'edit',
     incident: inc,
-    pages: allPages
+    components: allComponents
   });
 });
 
@@ -283,8 +346,8 @@ router.put('/incidents/:id', (req, res) => {
   if (!inc) {
     return res.redirect('/admin/incidents?msg=error&type=error');
   }
-  const { page_id, name, status, impact, starts_at, resolved_at, message, visible } = req.body;
-  incidents.update(req.params.id, { page_id, name, status, impact, starts_at, resolved_at, message, visible: visible ? 1 : 0 });
+  const { component_id, name, status, impact, starts_at, resolved_at, message, visible } = req.body;
+  incidents.update(req.params.id, { component_id, name, status, impact, starts_at, resolved_at, message, visible: visible ? 1 : 0 });
   res.redirect('/admin/incidents?msg=success&type=success');
 });
 
@@ -466,6 +529,18 @@ router.post('/users', (req, res) => {
   db.prepare('INSERT INTO users (id, email, password_hash, name, role) VALUES (?,?,?,?,?)').run(
     id, email, passwordHash, name, role || 'user'
   );
+  
+  // Send welcome email if SMTP is configured
+  const sendWelcome = req.body.send_welcome === '1';
+  if (sendWelcome) {
+    const emailUtils = require('../utils/email');
+    const { passwordResets } = require('../db/models');
+    const token = passwordResets.create(id, 24);
+    const baseUrl = (req.get('X-Forwarded-Proto') || 'http') + '://' + req.get('Host');
+    const resetUrl = baseUrl + '/auth/set-password/' + token;
+    emailUtils.sendWelcomeEmail(email, name, resetUrl).catch(() => {});
+  }
+  
   res.redirect('/admin/users?msg=created&type=success');
 });
 
@@ -480,6 +555,22 @@ router.delete('/users/:id', (req, res) => {
   }
   db.prepare('DELETE FROM users WHERE id=?').run(req.params.id);
   res.redirect('/admin/users?msg=deleted&type=success');
+});
+
+// Email settings save (POST to /admin/notifications)
+router.post('/email-settings', (req, res) => {
+  const { smtp_host, smtp_port, smtp_user, smtp_pass, smtp_secure, smtp_from, smtp_from_name } = req.body;
+  settings.setSMTP({ smtp_host, smtp_port, smtp_user, smtp_pass, smtp_secure, smtp_from, smtp_from_name });
+  res.redirect('/admin/notifications?msg=success&type=success');
+});
+
+router.post('/email-settings/test', (req, res) => {
+  const { to } = req.body;
+  if (!to) return res.json({ ok: false, error: 'No recipient specified' });
+  const email = require('../utils/email');
+  email.sendEmail(to, 'Test email from StatusFe', '<h2>Success!</h2><p>If you received this, your SMTP settings are configured correctly.</p>')
+    .then(result => res.json(result))
+    .catch(err => res.json({ ok: false, error: err.message }));
 });
 
 module.exports = router;

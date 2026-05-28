@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 
-const SESSION_SECRET = process.env.SESSION_SECRET || 'statuspage-session-secret-change-in-production';
+const SESSION_SECRET = process.env.SESSION_SECRET || 'statusfe-session-secret-change-in-production';
 
 function signCookie(value) {
   const hmac = crypto.createHmac('sha256', SESSION_SECRET);

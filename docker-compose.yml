@@ -1,7 +1,7 @@
 services:
-  statuspage:
+  statusfe:
     build: .
-    container_name: statuspage
+    container_name: statusfe
     restart: unless-stopped
     ports:
       - "${PORT:-3000}:3000"
@@ -9,7 +9,7 @@ services:
       - PORT=3000
       - SESSION_SECRET=${SESSION_SECRET:-change-me-to-a-random-string}
     volumes:
-      - statuspage-data:/app/data
+      - statusfe-data:/app/data
 
 volumes:
-  statuspage-data:
+  statusfe-data:
