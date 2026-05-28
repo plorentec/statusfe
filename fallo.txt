@@ -1,27 +1,24 @@
-{"error":"/app/views/admin/dashboard.ejs:11\n    9| <body>\n    10| <div class=\"admin-layout\">\n >> 11| <%- include('/var/www/cachet/views/partials/_sidebar'); %>\n    12| <main class=\"admin-main\">\n    13| <div class=\"admin-header\">\n    14| <h1><%= title %></h1>\n\nENOENT: no such file or directory, open '/var/www/cachet/views/partials/_sidebar.ejs'"}
+{"error":"/app/views/status-page.ejs:22\n    20| <div class=\"page-header\">\n    21| <div class=\"page-header-inner\">\n >> 22| <%- include('../partials/_logo'); %>\n    23| <% if (page.logo_url) { %><img src=\"<%= page.logo_url %>\" alt=\"<%= page.name %>\" class=\"logo\"><% } %>\n    24| <div>\n    25| <h1><%= page.name %></h1>\n\nCould not find the include file \"../partials/_logo\""}
 
-
-statusfe  | Error: /app/views/admin/dashboard.ejs:11
-statusfe  |     9| <body>
-statusfe  |     10| <div class="admin-layout">
-statusfe  |  >> 11| <%- include('/var/www/cachet/views/partials/_sidebar'); %>
-statusfe  |     12| <main class="admin-main">
-statusfe  |     13| <div class="admin-header">
-statusfe  |     14| <h1><%= title %></h1>
+statusfe  | RENDERING docs.ejs from: /app/views
+statusfe  | Error: /app/views/status-page.ejs:22
+statusfe  |     20| <div class="page-header">
+statusfe  |     21| <div class="page-header-inner">
+statusfe  |  >> 22| <%- include('../partials/_logo'); %>
+statusfe  |     23| <% if (page.logo_url) { %><img src="<%= page.logo_url %>" alt="<%= page.name %>" class="logo"><% } %>
+statusfe  |     24| <div>
+statusfe  |     25| <h1><%= page.name %></h1>
 statusfe  |
-statusfe  | ENOENT: no such file or directory, open '/var/www/cachet/views/partials/_sidebar.ejs'
-statusfe  |     at Object.openSync (node:fs:573:18)
-statusfe  |     at Object.readFileSync [as fileLoader] (node:fs:452:35)
-statusfe  |     at fileLoader (/app/node_modules/ejs/lib/cjs/ejs.js:269:16)
-statusfe  |     at handleCache (/app/node_modules/ejs/lib/cjs/ejs.js:214:20)
-statusfe  |     at includeFile (/app/node_modules/ejs/lib/cjs/ejs.js:296:12)
+statusfe  | Could not find the include file "../partials/_logo"
+statusfe  |     at getIncludePath (/app/node_modules/ejs/lib/cjs/ejs.js:170:19)
+statusfe  |     at includeFile (/app/node_modules/ejs/lib/cjs/ejs.js:284:21)
 statusfe  |     at include (/app/node_modules/ejs/lib/cjs/ejs.js:630:24)
-statusfe  |     at eval ("/app/views/admin/dashboard.ejs":15:17)
-statusfe  |     at dashboard (/app/node_modules/ejs/lib/cjs/ejs.js:632:23)
+statusfe  |     at eval ("/app/views/status-page.ejs":40:17)
+statusfe  |     at status-page (/app/node_modules/ejs/lib/cjs/ejs.js:632:23)
 statusfe  |     at tryHandleCache (/app/node_modules/ejs/lib/cjs/ejs.js:253:42)
-statusfe  |     at ejs.renderFile [as engine] (/app/node_modules/ejs/lib/cjs/ejs.js:444:12) {
-statusfe  |   errno: -2,
-statusfe  |   code: 'ENOENT',
-statusfe  |   syscall: 'open',
-statusfe  |   path: '/app/views/admin/dashboard.ejs'
+statusfe  |     at ejs.renderFile [as engine] (/app/node_modules/ejs/lib/cjs/ejs.js:444:12)
+statusfe  |     at View.render (/app/node_modules/express/lib/view.js:135:8)
+statusfe  |     at tryRender (/app/node_modules/express/lib/application.js:657:10)
+statusfe  |     at Function.render (/app/node_modules/express/lib/application.js:609:3) {
+statusfe  |   path: '/app/views/status-page.ejs'
 statusfe  | }
