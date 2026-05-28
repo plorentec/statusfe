@@ -10,6 +10,9 @@ services:
       - SESSION_SECRET=${SESSION_SECRET:-change-me-to-a-random-string}
     volumes:
       - statusfe-data:/app/data
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
 
 volumes:
   statusfe-data:
