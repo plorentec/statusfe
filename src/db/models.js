@@ -340,6 +340,7 @@ module.exports.incidents = {
     const inc = this.get(id);
     if (inc && inc.component_id) {
       const cs = data.cascade_status || inc.cascade_status || 'same';
+      console.log('Incident update:', id, 'status:', data.status, 'cs:', cs);
       // When incident status changes (not resolved), update component status and cascade
       if (data.status && data.status !== 'resolved' && cs !== 'none') {
         let newStatus;
@@ -366,9 +367,7 @@ module.exports.incidents = {
       }
       // When incident is resolved and no active incidents on this component, restore component to operational
       if (data.status === 'resolved') {
-        console.log('Incident resolved:', inc.id, 'component:', inc.component_id, 'active:', activeIncidents.length);
         const activeIncidents = db.prepare('SELECT id FROM incidents WHERE component_id=? AND status != \'resolved\'').all(inc.component_id);
-        console.log('Active incidents after query:', activeIncidents.length);
         if (activeIncidents.length === 0) {
           const comp = this.get(inc.component_id);
           if (comp && comp.status !== 'operational') {
