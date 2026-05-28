@@ -85,11 +85,13 @@ module.exports.components = {
           hId, id, pc.page_id, oldComp.status, data.status
         );
       });
-      // Also record with empty page_id for global tracking
+      // Also record with null page_id for global tracking
       const hId2 = uuidv4();
-      db.prepare('INSERT INTO status_history (id,component_id,page_id,old_status,new_status) VALUES (?,?,?,?,?)').run(
-        hId2, id, '', oldComp.status, data.status
-      );
+      try {
+        db.prepare('INSERT INTO status_history (id,component_id,page_id,old_status,new_status) VALUES (?,?,?,?,?)').run(hId2, id, null, oldComp.status, data.status);
+      } catch(e) {
+        if (!e.message.includes('FOREIGN KEY')) throw e;
+      }
     }
     return this.get(id);
   },
@@ -129,7 +131,14 @@ module.exports.components = {
 
     // Record history
     const hId = uuidv4();
-    db.prepare('INSERT INTO status_history (id,component_id,page_id,old_status,new_status) VALUES (?,?,?,?,?)').run(hId, componentId, pageId || '', oldStatus, newStatus);
+    const effectivePageId = (pageId && isUUID(pageId)) ? pageId : null;
+    try {
+      db.prepare('INSERT INTO status_history (id,component_id,page_id,old_status,new_status) VALUES (?,?,?,?,?)').run(hId, componentId, effectivePageId, oldStatus, newStatus);
+    } catch(e) {
+      if (e.message.includes('FOREIGN KEY')) {
+        db.prepare('INSERT INTO status_history (id,component_id,page_id,old_status,new_status) VALUES (?,?,?,?,?)').run(hId, componentId, null, oldStatus, newStatus);
+      } else throw e;
+    }
 
     // Send email notification
     let pageTitle = 'Status Page';
