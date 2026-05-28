@@ -291,7 +291,7 @@ router.get('/analytics-detail', requirePerm('read'), (req, res) => {
         d.setDate(d.getDate() - i);
         const ds = d.toISOString().split('T')[0];
         const s = dayStatus[ds];
-        data.push(s === 'operational' ? 100 : (s ? 50 : 100));
+        data.push(s === 'operational' ? 100 : (s ? 50 : 0));
       }
       
       datasets.push({
@@ -327,7 +327,7 @@ router.get('/analytics-detail', requirePerm('read'), (req, res) => {
       d.setDate(d.getDate() - i);
       const ds = d.toISOString().split('T')[0];
       const s = dayStatus[ds];
-      data.push(s === 'operational' ? 100 : (s ? 50 : 100));
+      data.push(s === 'operational' ? 100 : (s ? 50 : 0));
     }
     
     datasets.push({

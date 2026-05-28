@@ -33,33 +33,36 @@ router.get('/', (req, res) => {
 
   // Disk usage
   const dbPath = path.join(__dirname, '..', '..', 'data', 'statusfe.db');
-  let diskUsed = 0;
-  let diskTotal = 0;
-  let diskAvailable = 0;
-  try {
-    const stat = fs.statSync(dbPath);
-    diskUsed = stat.size;
-    const { total, available } = require('fs').totaldiskusage ? { total: 0, available: 0 } : { total: 0, available: 0 };
-    // Use /proc if available (Linux)
-    try {
-      const procStat = require('fs').readFileSync('/proc/stat', 'utf8');
-    } catch(e) {}
-  } catch(e) {}
-
   let diskInfo = { used: 0, total: 0, percentage: 0, dbSize: 0 };
   try {
     const stat = fs.statSync(dbPath);
     diskInfo.dbSize = stat.size;
     
-    // Read from /proc/meminfo and df-like info from /proc on Linux
+    // Read disk usage via df (supports both GNU and BusyBox/Alpine)
     try {
       const { execSync } = require('child_process');
-      const df = execSync(`df --block-size=1 "${path.join(__dirname, '..', '..')}" 2>/dev/null | tail -1`, { encoding: 'utf8' });
+      const rootPath = path.join(__dirname, '..', '..');
+      let df;
+      try {
+        df = execSync(`df -B1 "${rootPath}" 2>/dev/null | tail -1`, { encoding: 'utf8' });
+      } catch(e2) {
+        df = execSync(`df "${rootPath}" 2>/dev/null | tail -1`, { encoding: 'utf8' });
+      }
       const cols = df.trim().split(/\s+/);
       if (cols.length >= 5) {
-        diskInfo.total = parseInt(cols[1]);
-        diskInfo.used = parseInt(cols[2]);
-        diskInfo.available = parseInt(cols[3]);
+        const rawTotal = parseInt(cols[1]);
+        const rawUsed = parseInt(cols[2]);
+        const rawAvailable = parseInt(cols[3]);
+        // If values look like they're in KB (Alpine default), convert to bytes
+        if (rawTotal > 0 && rawTotal < 1000000000) {
+          diskInfo.total = rawTotal * 1024;
+          diskInfo.used = rawUsed * 1024;
+          diskInfo.available = rawAvailable * 1024;
+        } else {
+          diskInfo.total = rawTotal;
+          diskInfo.used = rawUsed;
+          diskInfo.available = rawAvailable;
+        }
         diskInfo.percentage = diskInfo.total > 0 ? ((diskInfo.used / diskInfo.total) * 100).toFixed(1) : 0;
       }
     } catch(e) {
