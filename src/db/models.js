@@ -5,6 +5,24 @@ function isUUID(str) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 }
 
+function formatDateInTZ(dateStr, tz) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  const options = { timeZone: tz || 'UTC', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false };
+  const formatter = new Intl.DateTimeFormat('es-ES', options);
+  return formatter.format(d);
+}
+
+function nowInTZ(tz) {
+  const d = new Date();
+  return d.toLocaleString('sv-SE', { timeZone: tz || 'UTC' }).replace(/\//g, '-').slice(0, 19).replace('T', ' ');
+}
+
+function getServerTZ() {
+  return module.exports.settings.get('server_timezone') || 'UTC';
+}
+
 function cascadeStatusChange(upstreamComponentId, newStatus) {
   // Find all components that depend on upstreamComponentId
   const dependents = db.prepare('SELECT * FROM component_dependencies WHERE depends_on=?').all(upstreamComponentId);
@@ -262,7 +280,27 @@ module.exports.incidents = {
     
     db.prepare(`INSERT INTO incidents (id,component_id,page_id,name,status,impact,starts_at,resolved_at,message,visible)
       VALUES (?,?,?,?,?,?,?,?,?,?)`).run(id, component_id||null, resolvedPageId, name, status||'investigating', impact||'none',
-      starts_at||new Date().toISOString().slice(0,19).replace('T',' '), resolved_at||null, message, visible ? 1 : 0);
+      starts_at||nowInTZ(getServerTZ()), resolved_at||null, message, visible ? 1 : 0);
+    
+    // When creating an incident on a component, change component status and cascade
+    if (component_id && status !== 'resolved') {
+      const incidentStatus = status || 'investigating';
+      const comp = this.get(component_id);
+      if (comp && comp.status === 'operational') {
+        const newStatus = incidentStatus === 'investigating' ? 'major_outage'
+          : incidentStatus === 'identified' ? 'partial_outage'
+          : 'degraded_performance';
+        db.prepare('UPDATE components SET status=?, updated_at=datetime(\'now\') WHERE id=?').run(newStatus, component_id);
+        const hId = uuidv4();
+        try {
+          db.prepare('INSERT INTO status_history (id,component_id,page_id,old_status,new_status) VALUES (?,?,?,?,?)').run(hId, component_id, resolvedPageId, 'operational', newStatus);
+        } catch(e) {
+          if (!e.message.includes('FOREIGN KEY')) throw e;
+        }
+        cascadeStatusChange(component_id, newStatus);
+      }
+    }
+    
     const inc = this.get(id);
     const page = module.exports.pages.getById(resolvedPageId);
     const comp = component_id ? module.exports.components.get(component_id) : null;
@@ -282,7 +320,7 @@ module.exports.incidents = {
     // Auto-set resolved_at when status changes to resolved
     if (data.status === 'resolved' && !data.resolved_at) {
       fields.push('resolved_at=?');
-      params.push(new Date().toISOString().slice(0,19).replace('T',' '));
+      params.push(nowInTZ(getServerTZ()));
     }
     if (fields.length) {
       params.push(id);
@@ -290,6 +328,24 @@ module.exports.incidents = {
     }
     const inc = this.get(id);
     if (inc) {
+      // When incident is resolved and no active incidents on this component, restore component to operational
+      if (data.status === 'resolved' && inc.component_id) {
+        const activeIncidents = db.prepare('SELECT id FROM incidents WHERE component_id=? AND status != "resolved"').all(inc.component_id);
+        if (activeIncidents.length === 0) {
+          const comp = this.get(inc.component_id);
+          if (comp && comp.status !== 'operational') {
+            db.prepare('UPDATE components SET status=?, updated_at=datetime(\'now\') WHERE id=?').run('operational', inc.component_id);
+            const hId = uuidv4();
+            try {
+              db.prepare('INSERT INTO status_history (id,component_id,page_id,old_status,new_status) VALUES (?,?,?,?,?)').run(hId, inc.component_id, inc.page_id, comp.status, 'operational');
+            } catch(e) {
+              if (!e.message.includes('FOREIGN KEY')) throw e;
+            }
+            // Cascade operational status back
+            cascadeStatusChange(inc.component_id, 'operational');
+          }
+        }
+      }
       const page = module.exports.pages.getById(inc.page_id);
       const comp = inc.component_id ? module.exports.components.get(inc.component_id) : null;
       const compName = comp ? comp.name : 'Status Page';
