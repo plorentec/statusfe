@@ -26,6 +26,13 @@ cp .env.example .env
 docker compose up -d
 ```
 
+> **Note:** If you get a SQLite error (`no such table: api_keys`), delete the old volume first:
+> ```bash
+> docker compose down
+> docker volume rm statusfe_statusfe-data
+> docker compose up -d
+> ```
+
 Access at `http://localhost:3000` / Acceso en `http://localhost:3000`
 
 Default admin credentials: `admin@status.local` / `admin123` / Credenciales admin por defecto: `admin@status.local` / `admin123`

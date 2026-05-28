@@ -1,0 +1,21 @@
+ exited with code 1 (restarting)
+statusfe  |
+statusfe  | /app/node_modules/better-sqlite3/lib/methods/wrappers.js:5
+statusfe  | ch  return this[cppdb].prepare(sql, this, false);
+statusfe  |                        ^
+statusfe  | SqliteError: no such table: api_keys
+statusfe  |     at Database.prepare (/app/node_modules/better-sqlite3/lib/methods/wrappers.js:5:21)
+statusfe  |     at Object.<anonymous> (/app/src/db/init.js:38:27)
+statusfe  |     at Module._compile (node:internal/modules/cjs/loader:1521:14)
+statusfe  |     at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+statusfe  |     at Module.load (node:internal/modules/cjs/loader:1266:32)
+statusfe  |     at Module._load (node:internal/modules/cjs/loader:1091:12)
+statusfe  |     at Module.require (node:internal/modules/cjs/loader:1289:19)
+statusfe  |     at require (node:internal/modules/helpers:182:18)
+statusfe  |     at Object.<anonymous> (/app/src/app.js:13:1)
+statusfe  |     at Module._compile (node:internal/modules/cjs/loader:1521:14) {
+statusfe  |   code: 'SQLITE_ERROR'
+statusfe  | }
+statusfe  |
+statusfe  | Node.js v20.20.2
+statusfe exited with code 1 (restarting)
