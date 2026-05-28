@@ -86,7 +86,7 @@ app.get('/status/:slug', (req, res) => {
   // Check dependencies and cascade status
   const pageComps = db.prepare(`
     SELECT c.*, pc.position,
-      (SELECT new_status FROM status_history WHERE component_id=c.id AND page_id=? ORDER BY created_at DESC LIMIT 1) as current_status
+      (SELECT new_status FROM status_history WHERE component_id=c.id AND (page_id=? OR page_id IS NULL) ORDER BY created_at DESC LIMIT 1) as current_status
     FROM components c JOIN page_components pc ON c.id=pc.component_id WHERE pc.page_id=? ORDER BY pc.position,c.name
   `).all(page.id, page.id);
   
