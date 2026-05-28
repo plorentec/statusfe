@@ -1,21 +1,27 @@
- exited with code 1 (restarting)
+{"error":"/app/views/admin/dashboard.ejs:11\n    9| <body>\n    10| <div class=\"admin-layout\">\n >> 11| <%- include('/var/www/cachet/views/partials/_sidebar'); %>\n    12| <main class=\"admin-main\">\n    13| <div class=\"admin-header\">\n    14| <h1><%= title %></h1>\n\nENOENT: no such file or directory, open '/var/www/cachet/views/partials/_sidebar.ejs'"}
+
+
+statusfe  | Error: /app/views/admin/dashboard.ejs:11
+statusfe  |     9| <body>
+statusfe  |     10| <div class="admin-layout">
+statusfe  |  >> 11| <%- include('/var/www/cachet/views/partials/_sidebar'); %>
+statusfe  |     12| <main class="admin-main">
+statusfe  |     13| <div class="admin-header">
+statusfe  |     14| <h1><%= title %></h1>
 statusfe  |
-statusfe  | /app/node_modules/better-sqlite3/lib/methods/wrappers.js:5
-statusfe  | ch  return this[cppdb].prepare(sql, this, false);
-statusfe  |                        ^
-statusfe  | SqliteError: no such table: api_keys
-statusfe  |     at Database.prepare (/app/node_modules/better-sqlite3/lib/methods/wrappers.js:5:21)
-statusfe  |     at Object.<anonymous> (/app/src/db/init.js:38:27)
-statusfe  |     at Module._compile (node:internal/modules/cjs/loader:1521:14)
-statusfe  |     at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
-statusfe  |     at Module.load (node:internal/modules/cjs/loader:1266:32)
-statusfe  |     at Module._load (node:internal/modules/cjs/loader:1091:12)
-statusfe  |     at Module.require (node:internal/modules/cjs/loader:1289:19)
-statusfe  |     at require (node:internal/modules/helpers:182:18)
-statusfe  |     at Object.<anonymous> (/app/src/app.js:13:1)
-statusfe  |     at Module._compile (node:internal/modules/cjs/loader:1521:14) {
-statusfe  |   code: 'SQLITE_ERROR'
+statusfe  | ENOENT: no such file or directory, open '/var/www/cachet/views/partials/_sidebar.ejs'
+statusfe  |     at Object.openSync (node:fs:573:18)
+statusfe  |     at Object.readFileSync [as fileLoader] (node:fs:452:35)
+statusfe  |     at fileLoader (/app/node_modules/ejs/lib/cjs/ejs.js:269:16)
+statusfe  |     at handleCache (/app/node_modules/ejs/lib/cjs/ejs.js:214:20)
+statusfe  |     at includeFile (/app/node_modules/ejs/lib/cjs/ejs.js:296:12)
+statusfe  |     at include (/app/node_modules/ejs/lib/cjs/ejs.js:630:24)
+statusfe  |     at eval ("/app/views/admin/dashboard.ejs":15:17)
+statusfe  |     at dashboard (/app/node_modules/ejs/lib/cjs/ejs.js:632:23)
+statusfe  |     at tryHandleCache (/app/node_modules/ejs/lib/cjs/ejs.js:253:42)
+statusfe  |     at ejs.renderFile [as engine] (/app/node_modules/ejs/lib/cjs/ejs.js:444:12) {
+statusfe  |   errno: -2,
+statusfe  |   code: 'ENOENT',
+statusfe  |   syscall: 'open',
+statusfe  |   path: '/app/views/admin/dashboard.ejs'
 statusfe  | }
-statusfe  |
-statusfe  | Node.js v20.20.2
-statusfe exited with code 1 (restarting)
