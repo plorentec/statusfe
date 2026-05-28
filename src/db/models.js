@@ -290,14 +290,14 @@ module.exports.incidents = {
       const comp = this.get(component_id);
       let newStatus;
       if (cs === 'same') {
-        // Same status as incident — use component status values
+        // Same status as incident
+        newStatus = incidentStatus;
+      } else {
+        // Map by criticality
         if (incidentStatus === 'investigating') newStatus = 'major_outage';
         else if (incidentStatus === 'identified') newStatus = 'partial_outage';
         else if (incidentStatus === 'monitoring') newStatus = 'degraded_performance';
         else if (incidentStatus === 'resolved') newStatus = 'operational';
-      } else {
-        // Map by criticality — always use the incident status string
-        newStatus = incidentStatus;
       }
       const oldStatus = comp ? comp.status : 'operational';
       if (newStatus && oldStatus !== newStatus) {
@@ -344,11 +344,13 @@ module.exports.incidents = {
       if (data.status && data.status !== 'resolved' && cs !== 'none') {
         let newStatus;
         if (cs === 'same') {
+          // Same status as incident
+          newStatus = data.status;
+        } else {
+          // Map by criticality
           if (data.status === 'investigating') newStatus = 'major_outage';
           else if (data.status === 'identified') newStatus = 'partial_outage';
           else if (data.status === 'monitoring') newStatus = 'degraded_performance';
-        } else {
-          newStatus = data.status;
         }
         const comp = this.get(inc.component_id);
         if (newStatus && comp && comp.status !== newStatus) {
