@@ -119,33 +119,24 @@ Status Mappings
 <script src="/js/admin.js"></script>
 <script>
 (function() {
-  const saved = localStorage.getItem('statusfe-theme');
+  var saved = localStorage.getItem('statusfe-theme');
   if (saved === 'dark') {
     document.body.classList.add('dark');
-    const icon = document.getElementById('themeIcon');
+    var icon = document.getElementById('themeIcon');
     if (icon) icon.textContent = '☀️';
-    const adminIcon = document.getElementById('adminThemeIcon');
-    if (adminIcon) adminIcon.textContent = '☀️';
   }
 })();
 
 function toggleTheme() {
   document.body.classList.toggle('dark');
-  const icon = document.getElementById('themeIcon');
-  const adminIcon = document.getElementById('adminThemeIcon');
+  var icon = document.getElementById('themeIcon');
   if (document.body.classList.contains('dark')) {
     localStorage.setItem('statusfe-theme', 'dark');
     if (icon) icon.textContent = '☀️';
-    if (adminIcon) adminIcon.textContent = '☀️';
   } else {
     localStorage.setItem('statusfe-theme', 'light');
     if (icon) icon.textContent = '🌙';
-    if (adminIcon) adminIcon.textContent = '🌙';
   }
-}
-
-function toggleAdminTheme() {
-  toggleTheme();
 }
 </script>
 </body>
