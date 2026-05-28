@@ -24,12 +24,13 @@ function getServerTZ() {
 }
 
 function cascadeStatusChange(upstreamComponentId, newStatus) {
-  // Find all components that depend on upstreamComponentId
   const dependents = db.prepare('SELECT * FROM component_dependencies WHERE depends_on=?').all(upstreamComponentId);
+  if (dependents.length > 0) console.log('Cascading status', newStatus, 'from', upstreamComponentId, 'to', dependents.map(d => d.component_id).join(', '));
   for (const dep of dependents) {
-    if (dep.cascade_status) {
+    if (dep.cascade_status == 1) {
       const depComp = db.prepare('SELECT * FROM components WHERE id=?').get(dep.component_id);
       if (depComp && depComp.status !== newStatus) {
+        console.log('  Cascade:', depComp.name, depComp.status, '->', newStatus);
         db.prepare('UPDATE components SET status=?, updated_at=datetime(\'now\') WHERE id=?').run(newStatus, dep.component_id);
         const dhId = uuidv4();
         try {
