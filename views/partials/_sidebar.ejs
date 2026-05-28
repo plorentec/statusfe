@@ -95,6 +95,15 @@
 </div>
 </aside>
 <script>
-(function(){const s=localStorage.getItem('statusfe-theme');if(s==='dark'){document.body.classList.add('dark');const i=document.getElementById('adminThemeIcon');if(i)i.textContent='☀️';}})();
-function toggleAdminTheme(){document.body.classList.toggle('dark');const i=document.getElementById('adminThemeIcon');if(document.body.classList.contains('dark')){localStorage.setItem('statusfe-theme','dark');if(i)i.textContent='☀️';}else{localStorage.setItem('statusfe-theme','light');if(i)i.textContent='🌙';}}
+(function(){
+  var s=localStorage.getItem('statusfe-theme');
+  if(s==='dark'){document.body.classList.add('dark');var i=document.getElementById('adminThemeIcon');if(i)i.textContent='☀️';}
+  // Submenu toggle
+  var parents=document.querySelectorAll('.sidebar-parent');
+  for(var i=0;i<parents.length;i++){(function(p){p.addEventListener('click',function(e){e.preventDefault();p.classList.toggle('open');var sm=p.nextElementSibling;if(sm&&sm.classList.contains('sidebar-submenu'))sm.classList.toggle('open');});})(parents[i]);}
+  // Open parent nav items that have active children
+  var submenus=document.querySelectorAll('.sidebar-submenu');
+  for(var j=0;j<submenus.length;j++){var ac=submenus[j].querySelector('.active');if(ac){var pr=submenus[j].previousElementSibling;if(pr&&pr.classList.contains('sidebar-parent')){pr.classList.add('open');submenus[j].classList.add('open');}}}
+})();
+function toggleAdminTheme(){document.body.classList.toggle('dark');var i=document.getElementById('adminThemeIcon');if(document.body.classList.contains('dark')){localStorage.setItem('statusfe-theme','dark');if(i)i.textContent='☀️';}else{localStorage.setItem('statusfe-theme','light');if(i)i.textContent='🌙';}}
 </script>
