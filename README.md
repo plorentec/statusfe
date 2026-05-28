@@ -8,6 +8,7 @@ Open source status page system built with Node.js, Express, and SQLite.
 
 - Multiple status pages / Múltiples páginas de estado
 - Components with status tracking / Componentes con seguimiento de estado
+- **Same component across multiple pages / Mismo componente en varias páginas** (unique among open source alternatives)
 - Incidents and maintenance windows / Incidentes y ventanas de mantenimiento
 - REST API with key-based authentication / API REST con autenticación por clave
 - Webhooks for status changes / Webhooks para cambios de estado
