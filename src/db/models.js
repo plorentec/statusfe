@@ -294,7 +294,7 @@ module.exports.incidents = {
         newStatus = incidentStatus;
       } else if (cs === 'criticality') {
         // Map by criticality using status_mappings table
-        newStatus = statusMappings.resolve(incidentStatus);
+        newStatus = module.exports.statusMappings.resolve(incidentStatus);
         // Fallback to hardcoded mapping if no mapping exists
         if (!newStatus) {
           if (incidentStatus === 'investigating') newStatus = 'major_outage';
@@ -353,7 +353,7 @@ module.exports.incidents = {
           newStatus = data.status;
         } else {
           // Map by criticality using status_mappings table
-          newStatus = statusMappings.resolve(data.status);
+          newStatus = module.exports.statusMappings.resolve(data.status);
           // Fallback to hardcoded mapping if no mapping exists
           if (!newStatus) {
             if (data.status === 'investigating') newStatus = 'major_outage';
