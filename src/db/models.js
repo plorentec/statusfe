@@ -353,10 +353,7 @@ module.exports.incidents = {
           newStatus = data.status;
         } else {
           // Map by criticality using status_mappings table
-          console.log('DEBUG: typeof module.exports.statusMappings =', typeof module.exports.statusMappings);
-          console.log('DEBUG: module.exports.statusMappings =', module.exports.statusMappings);
           newStatus = module.exports.statusMappings.resolve(data.status);
-          console.log('DEBUG: newStatus from resolve =', newStatus);
           // Fallback to hardcoded mapping if no mapping exists
           if (!newStatus) {
             if (data.status === 'investigating') newStatus = 'major_outage';
@@ -364,8 +361,7 @@ module.exports.incidents = {
             else if (data.status === 'monitoring') newStatus = 'degraded_performance';
           }
         }
-        const comp = this.get(inc.component_id);
-        console.log('DEBUG: comp.status =', comp.status, 'newStatus =', newStatus, 'shouldUpdate =', !!(newStatus && comp && comp.status !== newStatus));
+        const comp = module.exports.components.get(inc.component_id);
         if (newStatus && comp && comp.status !== newStatus) {
           db.prepare('UPDATE components SET status=?, updated_at=datetime(\'now\') WHERE id=?').run(newStatus, inc.component_id);
           const hId = uuidv4();
@@ -381,7 +377,7 @@ module.exports.incidents = {
       if (data.status === 'resolved') {
         const activeIncidents = db.prepare('SELECT id FROM incidents WHERE component_id=? AND status != \'resolved\'').all(inc.component_id);
         if (activeIncidents.length === 0) {
-          const comp = this.get(inc.component_id);
+          const comp = module.exports.components.get(inc.component_id);
           if (comp && comp.status !== 'operational') {
             db.prepare('UPDATE components SET status=?, updated_at=datetime(\'now\') WHERE id=?').run('operational', inc.component_id);
             const hId = uuidv4();
