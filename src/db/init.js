@@ -77,7 +77,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS status_history (
     id TEXT PRIMARY KEY,
     component_id TEXT NOT NULL,
-    page_id TEXT NOT NULL,
+    page_id TEXT,
     old_status TEXT,
     new_status TEXT NOT NULL,
     created_at TEXT DEFAULT (datetime('now')),
@@ -256,6 +256,27 @@ try {
 try { db.prepare("ALTER TABLE incidents ADD COLUMN component_id TEXT").run(); } catch(e) {}
 try { db.prepare("ALTER TABLE incidents ADD COLUMN created_at TEXT DEFAULT (datetime('now'))").run(); } catch(e) {}
 try { db.prepare("ALTER TABLE incidents ADD COLUMN updated_at TEXT DEFAULT (datetime('now'))").run(); } catch(e) {}
+
+// Migrate: allow NULL page_id in status_history for global tracking
+try {
+  const col = db.prepare("PRAGMA table_info(status_history)").all().find(c => c.name === 'page_id');
+  if (col && col.notnull === 1) {
+    db.prepare("ALTER TABLE status_history RENAME TO status_history_old").run();
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS status_history (
+        id TEXT PRIMARY KEY,
+        component_id TEXT NOT NULL,
+        page_id TEXT,
+        old_status TEXT,
+        new_status TEXT NOT NULL,
+        FOREIGN KEY (component_id) REFERENCES components(id) ON DELETE CASCADE,
+        FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE CASCADE
+      );
+    `);
+    db.prepare("INSERT INTO status_history SELECT * FROM status_history_old").run();
+    db.prepare("DROP TABLE status_history_old").run();
+  }
+} catch(e) {}
 
 // Seed data
 const adminPage = db.prepare('SELECT id FROM pages WHERE slug = ?').get('admin');
