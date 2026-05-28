@@ -365,6 +365,7 @@ module.exports.incidents = {
           }
         }
         const comp = this.get(inc.component_id);
+        console.log('DEBUG: comp.status =', comp.status, 'newStatus =', newStatus, 'shouldUpdate =', !!(newStatus && comp && comp.status !== newStatus));
         if (newStatus && comp && comp.status !== newStatus) {
           db.prepare('UPDATE components SET status=?, updated_at=datetime(\'now\') WHERE id=?').run(newStatus, inc.component_id);
           const hId = uuidv4();
