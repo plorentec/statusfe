@@ -36,15 +36,5 @@
         }
       }
     }
-  },
-  "mcp": {
-    "n8n": {
-      "type": "remote",
-      "url": "https://n8n.plorentec.com/mcp/skillmanager",
-      "headers": {
-        "Authorization": "Bearer 7h7H7dh7H7h7<nq73<gdejncrk83"
-      },
-      "enabled": true
-    }
   }
 }

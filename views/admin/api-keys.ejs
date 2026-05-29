@@ -10,7 +10,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  background: #f8fafc;
+  background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 8px 12px;
@@ -32,9 +32,9 @@
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
-.perm-read { background: #dbeafe; color: #1e40af; }
-.perm-write { background: #d1fae5; color: #065f46; }
-.perm-admin { background: #fef3c7; color: #92400e; }
+.perm-read { background: var(--primary); color: #fff; }
+.perm-write { background: #059669; color: #fff; }
+.perm-admin { background: #d97706; color: #fff; }
 .api-key-row { display: flex; justify-content: space-between; align-items: center; }
 </style>
 </head>
@@ -46,7 +46,7 @@
 <% if (message) { %>
 <div class="flash flash-<%= messageType %>"><%= message %></div>
 <% if (typeof key_value !== 'undefined' && key_value) { %>
-<div class="card" style="margin-top:16px;border-color:#10b981;background:#f0fdf4">
+<div class="card" style="margin-top:16px;border-color:#10b981;background:var(--bg)">
 <h3>🔑 New API Key Created</h3>
 <div style="font-size:13px;margin-bottom:8px">Permissions: <%- (key_perms || 'read, write') %></div>
 <div class="key-display">
@@ -120,7 +120,7 @@
 </form>
 <% } else { %>
 <form action="/admin/api-keys/<%= k.id %>/reactivate" method="post" onsubmit="return confirm('Reactivate this API key?')">
-<button type="submit" class="btn btn-sm" style="color:#065f46;border-color:#a7f3d0;background:#f0fdf4;">Reactivate</button>
+<button type="submit" class="btn btn-sm" style="color:#10b981;border-color:var(--border);background:var(--bg);">Reactivate</button>
 </form>
 <% } %>
 </td>
@@ -135,5 +135,6 @@
 </main>
 </div>
 <script src="/js/admin.js"></script>
+<script>document.body.classList.add('dark');</script>
 </body>
 </html>
