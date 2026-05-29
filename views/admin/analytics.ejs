@@ -20,6 +20,7 @@
 .chart-container { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 20px; }
 .chart-container canvas { max-height: 300px; }
 </style>
+<script>document.body.classList.add('dark');</script>
 </head>
 <body>
 <div class="admin-layout">
@@ -158,9 +159,8 @@
 </main>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
-<script src="/js/admin.js"></script>
-<script>
-document.body.classList.add('dark');
+ <script src="/js/admin.js"></script>
+ <script>
 
 let mainChart = null;
 
