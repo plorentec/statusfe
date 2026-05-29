@@ -150,7 +150,7 @@ router.get('/analytics-detail', (req, res) => {
   const hourMap = {};
   for (let i = 0; i < h; i++) {
     const d = new Date(now.getTime() - i * 3600000);
-    const key = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate() + '-' + d.getHours();
+    const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0') + '-' + String(d.getHours()).padStart(2,'0');
     hourMap[key] = h - 1 - i;
   }
   
@@ -161,7 +161,7 @@ router.get('/analytics-detail', (req, res) => {
     if (!page) return res.status(404).json({ error: 'Page not found' });
     
     const views = db.prepare(`
-      SELECT strftime('%Y-%m-%H', created_at) as hour, COUNT(*) as cnt
+      SELECT strftime('%Y-%m-%d-%H', created_at) as hour, COUNT(*) as cnt
       FROM page_views WHERE page_id=? AND created_at >= datetime('now', ? || ' hours')
       GROUP BY hour ORDER BY hour
     `).all(id, String(h));
