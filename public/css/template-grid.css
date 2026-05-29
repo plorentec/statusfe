@@ -169,4 +169,3 @@ body.template-grid.status-dark {
 }
 body.template-grid.status-dark .template-grid .overall-status.operational { background: rgba(34,197,94,0.15); }
 body.template-grid.status-dark .template-grid .overall-status.major_outage { background: rgba(239,68,68,0.15); }
-body.template-grid.status-dark .status-theme-toggle { background: #6366f1; color: #fff; }
