@@ -10,11 +10,11 @@ html, body { overflow-x: hidden; margin: 0 !important; padding: 0 !important; }
   --success: #10b981;
   --danger: #ef4444;
   --warning: #f59e0b;
-  --bg: #f1f5f9;
-  --white: #ffffff;
-  --text: #1e293b;
-  --text-muted: #64748b;
-  --border: #e2e8f0;
+  --bg: #0f1117;
+  --white: #1a1b26;
+  --text: #e2e8f0;
+  --text-muted: #94a3b8;
+  --border: #1e2030;
   --radius: 8px;
 }
 
