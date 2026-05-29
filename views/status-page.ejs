@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><%= page.name %> - System Status</title>
+<meta name="refresh-interval" content="<%= typeof refreshInterval !== 'undefined' ? refreshInterval : '0' %>">
 <% if (page.template === 'grid') { %>
 <link rel="stylesheet" href="/css/template-grid.css">
 <% } else if (page.template === 'dark') { %>
@@ -254,6 +255,15 @@ setInterval(() => {
   }).catch(() => {});
 }, 60000);
 function formatStatus(s) { return {operational:'Operational',under_maintenance:'Under Maintenance',degraded_performance:'Degraded Performance',partial_outage:'Partial Outage',major_outage:'Major Outage',investigating:'Investigating',identified:'Identified',monitoring:'Monitoring',resolved:'Resolved'}[s] || s; }
+
+// Auto-refresh page at configured interval
+(function() {
+  var meta = document.querySelector('meta[name="refresh-interval"]');
+  var seconds = meta ? parseInt(meta.content) : 0;
+  if (seconds > 0) {
+    setInterval(function() { location.reload(); }, seconds * 1000);
+  }
+})();
 </script>
 <% if (page.custom_html) { %><%= page.custom_html %><% } %>
 </body>

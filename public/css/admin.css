@@ -423,6 +423,7 @@ code {
   font-family: inherit;
   transition: border-color 0.15s;
   background: var(--white);
+  color: var(--text);
 }
 .form-group input:focus,
 .form-group select:focus,

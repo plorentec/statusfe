@@ -78,6 +78,22 @@
 </div>
 </div>
 
+<div class="card" style="margin-top:20px;">
+<h3 style="font-size:16px;font-weight:600;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border);">Auto-Refresh</h3>
+<div class="form-group">
+<label for="page_refresh_interval">Public Page Refresh Interval (seconds)</label>
+<select id="page_refresh_interval" name="page_refresh_interval">
+<option value="0" <%= parseInt(customization.page_refresh_interval) === 0 ? 'selected' : '' %>>Disabled (manual only)</option>
+<option value="15" <%= customization.page_refresh_interval === '15' ? 'selected' : '' %>>15 seconds</option>
+<option value="30" <%= customization.page_refresh_interval === '30' ? 'selected' : '' %>>30 seconds</option>
+<option value="60" <%= customization.page_refresh_interval === '60' ? 'selected' : '' %>>1 minute</option>
+<option value="120" <%= customization.page_refresh_interval === '120' ? 'selected' : '' %>>2 minutes</option>
+<option value="300" <%= customization.page_refresh_interval === '300' ? 'selected' : '' %>>5 minutes</option>
+</select>
+<p style="font-size:12px;color:var(--text-muted);margin-top:6px;">The public status page will automatically reload at this interval. Set to 0 to disable.</p>
+</div>
+</div>
+
 <form action="/admin/customize" method="post" style="margin-top:20px;">
 <div class="form-actions">
 <button type="submit" class="btn btn-primary">Save Customization</button>

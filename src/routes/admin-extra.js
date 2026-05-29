@@ -310,6 +310,7 @@ router.get('/customize', (req, res) => {
     logo_color: settings.get('custom_logo_color') || '#10b981',
     page_structure: settings.get('custom_page_structure') || 'default',
     border_radius: settings.get('custom_border_radius') || '12',
+    page_refresh_interval: settings.get('page_refresh_interval') || '0',
   };
   res.render('admin/customize', {
     title: 'Customize',
@@ -321,7 +322,7 @@ router.get('/customize', (req, res) => {
 });
 
 router.post('/customize', (req, res) => {
-  const { primary_color, secondary_color, bg_color, text_color, font_family, logo_text, logo_color, page_structure, border_radius } = req.body;
+  const { primary_color, secondary_color, bg_color, text_color, font_family, logo_text, logo_color, page_structure, border_radius, page_refresh_interval } = req.body;
   const settings = require('../db/models').settings;
   settings.set('custom_primary_color', primary_color);
   settings.set('custom_secondary_color', secondary_color);
@@ -332,6 +333,7 @@ router.post('/customize', (req, res) => {
   settings.set('custom_logo_color', logo_color);
   settings.set('custom_page_structure', page_structure);
   settings.set('custom_border_radius', border_radius);
+  settings.set('page_refresh_interval', String(page_refresh_interval || 0));
   res.redirect('/admin/customize?msg=success&type=success');
 });
 
