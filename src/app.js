@@ -138,7 +138,8 @@ app.get('/status/:slug', (req, res) => {
   });
   
   const formatStatus = s => ({operational:'Operational',under_maintenance:'Under Maintenance',degraded_performance:'Degraded Performance',partial_outage:'Partial Outage',major_outage:'Major Outage',investigating:'Investigating',identified:'Identified',monitoring:'Monitoring',resolved:'Resolved'}[s] || s);
-  res.render('status-page', { page, components: resolvedComps, incidents: incs, incidentsByComponent, formatStatus });
+  const refreshInterval = db.prepare('SELECT value FROM settings WHERE key=?').get('page_refresh_interval');
+  res.render('status-page', { page, components: resolvedComps, incidents: incs, incidentsByComponent, formatStatus, refreshInterval: refreshInterval ? parseInt(refreshInterval.value) : 0 });
 });
 
 // Embed widget with customization
