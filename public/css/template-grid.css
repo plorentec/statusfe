@@ -1,11 +1,11 @@
 /* Template 2: Card Grid - Redesigned */
 :root {
-  --grid-bg: #f0f2f5;
-  --grid-card: #ffffff;
-  --grid-text: #1a1a2e;
-  --grid-muted: #6c757d;
-  --grid-border: #e2e6ea;
-  --grid-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  --grid-bg: #0a0a0f;
+  --grid-card: #12121a;
+  --grid-text: #e2e8f0;
+  --grid-muted: #64748b;
+  --grid-border: #1e1e2e;
+  --grid-shadow: 0 2px 12px rgba(0,0,0,0.3);
   --grid-radius: 16px;
   --grid-operational: #10b981;
   --grid-degraded: #f59e0b;
@@ -64,18 +64,18 @@ body.template-grid {
 .template-grid .incidents-panel {
   border-radius: var(--grid-radius); margin-bottom: 28px; overflow: hidden; border: 1px solid;
 }
-.template-grid .incidents-panel.impact-critical { border-color: #fecaca; background: #fef2f2; }
-.template-grid .incidents-panel.impact-major { border-color: #fed7aa; background: #fff7ed; }
-.template-grid .incidents-panel.impact-minor { border-color: #fef08a; background: #fefce8; }
-.template-grid .incidents-panel.impact-none { border-color: #e2e8f0; background: #f8fafc; }
+.template-grid .incidents-panel.impact-critical { border-color: rgba(239,68,68,0.3); background: rgba(239,68,68,0.08); }
+.template-grid .incidents-panel.impact-major { border-color: rgba(249,115,22,0.3); background: rgba(249,115,22,0.08); }
+.template-grid .incidents-panel.impact-minor { border-color: rgba(245,158,11,0.3); background: rgba(245,158,11,0.08); }
+.template-grid .incidents-panel.impact-none { border-color: rgba(148,163,184,0.2); background: rgba(148,163,184,0.05); }
 .template-grid .incidents-panel-header {
   display: flex; align-items: center; gap: 10px; padding: 14px 20px;
   border-bottom: 1px solid; font-size: 14px; font-weight: 700;
 }
-.template-grid .incidents-panel.impact-critical .incidents-panel-header { border-color: #fecaca; color: #991b1b; }
-.template-grid .incidents-panel.impact-major .incidents-panel-header { border-color: #fed7aa; color: #9a3412; }
-.template-grid .incidents-panel.impact-minor .incidents-panel-header { border-color: #fef08a; color: #854d0e; }
-.template-grid .incidents-panel.impact-none .incidents-panel-header { border-color: #e2e8f0; color: #475569; }
+.template-grid .incidents-panel.impact-critical .incidents-panel-header { border-color: rgba(239,68,68,0.3); color: #f87171; }
+.template-grid .incidents-panel.impact-major .incidents-panel-header { border-color: rgba(249,115,22,0.3); color: #fb923c; }
+.template-grid .incidents-panel.impact-minor .incidents-panel-header { border-color: rgba(245,158,11,0.3); color: #fbbf24; }
+.template-grid .incidents-panel.impact-none .incidents-panel-header { border-color: rgba(148,163,184,0.2); color: #94a3b8; }
 .template-grid .alert-icon { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 .template-grid .incidents-panel.impact-critical .alert-icon { background: #ef4444; }
 .template-grid .incidents-panel.impact-major .alert-icon { background: #f97316; }
@@ -86,10 +86,10 @@ body.template-grid {
   padding: 14px 20px; border-bottom: 1px solid; gap: 12px;
 }
 .template-grid .incident-row:last-child { border-bottom: none; }
-.template-grid .incidents-panel.impact-critical .incident-row { border-color: #fecaca; }
-.template-grid .incidents-panel.impact-major .incident-row { border-color: #fed7aa; }
-.template-grid .incidents-panel.impact-minor .incident-row { border-color: #fef08a; }
-.template-grid .incidents-panel.impact-none .incident-row { border-color: #e2e8f0; }
+.template-grid .incidents-panel.impact-critical .incident-row { border-color: rgba(239,68,68,0.15); }
+.template-grid .incidents-panel.impact-major .incident-row { border-color: rgba(249,115,22,0.15); }
+.template-grid .incidents-panel.impact-minor .incident-row { border-color: rgba(245,158,11,0.15); }
+.template-grid .incidents-panel.impact-none .incident-row { border-color: rgba(148,163,184,0.1); }
 .template-grid .incident-row-left { display: flex; align-items: flex-start; gap: 10px; flex: 1; min-width: 0; }
 .template-grid .incident-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
 .template-grid .incident-dot.impact-critical { background: #ef4444; }
@@ -101,15 +101,15 @@ body.template-grid {
 .template-grid .incident-row-badge {
   font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px; white-space: nowrap; flex-shrink: 0;
 }
-.template-grid .badge-operational { background: #d1fae5; color: #065f46; }
-.template-grid .badge-under_maintenance { background: #ede9fe; color: #5b21b6; }
-.template-grid .badge-degraded_performance { background: #fef3c7; color: #92400e; }
-.template-grid .badge-partial_outage { background: #ffedd5; color: #9a3412; }
-.template-grid .badge-major_outage { background: #fee2e2; color: #991b1b; }
-.template-grid .badge-investigating { background: #fee2e2; color: #991b1b; }
-.template-grid .badge-identified { background: #ffedd5; color: #9a3412; }
-.template-grid .badge-monitoring { background: #fef3c7; color: #92400e; }
-.template-grid .badge-resolved { background: #d1fae5; color: #065f46; }
+.template-grid .badge-operational { background: rgba(16,185,129,0.15); color: #34d399; }
+.template-grid .badge-under_maintenance { background: rgba(139,92,246,0.15); color: #a78bfa; }
+.template-grid .badge-degraded_performance { background: rgba(245,158,11,0.15); color: #fbbf24; }
+.template-grid .badge-partial_outage { background: rgba(249,115,22,0.15); color: #fb923c; }
+.template-grid .badge-major_outage { background: rgba(239,68,68,0.15); color: #f87171; }
+.template-grid .badge-investigating { background: rgba(239,68,68,0.15); color: #f87171; }
+.template-grid .badge-identified { background: rgba(249,115,22,0.15); color: #fb923c; }
+.template-grid .badge-monitoring { background: rgba(245,158,11,0.15); color: #fbbf24; }
+.template-grid .badge-resolved { background: rgba(16,185,129,0.15); color: #34d399; }
 
 /* Grid Components */
 .template-grid .grid-container { max-width: 960px; margin: 0 auto; padding: 0 20px; }
@@ -147,15 +147,15 @@ body.template-grid {
   font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px;
   text-transform: uppercase; letter-spacing: 0.5px;
 }
-.template-grid .card-status.operational { background: #d1fae5; color: #065f46; }
-.template-grid .card-status.degraded_performance { background: #fef3c7; color: #92400e; }
-.template-grid .card-status.partial_outage { background: #ffedd5; color: #9a3412; }
-.template-grid .card-status.major_outage { background: #fee2e2; color: #991b1b; }
-.template-grid .card-status.under_maintenance { background: #ede9fe; color: #5b21b6; }
-.template-grid .card-status.investigating { background: #fee2e2; color: #991b1b; }
-.template-grid .card-status.identified { background: #ffedd5; color: #9a3412; }
-.template-grid .card-status.monitoring { background: #fef3c7; color: #92400e; }
-.template-grid .card-status.resolved { background: #d1fae5; color: #065f46; }
+.template-grid .card-status.operational { background: rgba(16,185,129,0.15); color: #34d399; }
+.template-grid .card-status.degraded_performance { background: rgba(245,158,11,0.15); color: #fbbf24; }
+.template-grid .card-status.partial_outage { background: rgba(249,115,22,0.15); color: #fb923c; }
+.template-grid .card-status.major_outage { background: rgba(239,68,68,0.15); color: #f87171; }
+.template-grid .card-status.under_maintenance { background: rgba(139,92,246,0.15); color: #a78bfa; }
+.template-grid .card-status.investigating { background: rgba(239,68,68,0.15); color: #f87171; }
+.template-grid .card-status.identified { background: rgba(249,115,22,0.15); color: #fb923c; }
+.template-grid .card-status.monitoring { background: rgba(245,158,11,0.15); color: #fbbf24; }
+.template-grid .card-status.resolved { background: rgba(16,185,129,0.15); color: #34d399; }
 .template-grid .card-desc { font-size: 13px; color: var(--grid-muted); margin-top: 4px; }
 
 .template-grid footer {

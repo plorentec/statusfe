@@ -2,7 +2,7 @@
 :root {
   --operational: #006b39; --maintenance: #f0ad4e; --degraded: #f0ad4e;
   --partial: #f0ad85; --major: #d9534f;
-  --bg: #f8f9fb; --white: #fff; --text: #1a1a2e; --light: #64748b; --border: #e2e8f0;
+  --bg: #0a0a0f; --white: #12121a; --text: #e2e8f0; --light: #64748b; --border: #1e1e2e;
   --radius: 12px;
 }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }

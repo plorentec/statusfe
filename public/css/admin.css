@@ -51,7 +51,7 @@ body {
   padding: 40px;
   width: 100%;
   max-width: 400px;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.3);
 }
 
 .auth-header { text-align: center; margin-bottom: 32px; }
@@ -71,8 +71,8 @@ body {
   font-size: 14px;
   font-weight: 500;
 }
-.flash-success { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
-.flash-error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+.flash-success { background: rgba(16,185,129,0.15); color: #34d399; border: 1px solid rgba(16,185,129,0.3); }
+.flash-error { background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3); }
 
 /* ===== ADMIN LAYOUT ===== */
 .admin-layout {
@@ -189,7 +189,7 @@ body {
   border-radius: var(--radius);
   padding: 24px;
   margin-bottom: 24px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
   border: 1px solid var(--border);
 }
 
@@ -214,11 +214,11 @@ body {
 .stat-card {
   background: var(--white);
   border-radius: var(--radius);
-  padding: 20px;
+  padding: 24px;
   display: flex;
   align-items: center;
   gap: 16px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
   border: 1px solid var(--border);
 }
 .stat-icon {
@@ -250,7 +250,7 @@ body {
   background: var(--white);
   border-radius: var(--radius);
   padding: 24px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
   border: 1px solid var(--border);
 }
 .dashboard-card h3 {
@@ -288,7 +288,7 @@ body {
 .table-container {
   background: var(--white);
   border-radius: var(--radius);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
   border: 1px solid var(--border);
   overflow-x: auto;
 }
@@ -306,7 +306,7 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-muted);
-  background: #f8fafc;
+  background: #161722;
   border-bottom: 1px solid var(--border);
 }
 .admin-table td {
@@ -363,7 +363,7 @@ body {
 .empty-state { color: var(--text-muted); text-align: center; padding: 20px; }
 
 code {
-  background: #f1f5f9;
+  background: #161722;
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 13px;
@@ -726,7 +726,7 @@ code {
 .template-card-preview {
   padding: 0;
   min-height: 0;
-  background: #fff;
+  background: var(--white);
   overflow: hidden;
 }
 
@@ -904,6 +904,11 @@ body.dark .yes {
 
 body.dark .no {
   color: #fca5a5;
+}
+
+body.dark select option {
+  background: #1a1b26;
+  color: #e2e8f0;
 }
 
 /* ===== NOTIFICATIONS ===== */
