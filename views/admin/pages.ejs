@@ -202,9 +202,22 @@ Make page public
 <% components.forEach(c => { %>
 <label class="component-checkbox">
 <input type="checkbox" name="component_ids" value="<%= c.id %>" <%= (assignedComponentIds || []).includes(c.id) ? 'checked' : '' %>>
-<%= c.name %> <small class="text-muted">(<%= c.group_name || 'Other' %>)</small>
 </label>
 <% }) %>
+</div>
+<% } else { %>
+<small class="text-muted">No components created yet. <a href="/admin/components/new">Create components first</a>.</small>
+<% } %>
+</div>
+<div class="form-group">
+<label for="custom_css">Custom CSS</label>
+<textarea id="custom_css" name="custom_css" rows="6" placeholder="/* Your custom CSS */"><%= page.custom_css || '' %></textarea>
+<small class="text-muted">CSS injected into the status page. Use it to override styles, change colors, fonts, etc.</small>
+</div>
+<div class="form-group">
+<label for="custom_html">Custom HTML (injected before </body>)</label>
+<textarea id="custom_html" name="custom_html" rows="6" placeholder="<!-- Your custom HTML -->"><%= page.custom_html || '' %></textarea>
+<small class="text-muted">HTML injected at the bottom of the status page. Use it for embed widgets, tracking scripts, etc.</small>
 </div>
 <% } else { %>
 <small class="text-muted">No components created yet. <a href="/admin/components/new">Create components first</a>.</small>
