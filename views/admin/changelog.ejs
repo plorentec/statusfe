@@ -1,0 +1,71 @@
+<div class="card">
+<h3>🚀 Version 2.0.0</h3>
+<p class="text-muted">Released <%= new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) %></p>
+
+<h4 style="margin-top: 20px; color: var(--success);">✨ New Features</h4>
+<ul>
+<li><strong>Two-Factor Authentication (TOTP)</strong> — Mandatory for admin and write roles. Setup via authenticator apps (Google Authenticator, Authy, etc.)</li>
+<li><strong>Audit Log</strong> — Complete log of all admin actions with CSV export. Daily rotation to dated files.</li>
+<li><strong>Component Groups</strong> — Group components for better organization, with global or page-specific groups.</li>
+<li><strong>Custom Layout Mode</strong> — Full HTML/CSS customization for status pages with placeholder system.</li>
+<li><strong>Self-signed SSL</strong> — Auto-generated HTTPS certificates (enable with HTTPS=true).</li>
+<li><strong>Auto Session Secret</strong> — Random session secret generated on first run, persisted in data/.</li>
+<li><strong>Auto Backup</strong> — SQLite database backed up every hour (7 rolling copies).</li>
+<li><strong>Rate Limiting</strong> — Login (10/15min), API (60/min), Admin (60/min).</li>
+</ul>
+
+<h4 style="margin-top: 20px; color: var(--warning);">🔒 Security Improvements</h4>
+<ul>
+<li>CSRF protection on all admin forms</li>
+<li>XSS sanitization in custom CSS/HTML/logo rendering</li>
+<li>API key expiration enforcement</li>
+<li>Webhook URL validation (SSRF protection)</li>
+<li>Admin-only guards on user creation and component status changes</li>
+<li>CORS restricted to status pages and API only</li>
+</ul>
+
+<h4 style="margin-top: 20px; color: var(--info);">🐛 Bug Fixes</h4>
+<ul>
+<li>Fixed session persistence (SQLite backend)</li>
+<li>Fixed uptime calculation logic</li>
+<li>Fixed duplicate route conflicts</li>
+<li>Fixed component status change notifications</li>
+<li>Fixed notification rendering (emoji icons)</li>
+</ul>
+
+<h4 style="margin-top: 20px;">⚙️ Technical</h4>
+<ul>
+<li>SQLite WAL mode + busy_timeout for better concurrency</li>
+<li>API key auth optimized with hash prefix indexing</li>
+<li>All admin views include CSRF tokens via auto-inject</li>
+<li>Daily analytics and audit log cleanup cron</li>
+</ul>
+
+<div class="card" style="margin-top: 20px; border: 1px solid var(--border);">
+<h4>🔄 Check for Updates</h4>
+<div id="updateStatus" style="padding: 10px 0;">
+<button class="btn btn-primary" onclick="checkUpdate()">Check for Updates</button>
+</div>
+</div>
+</div>
+
+<script>
+function checkUpdate() {
+  const el = document.getElementById('updateStatus');
+  el.innerHTML = '<p style="color: var(--info);">Checking...</p>';
+  fetch('/admin/check-update')
+    .then(r => r.json())
+    .then(data => {
+      if (data.hasUpdate) {
+        el.innerHTML = `<p style="color: var(--warning);">⚠️ New version available: <strong>${data.latestVersion}</strong></p>
+          <p>Current: ${data.currentVersion} — Published: ${new Date(data.publishedAt).toLocaleDateString()}</p>
+          <a href="${data.url}" target="_blank" class="btn btn-primary">View Release Notes</a>`;
+      } else {
+        el.innerHTML = `<p style="color: var(--success);">✅ You're running the latest version: ${data.currentVersion}</p>`;
+      }
+    })
+    .catch(err => {
+      el.innerHTML = `<p style="color: var(--danger);">Could not check for updates: ${err.message}</p>`;
+    });
+}
+</script>

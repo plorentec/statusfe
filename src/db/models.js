@@ -435,7 +435,7 @@ module.exports.apiKeys = {
   authenticate(key) {
     if (!key) return null;
     const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
-    const hash = require('bcryptjs').hashSync(key, 1);
+    const hash = require('bcryptjs').hashSync(key, 10);
     // First find candidate by hash prefix (fast index lookup), then verify full hash
     const row = db.prepare("SELECT * FROM api_keys WHERE is_active=1 AND (expires_at IS NULL OR expires_at > ?) AND key_hash LIKE ?").all(now, hash.substring(0, 12) + '%');
     for (const r of row) {
