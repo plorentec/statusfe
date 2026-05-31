@@ -43,7 +43,7 @@
 <% components.forEach(c => { %>
 <tr>
 <td><strong><%= c.name %></strong><br><small class="text-muted"><%= c.description || '' %></small></td>
-<td><%= c.group_name || '<span class="text-muted">-</span>' %></td>
+<td><% if (c.group_id) { const g = groups.find(x => x.id === c.group_id); %><%= g ? g.name : '-' %><% } else { %><%= c.group_name || '-' %><% } %></td>
 <td><span class="status-badge status-<%= c.status %>"><%= c.status %></span></td>
 <td><%= c.position %></td>
 <td><%= c.created_at %></td>
@@ -83,8 +83,18 @@
 </div>
 <div class="form-row">
 <div class="form-group">
-<label for="group_name">Group</label>
+<label for="group_id">Group</label>
+<select id="group_id" name="group_id">
+<option value="">No group</option>
+<% if (groups) { groups.forEach(g => { %>
+<option value="<%= g.id %>" <%= component.group_id === g.id ? 'selected' : '' %>><%= g.name %><% if (g.page_id) { %> — <%= pages.find(p=>p.id===g.page_id)?.name || 'Global' %><% } %></option>
+<% }); } %>
+</select>
+</div>
+<div class="form-group">
+<label for="group_name">Group Name (legacy)</label>
 <input type="text" id="group_name" name="group_name" value="<%= component.group_name || '' %>" placeholder="Infrastructure">
+<small class="text-muted">Or use the group selector above.</small>
 </div>
 <div class="form-group">
 <label for="position">Position</label>

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title><%= title %> - StatusFe Admin</title>
+<link rel="stylesheet" href="/css/admin.css">
+<script>document.body.classList.add('dark');</script>
+</head>
+<body>
+<div class="admin-layout">
+<%- include('../partials/_sidebar'); %>
+<main class="admin-main">
+<div class="admin-header">
+<h1><%= title %></h1>
+<% if (message) { %>
+<div class="flash flash-<%= messageType %>"><%= message %></div>
+<% } %>
+</div>
+
+<% if (groupMode === 'list') { %>
+<div class="card-header-row">
+<h2>All Groups</h2>
+<a href="/admin/groups/new" class="btn btn-primary">+ New Group</a>
+</div>
+
+<div class="table-container">
+<table class="admin-table">
+<thead>
+<tr>
+<th>Name</th>
+<th>Page</th>
+<th>Position</th>
+<th>Components</th>
+<th>Created</th>
+<th>Actions</th>
+</tr>
+</thead>
+<tbody>
+<% if (groups.length === 0) { %>
+<tr><td colspan="6" class="empty-cell">No groups yet. <a href="/admin/groups/new">Create your first group</a>.</td></tr>
+<% } else { %>
+<% groups.forEach(g => { %>
+<tr>
+<td><strong><%= g.name %></strong></td>
+<td><% if (g.page_id) { const p = pages.find(x => x.id === g.page_id); %><%= p ? p.name : 'Global' %><% } else { %>Global<% } %></td>
+<td><%= g.position %></td>
+<td><%= db.prepare("SELECT COUNT(*) as c FROM components WHERE group_id=?").get(g.id).c %></td>
+<td><%= g.created_at %></td>
+<td class="actions">
+<a href="/admin/groups/<%= g.id %>/edit" class="btn btn-sm">Edit</a>
+<form action="/admin/groups/<%= g.id %>?_method=DELETE" method="post" class="delete-form" onsubmit="return confirm('Delete this group? Components will be unassigned.')">
+<button type="submit" class="btn btn-sm btn-danger">Delete</button>
+</form>
+</td>
+</tr>
+<% }) %>
+<% } %>
+</tbody>
+</table>
+</div>
+<% } %>
+
+<% if (groupMode === 'create' || groupMode === 'edit') { %>
+<div class="card">
+<h3><%= groupMode === 'create' ? 'Create New Group' : 'Edit Group' %></h3>
+<form action="<%= groupMode === 'create' ? '/admin/groups' : '/admin/groups/' + group.id %>" method="post">
+<% if (groupMode === 'edit') { %>
+<input type="hidden" name="_method" value="PUT">
+<% } %>
+<div class="form-group">
+<label for="name">Group Name</label>
+<input type="text" id="name" name="name" value="<%= group.name || '' %>" required placeholder="Infrastructure, Application, etc.">
+</div>
+<div class="form-group">
+<label for="page_id">Page (optional)</label>
+<select id="page_id" name="page_id">
+<option value="">Global (all pages)</option>
+<% pages.forEach(p => { %>
+<option value="<%= p.id %>" <%= group.page_id === p.id ? 'selected' : '' %>><%= p.name %></option>
+<% }) %>
+</select>
+<small class="text-muted">Leave empty for global group, or select a specific page.</small>
+</div>
+<div class="form-group">
+<label for="position">Position</label>
+<input type="number" id="position" name="position" value="<%= group.position || 0 %>" min="0">
+</div>
+<div class="form-actions">
+<button type="submit" class="btn btn-primary"><%= groupMode === 'create' ? 'Create Group' : 'Save Changes' %></button>
+<% if (groupMode === 'edit') { %>
+<a href="/admin/groups" class="btn">Cancel</a>
+<% } %>
+</div>
+</form>
+</div>
+<% } %>
+
+</main>
+</div>
+<script src="/js/admin.js"></script>
+</body>
+</html>

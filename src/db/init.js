@@ -328,6 +328,21 @@ try { db.prepare("ALTER TABLE pages ADD COLUMN custom_layout INTEGER DEFAULT 0")
 try { db.prepare("ALTER TABLE pages ADD COLUMN custom_layout_css TEXT").run(); } catch(e) {}
 try { db.prepare("ALTER TABLE pages ADD COLUMN custom_layout_html TEXT").run(); } catch(e) {}
 
+// Migrate: create component_groups table
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS component_groups (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      page_id TEXT,
+      position INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE CASCADE
+    );
+  `);
+} catch(e) {}
+try { db.prepare("ALTER TABLE components ADD COLUMN group_id TEXT").run(); } catch(e) {}
+
 // Seed data
 const adminPage = db.prepare('SELECT id FROM pages WHERE slug = ?').get('admin');
 if (!adminPage) {
