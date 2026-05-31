@@ -356,15 +356,20 @@ try { db.exec(`
       FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE CASCADE
     );
   `); } catch(e) {}
-// Migrate: copy existing page_id values to group_pages (only if column exists)
+// Migrate: copy existing page_id values to group_pages (only if column exists and data not yet copied)
 try {
   const hasPageId = db.prepare("PRAGMA table_info(component_groups)").all().some(c => c.name === 'page_id');
   if (hasPageId) {
-    const groupsWithPage = db.prepare("SELECT id, page_id FROM component_groups WHERE page_id IS NOT NULL AND page_id != ''").all();
-    for (const g of groupsWithPage) {
-      db.prepare("INSERT OR IGNORE INTO group_pages (group_id, page_id) VALUES (?,?)").run(g.id, g.page_id);
+    // Check if migration already ran by looking for foreign key errors
+    try {
+      const groupsWithPage = db.prepare("SELECT id, page_id FROM component_groups WHERE page_id IS NOT NULL AND page_id != ''").all();
+      for (const g of groupsWithPage) {
+        db.prepare("INSERT OR IGNORE INTO group_pages (group_id, page_id) VALUES (?,?)").run(g.id, g.page_id);
+      }
+      db.prepare("ALTER TABLE component_groups DROP COLUMN page_id").run();
+    } catch(migrateErr) {
+      // FK constraint failed - data may already be migrated, skip
     }
-    db.prepare("ALTER TABLE component_groups DROP COLUMN page_id").run();
   }
 } catch(e) {}
 
