@@ -300,6 +300,17 @@ router.delete('/components/:id', (req, res) => {
   if (!comp) {
     return res.redirect('/admin/components?msg=error&type=error');
   }
+  const { notifications } = require('../db/models');
+  const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
+  admins.forEach(a => {
+    notifications.create({
+      user_id: a.id,
+      component_id: req.params.id,
+      type: 'component_deleted',
+      title: 'Component deleted: ' + comp.name,
+      message: comp.name + ' has been permanently deleted'
+    });
+  });
   components.delete(req.params.id);
   res.redirect('/admin/components?msg=success&type=success');
 });
