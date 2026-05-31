@@ -1,13 +1,23 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const crypto = require('crypto');
+const fs = require('fs');
 
-// Ensure SESSION_SECRET is always set
-const SESSION_SECRET = process.env.SESSION_SECRET;
-if (!SESSION_SECRET || SESSION_SECRET === 'change-me-to-a-random-string') {
-  const newSecret = crypto.randomBytes(64).toString('hex');
-  process.env.SESSION_SECRET = newSecret;
-  console.log('SESSION_SECRET generated at runtime (not persisted)');
+// Auto-generate SESSION_SECRET on first run, persist in data dir
+const secretFile = path.join(__dirname, '..', 'data', 'session_secret.txt');
+const dir = path.dirname(secretFile);
+if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+let secret = process.env.SESSION_SECRET;
+if (!secret || secret === 'change-me-to-a-random-string') {
+  if (fs.existsSync(secretFile)) {
+    secret = fs.readFileSync(secretFile, 'utf8').trim();
+  } else {
+    secret = crypto.randomBytes(64).toString('hex');
+    fs.writeFileSync(secretFile, secret);
+    console.log('Generated SESSION_SECRET in data/session_secret.txt');
+  }
+  process.env.SESSION_SECRET = secret;
 }
 
 const express = require('express');
