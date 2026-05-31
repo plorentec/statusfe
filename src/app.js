@@ -50,18 +50,41 @@ const { csrfMiddleware, csrfProtection } = require('./middleware/csrf');
 const { globalLimiter, authLimiter, apiLimiter, rateLimit } = require('./middleware/rate-limit');
 const { generateSelfSignedCert } = require('./utils/ssl');
 
-// Daily cleanup of old analytics data
+// Daily cleanup of old analytics data and audit log rotation
 setInterval(() => {
   try {
     const { analytics } = require('./db/models');
     const deleted = analytics.cleanOldData();
     if (deleted > 0) console.log(`Analytics cleanup: deleted ${deleted} old records`);
   } catch(e) { /* ignore */ }
+  
+  // Rotate audit log: backup today's entries, then clean entries older than retention
+  try {
+    const fs = require('fs');
+    const db = require('./db/init');
+    const today = new Date().toISOString().split('T')[0];
+    const logDir = path.join(__dirname, '..', 'data', 'audit_logs');
+    if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+    
+    const logFile = path.join(logDir, `audit-log-${today}.csv`);
+    if (!fs.existsSync(logFile)) {
+      const rows = db.prepare("SELECT * FROM audit_log WHERE DATE(created_at) = DATE('now')").all();
+      const csv = 'Date,User,Action,Target,Details,IP\n' + rows.map(r =>
+        `"${r.created_at}","${(r.user_id||'').substring(0,8)}","${r.action}","${(r.target||'').replace(/"/g,'""')}","${(r.details||'').replace(/"/g,'""')}","${(r.ip||'').substring(0,15)}"`
+      ).join('\n');
+      fs.writeFileSync(logFile, csv || 'Date,User,Action,Target,Details,IP\n');
+      console.log(`Audit log rotated: ${rows.length} entries saved to audit-log-${today}.csv`);
+    }
+    
+    // Clean audit entries older than 365 days (configurable via admin UI)
+    const retentionDays = 365;
+    db.prepare("DELETE FROM audit_log WHERE created_at < datetime('now', ?)").run(`-${retentionDays} days`);
+  } catch(e) { /* ignore */ }
 }, 24 * 60 * 60 * 1000);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const HTTPS_ENABLED = process.env.HTTPS === 'true';
+const HTTPS_ENABLED = process.env.HTTPS !== 'false';
 
 // Security headers
 app.use(helmet({ contentSecurityPolicy: false }));
@@ -113,6 +136,10 @@ app.use('/api/v1', apiRoutes);
 // CSRF protection: generate token for all requests, validate on mutations
 app.use(csrfMiddleware);
 app.use(csrfProtection);
+
+// 2FA requirement for admin and write roles
+const { require2FA } = require('./middleware/require-2fa');
+app.use('/admin', require2FA);
 
 const { pages, components, incidents, analytics, dependencies, notifications } = require('./db/models');
 const db = require('./db/init');

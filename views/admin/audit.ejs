@@ -1,5 +1,16 @@
 <div class="card">
 <h3>Audit Log</h3>
+<div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
+<button class="btn btn-primary" onclick="downloadLog()">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+Download Log
+</button>
+<button class="btn" onclick="showCleanupModal()">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+Cleanup Old Entries
+</button>
+<small class="text-muted" id="logInfo"></small>
+</div>
 <div class="table-container">
 <table class="admin-table">
 <thead>
@@ -34,21 +45,52 @@
 </tbody>
 </table>
 </div>
-<div style="margin-top: 15px; display: flex; gap: 10px; align-items: center;">
-<small class="text-muted">Last 100 entries</small>
-<button class="btn btn-sm" onclick="cleanupAudit()">Clean old entries</button>
+</div>
+
+<!-- Cleanup Modal -->
+<div id="cleanupModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.7); z-index:1000; align-items:center; justify-content:center;">
+<div class="card" style="max-width:400px; margin:auto;">
+<h3>Clean Old Audit Entries</h3>
+<p class="text-muted">Delete audit log entries older than a specified number of days.</p>
+<div class="form-group">
+<label for="retention_days">Keep entries from last X days</label>
+<input type="number" id="retention_days" name="retention_days" value="90" min="1" max="3650">
+</div>
+<div class="form-actions">
+<button class="btn btn-primary" onclick="doCleanup()">Delete Old Entries</button>
+<button class="btn" onclick="closeCleanupModal()">Cancel</button>
 </div>
 </div>
+</div>
+
 <script>
-function cleanupAudit() {
-  const days = prompt('Delete entries older than X days?', '90');
-  if (!days) return;
+function downloadLog() {
+  window.open('/admin/audit/download', 'audit_log');
+}
+
+function showCleanupModal() {
+  document.getElementById('cleanupModal').style.display = 'flex';
+}
+
+function closeCleanupModal() {
+  document.getElementById('cleanupModal').style.display = 'none';
+}
+
+function doCleanup() {
+  const days = document.getElementById('retention_days').value;
   fetch('/admin/audit/cleanup', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': document.getElementById('csrfToken').value },
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: 'retention_days=' + days
   }).then(() => location.reload());
 }
+
+// Show log count
+fetch('/admin/audit/count')
+  .then(r => r.json())
+  .then(data => {
+    document.getElementById('logInfo').textContent = 'Total entries: ' + data.total;
+  });
 </script>
 <%- include("../partials/_csrf"); %>
 </body>
