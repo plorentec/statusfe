@@ -1,9 +1,8 @@
 require('dotenv').config({ path: '.env' });
-
-// Auto-generate SESSION_SECRET if not set
 const crypto = require('crypto');
 const fs = require('fs');
-const path = require('path');
+
+// Auto-generate SESSION_SECRET if not set
 const envPath = path.join(__dirname, '..', '.env');
 const secret = process.env.SESSION_SECRET;
 if (!secret && fs.existsSync(envPath)) {
@@ -17,7 +16,6 @@ if (!secret && fs.existsSync(envPath)) {
   }
 }
 
-const SESSION_SECRET = process.env.SESSION_SECRET || 'statusfe-session-secret-change-in-production';
 const express = require('express');
 const path = require('path');
 const cookieParser = require('cookie-parser');
