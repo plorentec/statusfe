@@ -782,7 +782,19 @@ router.delete('/users/:id', (req, res) => {
   res.redirect('/admin/users?msg=deleted&type=success');
 });
 
-// Email settings save (POST to /admin/notifications)
+// Email settings GET
+router.get('/email-settings', (req, res) => {
+  const smtp = settings.getSMTP();
+  res.render('admin/email-settings', {
+    title: 'Email Settings',
+    user: req.user,
+    message: res.locals.message,
+    messageType: res.locals.messageType,
+    smtp
+  });
+});
+
+// Email settings save (POST to /admin/email-settings)
 router.post('/email-settings', (req, res) => {
   const { smtp_host, smtp_port, smtp_user, smtp_pass, smtp_secure, smtp_from, smtp_from_name } = req.body;
   settings.setSMTP({ smtp_host, smtp_port, smtp_user, smtp_pass, smtp_secure, smtp_from, smtp_from_name });

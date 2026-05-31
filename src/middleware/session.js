@@ -90,6 +90,9 @@ function session(req, res, next) {
   res.locals.message = null;
   res.locals.messageType = null;
 
+  // Always ensure req.session exists for CSRF middleware
+  if (!req.session) req.session = {};
+
   // Check URL params for flash messages (?msg=success, ?msg=error)
   const flashMsg = req.query.msg;
   if (flashMsg) {
