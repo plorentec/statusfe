@@ -263,10 +263,11 @@ function formatStatus(s) { return {operational:'Operational',under_maintenance:'
   if (seconds > 0) {
     var remaining = seconds;
     var counterEl = document.createElement('div');
-    counterEl.style.cssText = 'position:fixed;top:10px;right:10px;background:#1a1a2e;color:#10b981;padding:6px 12px;border-radius:6px;font-size:12px;font-family:monospace;z-index:9999;';
+    counterEl.setAttribute('id', 'refresh-counter');
+    counterEl.style.cssText = 'position:fixed;top:10px;right:10px;background:rgba(0,0,0,0.85);color:#10b981;padding:8px 14px;border-radius:8px;font-size:13px;font-family:monospace;z-index:99999;border:1px solid rgba(16,185,129,0.3);backdrop-filter:blur(4px);box-shadow:0 2px 12px rgba(0,0,0,0.3);';
     document.body.appendChild(counterEl);
     var tick = function() {
-      counterEl.textContent = 'Refresh in ' + remaining + 's';
+      counterEl.textContent = '⟳ ' + remaining + 's';
       remaining--;
       if (remaining < 0) {
         remaining = seconds;
