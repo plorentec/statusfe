@@ -18,10 +18,8 @@
 </head>
 <body class="<%= page.custom_layout ? 'custom-layout' : (page.template === 'default' ? '' : 'template-' + page.template) %>">
 
-<% if (page.custom_layout && page.custom_layout_html) { %>
-<!-- ===== CUSTOM LAYOUT ===== -->
 <%
-  const componentsData = components.map(c => ({
+  const componentsData = (components || []).map(c => ({
     id: c.id,
     name: c.name,
     status: c.current_status || c.status,
@@ -36,6 +34,11 @@
     impact: i.impact || 'minor',
     starts_at: i.starts_at
   }));
+%>
+
+<% if (page.custom_layout && page.custom_layout_html) { %>
+<!-- ===== CUSTOM LAYOUT ===== -->
+<%
   let layoutHtml = page.custom_layout_html;
   layoutHtml = layoutHtml.replace(/\{\{components\}\}/g, JSON.stringify(componentsData));
   layoutHtml = layoutHtml.replace(/\{\{incidents\}\}/g, JSON.stringify(incidentsData));
