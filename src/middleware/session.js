@@ -5,6 +5,8 @@ const fs = require('fs');
 
 const SESSION_SECRET = process.env.SESSION_SECRET || 'statusfe-session-secret-change-in-production';
 
+// Keep in sync with app.js — if env has SESSION_SECRET it's already set there
+
 function signCookie(value) {
   const hmac = crypto.createHmac('sha256', SESSION_SECRET);
   hmac.update(value);
