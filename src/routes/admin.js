@@ -933,7 +933,7 @@ router.get('/changelog', (req, res) => {
 });
 
 // Check for updates
-router.get('/admin/check-update', async (req, res) => {
+router.get('/check-update', async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin required' });
   try {
     const https = require('https');
