@@ -219,10 +219,6 @@ Make page public
 <textarea id="custom_html" name="custom_html" rows="6" placeholder="<!-- Your custom HTML -->"><%= page.custom_html || '' %></textarea>
 <small class="text-muted">HTML injected at the bottom of the status page. Use it for embed widgets, tracking scripts, etc.</small>
 </div>
-<% } else { %>
-<small class="text-muted">No components created yet. <a href="/admin/components/new">Create components first</a>.</small>
-<% } %>
-</div>
 <div class="form-actions">
 <button type="submit" class="btn btn-primary"><%= pageMode === 'create' ? 'Create Page' : 'Save Changes' %></button>
 <% if (pageMode === 'edit') { %>
