@@ -50,6 +50,15 @@ const { csrfMiddleware, csrfProtection } = require('./middleware/csrf');
 const { globalLimiter, authLimiter, apiLimiter, rateLimit } = require('./middleware/rate-limit');
 const { generateSelfSignedCert } = require('./utils/ssl');
 
+// Daily cleanup of old analytics data
+setInterval(() => {
+  try {
+    const { analytics } = require('./db/models');
+    const deleted = analytics.cleanOldData();
+    if (deleted > 0) console.log(`Analytics cleanup: deleted ${deleted} old records`);
+  } catch(e) { /* ignore */ }
+}, 24 * 60 * 60 * 1000);
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const HTTPS_ENABLED = process.env.HTTPS === 'true';
@@ -254,21 +263,6 @@ app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 app.use((err, req, res, next) => {
   console.error(err);
   res.status(err.status || 500).json({ error: err.message || 'Internal error' });
-});
-
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n  StatusFe: http://0.0.0.0:${PORT}\n`);
-  
-  // Daily cleanup of old analytics data
-  setInterval(() => {
-    try {
-      const { analytics } = require('./db/models');
-      const deleted = analytics.cleanOldData();
-      if (deleted > 0) console.log(`Analytics cleanup: deleted ${deleted} old records`);
-    } catch(e) {
-      // ignore
-    }
-  }, 24 * 60 * 60 * 1000);
 });
 
 module.exports = app;
