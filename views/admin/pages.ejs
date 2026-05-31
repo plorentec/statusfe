@@ -33,13 +33,14 @@
 <th>Template</th>
 <th>Status</th>
 <th>Public</th>
+<th>Refresh</th>
 <th>Created</th>
 <th>Actions</th>
 </tr>
 </thead>
 <tbody>
 <% if (pages.length === 0) { %>
-<tr><td colspan="7" class="empty-cell">No pages yet. <a href="/admin/pages/new">Create your first page</a>.</td></tr>
+<tr><td colspan="8" class="empty-cell">No pages yet. <a href="/admin/pages/new">Create your first page</a>.</td></tr>
 <% } else { %>
 <% pages.forEach(p => { %>
 <tr>
@@ -48,6 +49,7 @@
 <td><span class="template-badge template-<%= p.template || 'default' %>"><%= p.template === 'grid' ? 'Grid' : p.template === 'dark' ? 'Dark' : 'Default' %></span></td>
 <td><span class="status-badge status-<%= p.status %>"><%= p.status %></span></td>
 <td><span class="<%= p.is_public ? 'yes' : 'no' %>"><%= p.is_public ? 'Yes' : 'No' %></span></td>
+<td><%= p.refresh_interval ? p.refresh_interval + 's' : '—' %></td>
 <td><%= p.created_at %></td>
 <td class="actions">
 <a href="/admin/pages/<%= p.id %>/edit" class="btn btn-sm">Edit</a>
@@ -181,6 +183,17 @@
 <input type="checkbox" id="is_public" name="is_public" <%= page.is_public ? 'checked' : '' %>>
 Make page public
 </label>
+</div>
+<div class="form-group">
+<label for="refresh_interval">Public Page Refresh Interval (seconds)</label>
+<select id="refresh_interval" name="refresh_interval">
+<option value="0" <%= (page.refresh_interval || 0) === 0 ? 'selected' : '' %>>Disabled (manual only)</option>
+<option value="15" <%= (page.refresh_interval || 0) === 15 ? 'selected' : '' %>>15 seconds</option>
+<option value="30" <%= (page.refresh_interval || 0) === 30 ? 'selected' : '' %>>30 seconds</option>
+<option value="60" <%= (page.refresh_interval || 0) === 60 ? 'selected' : '' %>>1 minute</option>
+<option value="120" <%= (page.refresh_interval || 0) === 120 ? 'selected' : '' %>>2 minutes</option>
+<option value="300" <%= (page.refresh_interval || 0) === 300 ? 'selected' : '' %>>5 minutes</option>
+</select>
 </div>
 <div class="form-group">
 <label>Components</label>

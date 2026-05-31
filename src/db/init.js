@@ -321,6 +321,9 @@ try {
   }
 } catch(e) {}
 
+// Migrate: add per-page refresh interval
+try { db.prepare("ALTER TABLE pages ADD COLUMN refresh_interval INTEGER DEFAULT 0").run(); } catch(e) {}
+
 // Seed data
 const adminPage = db.prepare('SELECT id FROM pages WHERE slug = ?').get('admin');
 if (!adminPage) {
