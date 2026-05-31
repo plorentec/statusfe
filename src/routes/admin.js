@@ -730,6 +730,9 @@ router.delete('/maintenance/:id', (req, res) => {
 
 // ===== USERS CRUD =====
 router.get('/users', (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.redirect('/admin?msg=admin&type=error');
+  }
   const users = db.prepare('SELECT id, email, name, role, created_at FROM users ORDER BY created_at DESC').all();
   res.render('admin/users', {
     title: 'Users',
