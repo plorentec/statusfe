@@ -405,11 +405,16 @@ module.exports.incidents = {
 // ===== API KEYS =====
 module.exports.apiKeys = {
   list(pageId) {
-    let q = 'SELECT id,key_prefix,name,key,permissions,page_id,is_active,last_used_at,created_at,expires_at FROM api_keys WHERE 1=1';
+    let q = 'SELECT id,key_prefix,name,permissions,page_id,is_active,last_used_at,created_at,expires_at FROM api_keys WHERE 1=1';
     const p = [];
     if (pageId) { q += ' AND page_id=?'; p.push(pageId); }
     q += ' ORDER BY created_at DESC';
     return db.prepare(q).all(...p).map(r => ({...r, permissions: JSON.parse(r.permissions)}));
+  },
+
+  getFull(id) {
+    const r = db.prepare('SELECT id,key,name,permissions,page_id,is_active,last_used_at,created_at,expires_at FROM api_keys WHERE id=?').get(id);
+    return r ? {...r, permissions: JSON.parse(r.permissions)} : null;
   },
 
   create({ name, permissions, page_id, rate_limit, expires_at }) {
@@ -579,7 +584,9 @@ module.exports.analytics = {
     const componentStatuses = {};
     rows.forEach(r => {
       if (!componentStatuses[r.component_id]) componentStatuses[r.component_id] = {};
-      componentStatuses[r.component_id][r.date] = r.new_status;
+      if (!componentStatuses[r.component_id][r.date]) {
+        componentStatuses[r.component_id][r.date] = r.new_status;
+      }
     });
     
     let totalDays = 0;
@@ -962,6 +969,10 @@ module.exports.componentGroups = {
 
   get(id) { return db.prepare('SELECT * FROM component_groups WHERE id=?').get(id); },
 
+  countComponents(id) {
+    return db.prepare("SELECT COUNT(*) as c FROM components WHERE group_id=?").get(id).c;
+  },
+
   create({ name, page_id, position }) {
     const id = uuidv4();
     db.prepare('INSERT INTO component_groups (id, name, page_id, position) VALUES (?,?,?,?)').run(id, name, page_id||null, position||0);
@@ -986,6 +997,49 @@ module.exports.componentGroups = {
     // Unassign components from this group
     db.prepare("UPDATE components SET group_id=NULL WHERE group_id=?").run(id);
     db.prepare('DELETE FROM component_groups WHERE id=?').run(id);
+    return true;
+  }
+};
+
+// ===== USERS =====
+module.exports.users = {
+  list() {
+    return db.prepare('SELECT id, email, name, role, created_at, email_notifications, updated_at FROM users ORDER BY created_at').all();
+  },
+
+  get(id) {
+    return db.prepare('SELECT id, email, name, role, created_at, email_notifications, updated_at FROM users WHERE id=?').get(id);
+  },
+
+  getByEmail(email) {
+    return db.prepare('SELECT * FROM users WHERE email=?').get(email);
+  },
+
+  listAdmins() {
+    return db.prepare('SELECT id, email, name, role, email_notifications FROM users WHERE role=?').all('admin');
+  },
+
+  create({ id, email, password_hash, name, role }) {
+    db.prepare('INSERT INTO users (id, email, password_hash, name, role) VALUES (?,?,?,?,?)').run(id, email, password_hash, name, role || 'user');
+    return this.get(id);
+  },
+
+  update(id, data) {
+    const fields = [];
+    const params = [];
+    const allowed = ['email', 'password_hash', 'name', 'role', 'email_notifications'];
+    for (const k of allowed) {
+      if (data[k] !== undefined) { fields.push(k + '=?'); params.push(data[k]); }
+    }
+    if (fields.length) {
+      params.push(id);
+      db.prepare(`UPDATE users SET ${fields.join(', ')}, updated_at=datetime('now') WHERE id=?`).run(...params);
+    }
+    return this.get(id);
+  },
+
+  delete(id) {
+    db.prepare('DELETE FROM users WHERE id=?').run(id);
     return true;
   }
 };

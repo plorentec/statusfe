@@ -427,12 +427,6 @@ router.put('/users/:id', requirePerm('admin'), (req, res) => {
   res.json({ user });
 });
 
-router.get('/users/:id', requirePerm('admin'), (req, res) => {
-  const user = db.prepare("SELECT id, email, name, role, created_at FROM users WHERE id=?").get(req.params.id);
-  if (!user) return res.status(404).json({ error: 'Not found' });
-  res.json({ user });
-});
-
 // Analytics detail for admin UI
 router.get('/analytics-detail', requirePerm('read'), (req, res) => {
   const { id, type } = req.query;

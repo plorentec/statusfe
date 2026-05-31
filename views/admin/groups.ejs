@@ -45,7 +45,7 @@
 <td><strong><%= g.name %></strong></td>
 <td><% if (g.page_id) { const p = pages.find(x => x.id === g.page_id); %><%= p ? p.name : 'Global' %><% } else { %>Global<% } %></td>
 <td><%= g.position %></td>
-<td><%= db.prepare("SELECT COUNT(*) as c FROM components WHERE group_id=?").get(g.id).c %></td>
+<td><%= groupComponentCounts[g.id] || 0 %></td>
 <td><%= g.created_at %></td>
 <td class="actions">
 <a href="/admin/groups/<%= g.id %>/edit" class="btn btn-sm">Edit</a>

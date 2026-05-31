@@ -63,15 +63,21 @@
 <%
   function formatStatus(s) { return {operational:'Operational',under_maintenance:'Under Maintenance',degraded_performance:'Degraded Performance',partial_outage:'Partial Outage',major_outage:'Major Outage',investigating:'Investigating',identified:'Identified',monitoring:'Monitoring',resolved:'Resolved'}[s]||s; }
 
+  // HTML escape helper for XSS prevention
+  function escapeHtml(str) {
+    if (typeof str !== 'string') return str;
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
   // Render components as HTML list items
   function renderComponentsHTML(comps) {
     if (!comps || comps.length === 0) return '<p>No components</p>';
     let html = '';
     comps.forEach(c => {
       const status = c.current_status || c.status;
-      html += '<div class="sp-component-item status-' + status + '">';
-      html += '<span class="sp-component-name">' + c.name + '</span>';
-      html += '<span class="sp-component-status">' + formatStatus(status) + '</span>';
+      html += '<div class="sp-component-item status-' + escapeHtml(status) + '">';
+      html += '<span class="sp-component-name">' + escapeHtml(c.name) + '</span>';
+      html += '<span class="sp-component-status">' + escapeHtml(formatStatus(status)) + '</span>';
       html += '</div>';
     });
     return html;
@@ -82,10 +88,10 @@
     if (!incs || incs.length === 0) return '<p>No active incidents</p>';
     let html = '';
     incs.forEach(i => {
-      html += '<div class="sp-incident-item status-' + i.status + '">';
-      html += '<strong>' + i.name + '</strong>';
-      html += '<span class="sp-incident-status">' + formatStatus(i.status) + '</span>';
-      html += '<p>' + (i.message||'').replace(/\n/g,'<br>') + '</p>';
+      html += '<div class="sp-incident-item status-' + escapeHtml(i.status) + '">';
+      html += '<strong>' + escapeHtml(i.name) + '</strong>';
+      html += '<span class="sp-incident-status">' + escapeHtml(formatStatus(i.status)) + '</span>';
+      html += '<p>' + escapeHtml(i.message||'').replace(/\n/g,'<br>') + '</p>';
       html += '</div>';
     });
     return html;
@@ -94,12 +100,12 @@
   let layoutHtml = page.custom_layout_html;
   layoutHtml = layoutHtml.replace(/\{\{components\}\}/g, renderComponentsHTML(components));
   layoutHtml = layoutHtml.replace(/\{\{incidents\}\}/g, renderIncidentsHTML(incidents));
-  layoutHtml = layoutHtml.replace(/\{\{page_name\}\}/g, page.name);
+  layoutHtml = layoutHtml.replace(/\{\{page_name\}\}/g, escapeHtml(page.name));
   layoutHtml = layoutHtml.replace(/\{\{page_status\}\}/g, formatStatus(page.status));
-  layoutHtml = layoutHtml.replace(/\{\{page_description\}\}/g, page.description || '');
-  layoutHtml = layoutHtml.replace(/\{\{pageSlug\}\}/g, page.slug);
+  layoutHtml = layoutHtml.replace(/\{\{page_description\}\}/g, escapeHtml(page.description || ''));
+  layoutHtml = layoutHtml.replace(/\{\{pageSlug\}\}/g, escapeHtml(page.slug));
   layoutHtml = layoutHtml.replace(/\{\{refreshInterval\}\}/g, refreshInterval || '0');
-  layoutHtml = layoutHtml.replace(/\{\{pageStatusValue\}\}/g, page.status);
+  layoutHtml = layoutHtml.replace(/\{\{pageStatusValue\}\}/g, escapeHtml(page.status));
 %>
 <%- layoutHtml %>
 <% } else if (page.template === 'default') { %>
@@ -331,7 +337,7 @@
 <% if (page.custom_layout) { %>
 // Custom layout mode — data available for JS
 window.STATUSFE_DATA = {
-  page: { name: '<%= page.name %>', slug: '<%= page.slug %>', status: '<%= page.status %>', description: '<%= (page.description || '').replace(/'/g, "\\'") %>' },
+  page: { name: '<%- page.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/</g, '\\u003c').replace(/>/g, '\\u003e') %>', slug: '<%= page.slug %>', status: '<%= page.status %>', description: '<%- (page.description || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/</g, '\\u003c').replace(/>/g, '\\u003e') %>' },
   components: <%= JSON.stringify(componentsData).replace(/</g, '\\u003c') %>,
   incidents: <%= JSON.stringify(incidentsData).replace(/</g, '\\u003c') %>
 };
