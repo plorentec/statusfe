@@ -95,10 +95,10 @@ module.exports.components = {
 
   get(id) { return db.prepare('SELECT * FROM components WHERE id=?').get(id); },
 
-  create({ name, description, status, group_name, position }) {
+  create({ name, description, status, group_name, group_id, position }) {
     const id = uuidv4();
-    db.prepare('INSERT INTO components (id,name,description,status,group_name,position) VALUES (?,?,?,?,?,?)').run(
-      id, name, description||'', status||'operational', group_name||null, position||0);
+    db.prepare('INSERT INTO components (id,name,description,status,group_name,group_id,position) VALUES (?,?,?,?,?,?,?)').run(
+      id, name, description||'', status||'operational', group_name||null, group_id||null, position||0);
     return this.get(id);
   },
 
@@ -106,7 +106,7 @@ module.exports.components = {
     const oldComp = this.get(id);
     const fields = [];
     const params = [];
-    const allowed = ['name','description','status','group_name','position'];
+    const allowed = ['name','description','status','group_name','group_id','position'];
     for (const k of allowed) {
       if (data[k] !== undefined) { fields.push(k+'=?'); params.push(data[k]); }
     }
@@ -947,6 +947,46 @@ module.exports.statusMappings = {
   resolve(incidentStatus) {
     const row = db.prepare('SELECT component_status FROM status_mappings WHERE incident_status=?').get(incidentStatus);
     return row ? row.component_status : null;
+  }
+};
+
+// ===== COMPONENT GROUPS =====
+module.exports.componentGroups = {
+  list(pageId) {
+    let q = 'SELECT * FROM component_groups WHERE 1=1';
+    const p = [];
+    if (pageId) { q += ' AND page_id=?'; p.push(pageId); }
+    q += ' ORDER BY position, name';
+    return db.prepare(q).all(...p);
+  },
+
+  get(id) { return db.prepare('SELECT * FROM component_groups WHERE id=?').get(id); },
+
+  create({ name, page_id, position }) {
+    const id = uuidv4();
+    db.prepare('INSERT INTO component_groups (id, name, page_id, position) VALUES (?,?,?,?)').run(id, name, page_id||null, position||0);
+    return this.get(id);
+  },
+
+  update(id, data) {
+    const fields = [];
+    const params = [];
+    const allowed = ['name','page_id','position'];
+    for (const k of allowed) {
+      if (data[k] !== undefined) { fields.push(k+'=?'); params.push(data[k]); }
+    }
+    if (fields.length) {
+      params.push(id);
+      db.prepare(`UPDATE component_groups SET ${fields.join(',')}, updated_at=datetime('now') WHERE id=?`).run(...params);
+    }
+    return this.get(id);
+  },
+
+  delete(id) {
+    // Unassign components from this group
+    db.prepare("UPDATE components SET group_id=NULL WHERE group_id=?").run(id);
+    db.prepare('DELETE FROM component_groups WHERE id=?').run(id);
+    return true;
   }
 };
 

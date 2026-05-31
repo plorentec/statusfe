@@ -5,7 +5,7 @@ const bcrypt = require('bcryptjs');
 const db = require('../db/init');
 const fs = require('fs');
 const path = require('path');
-const { pages, components, apiKeys, incidents, maintenance, notifications, settings } = require('../db/models');
+const { pages, components, componentGroups, apiKeys, incidents, maintenance, notifications, settings } = require('../db/models');
 const { requireAuth } = require('../middleware/session');
 
 router.use(requireAuth);
@@ -240,7 +240,8 @@ router.get('/components', (req, res) => {
     message: res.locals.message,
     messageType: res.locals.messageType,
     components: allComponents,
-    componentMode: 'list'
+    componentMode: 'list',
+    groups: componentGroups.list()
   });
 });
 
@@ -252,16 +253,17 @@ router.get('/components/new', (req, res) => {
     messageType: res.locals.messageType,
     components: components.list(),
     componentMode: 'create',
-    component: {}
+    component: {},
+    groups: componentGroups.list()
   });
 });
 
 router.post('/components', (req, res) => {
-  const { name, description, status, group_name, position } = req.body;
+  const { name, description, status, group_name, group_id, position } = req.body;
   if (!name) {
     return res.redirect('/admin/components/new?msg=error&type=error');
   }
-  const comp = components.create({ name, description, status, group_name, position });
+  const comp = components.create({ name, description, status, group_name, group_id, position });
   const { notifications } = require('../db/models');
   const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
   admins.forEach(a => {
@@ -288,7 +290,8 @@ router.get('/components/:id/edit', (req, res) => {
     messageType: res.locals.messageType,
     components: components.list(),
     componentMode: 'edit',
-    component: comp
+    component: comp,
+    groups: componentGroups.list()
   });
 });
 
@@ -297,7 +300,7 @@ router.put('/components/:id', (req, res) => {
   if (!comp) {
     return res.redirect('/admin/components/' + req.params.id + '/edit?msg=error&type=error');
   }
-  const { name, description, status, group_name, position } = req.body;
+  const { name, description, status, group_name, group_id, position } = req.body;
   if (!name) {
     return res.redirect('/admin/components/' + req.params.id + '/edit?msg=error&type=error');
   }
@@ -417,7 +420,81 @@ router.post('/incidents', (req, res) => {
   res.redirect('/admin/incidents?msg=success&type=success');
 });
 
-router.get('/incidents/:id/edit', (req, res) => {
+// ===== COMPONENT GROUPS CRUD =====
+router.get('/groups', (req, res) => {
+  const allGroups = componentGroups.list();
+  const allPages = pages.list();
+  res.render('admin/groups', {
+    title: 'Component Groups',
+    user: req.user,
+    message: res.locals.message,
+    messageType: res.locals.messageType,
+    groups: allGroups,
+    pages: allPages,
+    groupMode: 'list'
+  });
+});
+
+router.get('/groups/new', (req, res) => {
+  const allPages = pages.list();
+  res.render('admin/groups', {
+    title: 'New Group',
+    user: req.user,
+    message: res.locals.message,
+    messageType: res.locals.messageType,
+    groups: componentGroups.list(),
+    pages: allPages,
+    groupMode: 'create',
+    group: {}
+  });
+});
+
+router.post('/groups', (req, res) => {
+  const { name, page_id, position } = req.body;
+  if (!name) {
+    return res.redirect('/admin/groups/new?msg=error&type=error');
+  }
+  componentGroups.create({ name, page_id: page_id || null, position: parseInt(position) || 0 });
+  res.redirect('/admin/groups?msg=success&type=success');
+});
+
+router.get('/groups/:id/edit', (req, res) => {
+  const group = componentGroups.get(req.params.id);
+  if (!group) {
+    return res.redirect('/admin/groups?msg=error&type=error');
+  }
+  const allPages = pages.list();
+  res.render('admin/groups', {
+    title: 'Edit Group',
+    user: req.user,
+    message: res.locals.message,
+    messageType: res.locals.messageType,
+    groups: componentGroups.list(),
+    pages: allPages,
+    groupMode: 'edit',
+    group
+  });
+});
+
+router.put('/groups/:id', (req, res) => {
+  const group = componentGroups.get(req.params.id);
+  if (!group) {
+    return res.redirect('/admin/groups?msg=error&type=error');
+  }
+  const { name, page_id, position } = req.body;
+  if (!name) {
+    return res.redirect('/admin/groups/' + req.params.id + '/edit?msg=error&type=error');
+  }
+  componentGroups.update(req.params.id, { name, page_id: page_id || null, position: parseInt(position) || 0 });
+  res.redirect('/admin/groups?msg=success&type=success');
+});
+
+router.delete('/groups/:id', (req, res) => {
+  componentGroups.delete(req.params.id);
+  res.redirect('/admin/groups?msg=success&type=success');
+});
+
+// ===== INCIDENTS CRUD =====
   const inc = incidents.get(req.params.id);
   if (!inc) {
     return res.redirect('/admin/incidents?msg=error&type=error');
