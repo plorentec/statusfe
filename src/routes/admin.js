@@ -125,6 +125,16 @@ router.post('/pages', (req, res) => {
     return res.redirect('/admin/pages/new?msg=error&type=error');
   }
   const page = pages.create({ name, slug, description, status, template, is_public, refresh_interval });
+  const { notifications } = require('../db/models');
+  const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
+  admins.forEach(a => {
+    notifications.create({
+      user_id: a.id,
+      type: 'page_created',
+      title: 'Page created: ' + name,
+      message: name + ' (' + slug + ') added'
+    });
+  });
   if (req.body.component_ids) {
     const ids = Array.isArray(req.body.component_ids) ? req.body.component_ids : [req.body.component_ids];
     ids.forEach((compId, idx) => {
@@ -171,6 +181,16 @@ router.put('/pages/:id', (req, res) => {
     return res.redirect('/admin/pages/' + req.params.id + '/edit?msg=error&type=error');
   }
   pages.update(req.params.id, { name, slug, description, status, template, is_public, refresh_interval });
+  const { notifications } = require('../db/models');
+  const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
+  admins.forEach(a => {
+    notifications.create({
+      user_id: a.id,
+      type: 'page_updated',
+      title: 'Page updated: ' + name,
+      message: name + ' changed by ' + req.user.name
+    });
+  });
   if (req.body.component_ids) {
     db.prepare('DELETE FROM page_components WHERE page_id=?').run(req.params.id);
     const ids = Array.isArray(req.body.component_ids) ? req.body.component_ids : [req.body.component_ids];
@@ -188,6 +208,16 @@ router.delete('/pages/:id', (req, res) => {
   if (!page) {
     return res.redirect('/admin/pages?msg=error&type=error');
   }
+  const { notifications } = require('../db/models');
+  const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
+  admins.forEach(a => {
+    notifications.create({
+      user_id: a.id,
+      type: 'page_deleted',
+      title: 'Page deleted: ' + page.name,
+      message: page.name + ' (' + page.slug + ') permanently deleted'
+    });
+  });
   pages.delete(page.id);
   res.redirect('/admin/pages?msg=success&type=success');
 });
@@ -231,7 +261,18 @@ router.post('/components', (req, res) => {
   if (!name) {
     return res.redirect('/admin/components/new?msg=error&type=error');
   }
-  components.create({ name, description, status, group_name, position });
+  const comp = components.create({ name, description, status, group_name, position });
+  const { notifications } = require('../db/models');
+  const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
+  admins.forEach(a => {
+    notifications.create({
+      user_id: a.id,
+      component_id: comp.id,
+      type: 'component_created',
+      title: 'Component created: ' + name,
+      message: name + ' added to system'
+    });
+  });
   res.redirect('/admin/components?msg=success&type=success');
 });
 
@@ -254,13 +295,25 @@ router.get('/components/:id/edit', (req, res) => {
 router.put('/components/:id', (req, res) => {
   const comp = components.get(req.params.id);
   if (!comp) {
-    return res.redirect('/admin/components?msg=error&type=error');
+    return res.redirect('/admin/components/' + req.params.id + '/edit?msg=error&type=error');
   }
   const { name, description, status, group_name, position } = req.body;
   if (!name) {
     return res.redirect('/admin/components/' + req.params.id + '/edit?msg=error&type=error');
   }
-  components.update(req.params.id, { name, description, status, group_name, position });
+  const oldData = { name: comp.name, description: comp.description, status: comp.status, group_name: comp.group_name, position: comp.position };
+  const updated = components.update(req.params.id, { name, description, status, group_name, position });
+  const { notifications } = require('../db/models');
+  const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
+  admins.forEach(a => {
+    notifications.create({
+      user_id: a.id,
+      component_id: req.params.id,
+      type: 'component_updated',
+      title: 'Component updated: ' + name,
+      message: name + ' changed by ' + req.user.name
+    });
+  });
   res.redirect('/admin/components?msg=success&type=success');
 });
 
@@ -512,7 +565,17 @@ router.post('/maintenance', (req, res) => {
   if (!page) {
     return res.redirect('/admin/maintenance/new?msg=error&type=error');
   }
-  maintenance.create({ page_id: page.id, component_id: component_id || null, title, description, starts_at, ends_at });
+  const win = maintenance.create({ page_id: page.id, component_id: component_id || null, title, description, starts_at, ends_at });
+  const { notifications } = require('../db/models');
+  const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
+  admins.forEach(a => {
+    notifications.create({
+      user_id: a.id,
+      type: 'maintenance_created',
+      title: 'Maintenance window: ' + title,
+      message: title + ' scheduled for ' + page.name
+    });
+  });
   res.redirect('/admin/maintenance?msg=success&type=success');
 });
 
@@ -542,6 +605,16 @@ router.put('/maintenance/:id', (req, res) => {
   }
   const { page_id, component_id, title, description, starts_at, ends_at } = req.body;
   maintenance.update(req.params.id, { page_id, component_id, title, description, starts_at, ends_at });
+  const { notifications } = require('../db/models');
+  const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
+  admins.forEach(a => {
+    notifications.create({
+      user_id: a.id,
+      type: 'maintenance_updated',
+      title: 'Maintenance updated: ' + title,
+      message: title + ' changed by ' + req.user.name
+    });
+  });
   res.redirect('/admin/maintenance?msg=success&type=success');
 });
 
@@ -550,6 +623,16 @@ router.delete('/maintenance/:id', (req, res) => {
   if (!win) {
     return res.redirect('/admin/maintenance?msg=error&type=error');
   }
+  const { notifications } = require('../db/models');
+  const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
+  admins.forEach(a => {
+    notifications.create({
+      user_id: a.id,
+      type: 'maintenance_deleted',
+      title: 'Maintenance deleted: ' + win.title,
+      message: win.title + ' permanently deleted'
+    });
+  });
   maintenance.delete(req.params.id);
   res.redirect('/admin/maintenance?msg=success&type=success');
 });

@@ -105,9 +105,35 @@ router.post('/components', requirePerm('write'), (req, res) => {
   const { name, description, status, group_name, position } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
   const c = components.create({ name, description, status, group_name, position });
+  const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
+  admins.forEach(a => {
+    notifications.create({
+      user_id: a.id,
+      component_id: c.id,
+      type: 'component_created',
+      title: 'Component created: ' + name,
+      message: name + ' added to system'
+    });
+  });
   res.status(201).json({ component: c });
 });
-router.put('/components/:id', requirePerm('write'), (req, res) => { res.json({ component: components.update(req.params.id, req.body) }); });
+router.put('/components/:id', requirePerm('write'), (req, res) => {
+  const oldComp = components.get(req.params.id);
+  const c = components.update(req.params.id, req.body);
+  if (c && oldComp) {
+    const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
+    admins.forEach(a => {
+      notifications.create({
+        user_id: a.id,
+        component_id: req.params.id,
+        type: 'component_updated',
+        title: 'Component updated: ' + c.name,
+        message: c.name + ' changed'
+      });
+    });
+  }
+  res.json({ component: c });
+});
 router.delete('/components/:id', requirePerm('admin'), (req, res) => {
   const comp = components.get(req.params.id);
   if (comp) {
