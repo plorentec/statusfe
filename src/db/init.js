@@ -396,8 +396,8 @@ const adminUser = db.prepare('SELECT id FROM users WHERE email = ?').get('admin@
 if (!adminUser) {
   const adminUserId = uuidv4();
   const adminPasswordHash = bcrypt.hashSync('admin123', 10);
-  db.prepare('INSERT INTO users (id, email, password_hash, name, role) VALUES (?,?,?,?,?)').run(
-    adminUserId, 'admin@status.local', adminPasswordHash, 'Admin User', 'admin'
+  db.prepare('INSERT INTO users (id, email, password_hash, name, role, totp_enabled, totp_secret) VALUES (?,?,?,?,?,?,?)').run(
+    adminUserId, 'admin@status.local', adminPasswordHash, 'Admin User', 'admin', 0, null
   );
   console.log('Seeded: default admin user (admin@status.local / admin123)');
 }

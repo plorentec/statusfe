@@ -1023,7 +1023,7 @@ module.exports.users = {
   },
 
   create({ id, email, password_hash, name, role }) {
-    db.prepare('INSERT INTO users (id, email, password_hash, name, role) VALUES (?,?,?,?,?)').run(id, email, password_hash, name, role || 'user');
+    db.prepare('INSERT INTO users (id, email, password_hash, name, role, totp_enabled, totp_secret) VALUES (?,?,?,?,?,?,?)').run(id, email, password_hash, name, role || 'user', 0, null);
     return this.get(id);
   },
 
