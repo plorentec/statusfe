@@ -495,6 +495,7 @@ router.delete('/groups/:id', (req, res) => {
 });
 
 // ===== INCIDENTS CRUD =====
+router.get('/incidents/:id/edit', (req, res) => {
   const inc = incidents.get(req.params.id);
   if (!inc) {
     return res.redirect('/admin/incidents?msg=error&type=error');
