@@ -162,7 +162,7 @@ router.get('/analytics-detail', (req, res) => {
     
     const views = db.prepare(`
       SELECT strftime('%Y-%m-%d-%H', created_at) as hour, COUNT(*) as cnt
-      FROM page_views WHERE page_id=? AND created_at >= datetime('now', ? || ' hours')
+      FROM page_views WHERE page_id=? AND created_at >= datetime('now', '-' || ? || ' hours')
       GROUP BY hour ORDER BY hour
     `).all(id, String(h));
     
@@ -192,7 +192,7 @@ router.get('/analytics-detail', (req, res) => {
     pageComps.forEach((c, ci) => {
       const history = db.prepare(`
         SELECT new_status, strftime('%Y-%m-%d-%H', created_at) as hour
-        FROM status_history WHERE component_id=? AND created_at >= datetime('now', ? || ' hours')
+        FROM status_history WHERE component_id=? AND created_at >= datetime('now', '-' || ? || ' hours')
         ORDER BY created_at DESC
       `).all(c.id, String(h));
       
@@ -226,7 +226,7 @@ router.get('/analytics-detail', (req, res) => {
     
     const history = db.prepare(`
       SELECT new_status, strftime('%Y-%m-%d-%H', created_at) as hour
-      FROM status_history WHERE component_id=? AND created_at >= datetime('now', ? || ' hours')
+      FROM status_history WHERE component_id=? AND created_at >= datetime('now', '-' || ? || ' hours')
       ORDER BY created_at DESC
     `).all(id, String(h));
     
