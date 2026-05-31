@@ -846,7 +846,7 @@ router.post('/admin/audit/cleanup', (req, res) => {
 // GET /admin/2fa/verify — verify 2FA code for session
 router.get('/2fa/verify', (req, res) => {
   if (!req.user) return res.redirect('/login');
-  res.render('admin/2fa-verify', { title: 'Verify 2FA', user: req.user });
+  res.render('admin/2fa-verify', { title: 'Verify 2FA', user: req.user, msg: req.query.msg, type: req.query.type });
 });
 
 // POST /admin/2fa/verify — verify 2FA code and set cookie

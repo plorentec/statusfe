@@ -56,7 +56,7 @@
 <div style="text-align:center; margin: 20px 0;">
 <img src="<%= qr %>" alt="QR Code" style="border: 2px solid var(--border); border-radius: 8px; padding: 10px; background: #fff;">
 </div>
-<p class="text-muted" style="text-align:center;">Or enter this code manually: <code style="background:var(--bg);padding:4px 8px;border-radius:4px;"><%= totp_secret %></code></p>
+<p class="text-muted" style="text-align:center;">Or enter this code manually: <code style="background:var(--bg);padding:4px 8px;border-radius:4px;"><%= user.totp_secret %></code></p>
 <form action="/admin/2fa/setup" method="post" style="max-width:300px; margin: 20px auto;">
 <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
 <input type="hidden" name="action" value="enable">
