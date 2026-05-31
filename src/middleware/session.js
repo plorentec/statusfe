@@ -100,13 +100,13 @@ function session(req, res, next) {
       registered: 'Registration is closed. Please contact the administrator.',
       noreg: 'First user can register. Please sign up.',
       admin: 'Admin access required.',
-      deleted: 'User deleted successfully.',
+      deleted: 'Component deleted successfully.',
       self: 'You cannot delete your own account.',
       created: 'User created successfully.',
       key_created: 'API key created. Copy it now — it won\'t be shown again.',
       revoked: 'API key revoked.',
       reactivated: 'API key reactivated.',
-      deleted: 'API key permanently deleted.',
+      key_deleted: 'API key permanently deleted.',
       default: flashMsg
     };
     res.locals.message = msgs[flashMsg] || flashMsg;

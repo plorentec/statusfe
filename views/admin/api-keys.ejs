@@ -95,10 +95,8 @@
 <td><strong><%= k.name %></strong></td>
 <td>
 <div class="key-display">
-<code><%= k.key_prefix %><%- k.full_key ? '••••••••••••••••••••••••••••' + k.full_key.slice(-8) : '' %></code>
-<% if (k.full_key) { %>
-<button class="btn btn-sm" onclick="copyKey(this, '<%= k.full_key.replace(/'/g, "\\'") %>')">Copy</button>
-<% } %>
+<code><%= k.key_prefix %>••••••••••••••••••••••••••••</code>
+<small class="text-muted">Only shown on creation</small>
 </div>
 </td>
 <td>

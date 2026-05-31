@@ -10,6 +10,17 @@ const ejs = require('ejs');
 // Clear EJS cache on every startup
 ejs.clearCache();
 
+// EJS escape helper for HTML escaping
+ejs.escape = function(str) {
+  if (typeof str !== 'string') return str;
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+};
+
 require('./db/init');
 const apiRoutes = require('./routes/api');
 const authRoutes = require('./routes/auth');
@@ -41,8 +52,6 @@ app.use((req, res, next) => {
   if (req.body && req.body._method) {
     req.method = req.body._method.toUpperCase();
     delete req.body._method;
-  } else if (req.query && req.query._method) {
-    req.method = req.query._method.toUpperCase();
   }
   next();
 });

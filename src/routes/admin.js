@@ -424,6 +424,10 @@ router.post('/incidents', (req, res) => {
 router.get('/groups', (req, res) => {
   const allGroups = componentGroups.list();
   const allPages = pages.list();
+  const groupComponentCounts = {};
+  for (const g of allGroups) {
+    groupComponentCounts[g.id] = componentGroups.countComponents(g.id);
+  }
   res.render('admin/groups', {
     title: 'Component Groups',
     user: req.user,
@@ -431,6 +435,7 @@ router.get('/groups', (req, res) => {
     messageType: res.locals.messageType,
     groups: allGroups,
     pages: allPages,
+    groupComponentCounts,
     groupMode: 'list'
   });
 });
@@ -587,19 +592,24 @@ router.post('/api-keys/:id/reactivate', (req, res) => {
 
 router.delete('/api-keys/:id/permanent', (req, res) => {
   apiKeys.permanentDelete(req.params.id);
-  res.redirect('/admin/api-keys?msg=deleted&type=success');
+  res.redirect('/admin/api-keys?msg=key_deleted&type=success');
 });
 
 // ===== API DOCS =====
 router.get('/docs', (req, res) => {
   const allKeys = apiKeys.list();
+  // For docs page, include full keys for the dropdown selector
+  const keysWithFull = allKeys.map(k => {
+    const full = apiKeys.getFull(k.id);
+    return full ? {...k, key: full.key} : k;
+  });
   console.log('RENDERING docs.ejs from:', res.app.get('views'));
   res.render('admin/docs', {
     title: 'API Docs',
     user: req.user,
     message: res.locals.message,
     messageType: res.locals.messageType,
-    keys: allKeys
+    keys: keysWithFull
   });
 });
 
