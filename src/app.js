@@ -1,23 +1,23 @@
-require('dotenv').config({ path: '.env' });
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const crypto = require('crypto');
 const fs = require('fs');
 
 // Auto-generate SESSION_SECRET if not set
-const envPath = path.join(__dirname, '..', '.env');
+const envFile = path.join(__dirname, '..', '.env');
 const secret = process.env.SESSION_SECRET;
-if (!secret && fs.existsSync(envPath)) {
-  const envContent = fs.readFileSync(envPath, 'utf8');
+if (!secret && fs.existsSync(envFile)) {
+  const envContent = fs.readFileSync(envFile, 'utf8');
   const line = envContent.split('\n').find(l => l.startsWith('SESSION_SECRET='));
   if (!line) {
     const newSecret = crypto.randomBytes(64).toString('hex');
-    fs.appendFileSync(envPath, `\nSESSION_SECRET=${newSecret}\n`);
+    fs.appendFileSync(envFile, `\nSESSION_SECRET=${newSecret}\n`);
     process.env.SESSION_SECRET = newSecret;
     console.log('Generated SESSION_SECRET in .env');
   }
 }
 
 const express = require('express');
-const path = require('path');
 const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
 const compression = require('compression');
