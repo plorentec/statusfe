@@ -66,7 +66,7 @@
     maintenance_updated: '&#x270f;&#xfe0f;',
     maintenance_deleted: '&#x1f5d1;&#xfe0f;'
   };
-%><%= icons[n.type] || '&#x1f514;' %> <%= n.type %></span></td>
+%><%- icons[n.type] || '&#x1f514;' %> <%= n.type %></span></td>
 <td><strong><%= n.title %></strong></td>
 <td><%= (n.message || '').substring(0, 150) %></td>
 <td><%= n.created_at %></td>
