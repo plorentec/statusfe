@@ -761,7 +761,7 @@ router.post('/users', (req, res) => {
   }
   const passwordHash = bcrypt.hashSync(password, 10);
   const id = uuidv4();
-  db.prepare('INSERT INTO users (id, email, password_hash, name, role) VALUES (?,?,?,?,?)').run(
+  db.prepare('INSERT INTO users (id, email, password_hash, name, role, totp_enabled, totp_secret) VALUES (?,?,?,?,?,?,?)').run(
     id, email, passwordHash, name, role || 'user'
   );
   
