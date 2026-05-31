@@ -1051,7 +1051,7 @@ module.exports.users = {
 module.exports.auditLog = {
   create({ user_id, action, target, details, ip, user_agent }) {
     const id = require('uuid').v4();
-    db.prepare('INSERT INTO audit_log (id, user_id, action, target, details, ip, user_agent) VALUES (?,?,?,?,?,?)').run(
+    db.prepare('INSERT INTO audit_log (id, user_id, action, target, details, ip, user_agent) VALUES (?,?,?,?,?,?,?)').run(
       id, user_id, action, target||'', details||'', ip||'', user_agent||''
     );
   },
