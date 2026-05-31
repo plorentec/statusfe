@@ -278,7 +278,20 @@ router.post('/components/:id/status', (req, res) => {
   if (comp.status === status) {
     return res.redirect('/admin/components?msg=success&type=success');
   }
-  components.updateStatus(req.params.id, status);
+  const result = components.updateStatus(req.params.id, status);
+  if (result.history) {
+    const { notifications } = require('../db/models');
+    const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
+    admins.forEach(a => {
+      notifications.create({
+        user_id: a.id,
+        component_id: req.params.id,
+        type: 'status_change',
+        title: 'Component ' + result.component.name + ' status changed',
+        message: result.component.name + ': ' + result.history.old_status + ' → ' + status
+      });
+    });
+  }
   res.redirect('/admin/components?msg=status_updated&type=success');
 });
 
