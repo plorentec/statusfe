@@ -261,7 +261,20 @@ function formatStatus(s) { return {operational:'Operational',under_maintenance:'
   var meta = document.querySelector('meta[name="refresh-interval"]');
   var seconds = meta ? parseInt(meta.content) : 0;
   if (seconds > 0) {
-    setInterval(function() { location.reload(); }, seconds * 1000);
+    var remaining = seconds;
+    var counterEl = document.createElement('div');
+    counterEl.style.cssText = 'position:fixed;top:10px;right:10px;background:#1a1a2e;color:#10b981;padding:6px 12px;border-radius:6px;font-size:12px;font-family:monospace;z-index:9999;';
+    document.body.appendChild(counterEl);
+    var tick = function() {
+      counterEl.textContent = 'Refresh in ' + remaining + 's';
+      remaining--;
+      if (remaining < 0) {
+        remaining = seconds;
+        location.reload();
+      }
+    };
+    tick();
+    setInterval(tick, 1000);
   }
 })();
 </script>
