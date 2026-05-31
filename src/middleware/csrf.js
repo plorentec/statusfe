@@ -16,25 +16,41 @@ function csrfProtection(req, res, next) {
     return res.status(403).json({ error: 'CSRF token missing' });
   }
 
-  // Compare with session token
-  if (!req.session || !req.session._csrf) {
+  // Compare with cookie-stored token (read from raw cookie header to avoid signed cookie issues)
+  const stored = readCsrfCookie(req);
+  if (!stored) {
     return res.status(403).json({ error: 'CSRF token invalid' });
   }
 
-  if (!crypto.timingSafeEqual(Buffer.from(token), Buffer.from(req.session._csrf))) {
+  if (!crypto.timingSafeEqual(Buffer.from(token), Buffer.from(stored))) {
     return res.status(403).json({ error: 'CSRF token invalid' });
   }
 
   next();
+}
+
+function readCsrfCookie(req) {
+  // Read _csrf from raw cookie header to avoid signed cookie parsing issues
+  const cookieHeader = req.headers.cookie || '';
+  const match = cookieHeader.match(/_csrf=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
 }
 
 function csrfMiddleware(req, res, next) {
-  // Generate token if not exists
-  if (!req.session || !req.session._csrf) {
-    req.session._csrf = generateToken();
+  // Generate or reuse CSRF token stored in a plain cookie
+  const existing = readCsrfCookie(req);
+  if (!existing) {
+    const token = generateToken();
+    res.cookie('_csrf', token, {
+      httpOnly: true,
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000
+    });
+    res.locals.csrfToken = token;
+  } else {
+    res.locals.csrfToken = existing;
   }
-  res.locals.csrfToken = req.session._csrf;
   next();
 }
 
-module.exports = { csrfProtection, csrfMiddleware, generateToken };
+module.exports = { csrfProtection, csrfMiddleware, generateToken, readCsrfCookie };

@@ -216,7 +216,8 @@ Make page public
 <small class="text-muted">CSS injected into the status page. Use it to override styles, change colors, fonts, etc.</small>
 </div>
 <div class="form-group">
-<label for="custom_html">Custom HTML (injected before </body>)</label>
+<label for="custom_html">Custom HTML (injected before <%- include("../partials/_csrf"); %>
+</body>)</label>
 <textarea id="custom_html" name="custom_html" rows="6" placeholder="<!-- Your custom HTML -->"><%= page.custom_html || '' %></textarea>
 <small class="text-muted">HTML injected at the bottom of the status page. Use it for embed widgets, tracking scripts, etc.</small>
 </div>
@@ -303,5 +304,6 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
+<%- include("../partials/_csrf"); %>
 </body>
 </html>
