@@ -20,7 +20,7 @@
 .chart-container { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 20px; }
 .chart-container canvas { max-height: 300px; }
 </style>
-<script>document.body.classList.add('dark');</script>
+<script defer>document.body.classList.add('dark');</script>
 </head>
 <body>
 <div class="admin-layout">
@@ -190,7 +190,10 @@ function loadAnalytics() {
 
   const hours = document.getElementById('timeRange').value;
   fetch('/admin/analytics-detail?id=' + encodeURIComponent(targetId) + '&type=' + type + '&hours=' + hours)
-    .then(r => r.json())
+    .then(r => {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
     .then(data => {
       if (data.error) {
         showToast(data.error, 'error');
@@ -205,10 +208,14 @@ function loadAnalytics() {
       document.getElementById('chartTitle').textContent = data.name + ' — ' + rangeLabel;
       buildChart(data);
     })
-    .catch(err => showToast('Failed to load data: ' + err.message, 'error'));
+    .catch(err => {
+      console.error('Analytics error:', err);
+      showToast('Failed to load data: ' + err.message, 'error');
+    });
 }
 
 function buildChart(data) {
+  console.log('buildChart called with:', JSON.stringify(data).substring(0, 500));
   const style = document.getElementById('chartStyle').value;
   const labels = data.labels;
   const datasets = data.datasets;
