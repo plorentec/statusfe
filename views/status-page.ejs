@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><%= page.name %> - System Status</title>
 <meta name="refresh-interval" content="<%= typeof refreshInterval !== 'undefined' ? refreshInterval : '0' %>">
-<% if (page.template === 'grid') { %>
+<% if (page.custom_layout && page.custom_layout_css) { %>
+<style><%= page.custom_layout_css %></style>
+<% } else if (page.template === 'grid') { %>
 <link rel="stylesheet" href="/css/template-grid.css">
 <% } else if (page.template === 'dark') { %>
 <link rel="stylesheet" href="/css/template-dark.css">
@@ -14,10 +16,39 @@
 <% } %>
 <% if (page.custom_css) { %><style><%= page.custom_css %></style><% } %>
 </head>
-<body class="<%= page.template === 'default' ? '' : 'template-' + page.template %>">
+<body class="<%= page.custom_layout ? 'custom-layout' : (page.template === 'default' ? '' : 'template-' + page.template) %>">
 
+<% if (page.custom_layout && page.custom_layout_html) { %>
+<!-- ===== CUSTOM LAYOUT ===== -->
+<%
+  const componentsData = components.map(c => ({
+    id: c.id,
+    name: c.name,
+    status: c.current_status || c.status,
+    description: c.description || '',
+    group_name: c.group_name || 'Other'
+  }));
+  const incidentsData = (incidents || []).map(i => ({
+    id: i.id,
+    name: i.name,
+    status: i.status,
+    message: i.message,
+    impact: i.impact || 'minor',
+    starts_at: i.starts_at
+  }));
+  let layoutHtml = page.custom_layout_html;
+  layoutHtml = layoutHtml.replace(/\{\{components\}\}/g, JSON.stringify(componentsData));
+  layoutHtml = layoutHtml.replace(/\{\{incidents\}\}/g, JSON.stringify(incidentsData));
+  layoutHtml = layoutHtml.replace(/\{\{page_name\}\}/g, page.name);
+  layoutHtml = layoutHtml.replace(/\{\{page_status\}\}/g, page.status);
+  layoutHtml = layoutHtml.replace(/\{\{page_description\}\}/g, page.description || '');
+  layoutHtml = layoutHtml.replace(/\{\{formatStatus\}\}/g, 'function(s){return{operational:"Operational",under_maintenance:"Under Maintenance",degraded_performance:"Degraded Performance",partial_outage:"Partial Outage",major_outage:"Major Outage",investigating:"Investigating",identified:"Identified",monitoring:"Monitoring",resolved:"Resolved"}[s]||s;}');
+  layoutHtml = layoutHtml.replace(/\{\{pageSlug\}\}/g, page.slug);
+  layoutHtml = layoutHtml.replace(/\{\{refreshInterval\}\}/g, refreshInterval || '0');
+%>
+<%- layoutHtml %>
+<% } else if (page.template === 'default') { %>
 <!-- ===== DEFAULT TEMPLATE ===== -->
-<% if (page.template === 'default') { %>
 <div class="page-header">
 <div class="page-header-inner">
 <%- include('partials/_logo'); %>
@@ -242,6 +273,14 @@
 <% } %>
 
 <script>
+<% if (page.custom_layout) { %>
+// Custom layout mode — data available for JS
+window.STATUSFE_DATA = {
+  page: { name: '<%= page.name %>', slug: '<%= page.slug %>', status: '<%= page.status %>', description: '<%= (page.description || '').replace(/'/g, "\\'") %>' },
+  components: <%= JSON.stringify(componentsData).replace(/</g, '\\u003c') %>,
+  incidents: <%= JSON.stringify(incidentsData).replace(/</g, '\\u003c') %>
+};
+<% } else { %>
 setInterval(() => {
   fetch('/api/v1/status/<%= page.slug %>').then(r => r.json()).then(d => {
     const b = document.querySelector('.overall-status');
@@ -254,6 +293,7 @@ setInterval(() => {
     }
   }).catch(() => {});
 }, 60000);
+<% } %>
 function formatStatus(s) { return {operational:'Operational',under_maintenance:'Under Maintenance',degraded_performance:'Degraded Performance',partial_outage:'Partial Outage',major_outage:'Major Outage',investigating:'Investigating',identified:'Identified',monitoring:'Monitoring',resolved:'Resolved'}[s] || s; }
 
 // Auto-refresh page at configured interval
@@ -279,6 +319,6 @@ function formatStatus(s) { return {operational:'Operational',under_maintenance:'
   }
 })();
 </script>
-<% if (page.custom_html) { %><%= page.custom_html %><% } %>
+<% if (page.custom_html && !page.custom_layout) { %><%= page.custom_html %><% } %>
 </body>
 </html>

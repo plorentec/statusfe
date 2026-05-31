@@ -114,7 +114,7 @@ router.get('/pages/new', (req, res) => {
 });
 
 router.post('/pages', (req, res) => {
-  const { name, slug, description, status, template, is_public, refresh_interval } = req.body;
+  const { name, slug, description, status, template, is_public, refresh_interval, custom_layout, custom_layout_css, custom_layout_html } = req.body;
   if (!name || !slug) {
     return res.redirect('/admin/pages/new?msg=error&type=error');
   }
@@ -124,7 +124,7 @@ router.post('/pages', (req, res) => {
   if (pages.getBySlug(slug)) {
     return res.redirect('/admin/pages/new?msg=error&type=error');
   }
-  const page = pages.create({ name, slug, description, status, template, is_public, refresh_interval });
+  const page = pages.create({ name, slug, description, status, template, is_public, refresh_interval, custom_layout: req.body.custom_layout ? 1 : 0, custom_layout_css, custom_layout_html });
   const { notifications } = require('../db/models');
   const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
   admins.forEach(a => {
@@ -169,7 +169,7 @@ router.put('/pages/:id', (req, res) => {
   if (!page) {
     return res.redirect('/admin/pages?msg=error&type=error');
   }
-  const { name, slug, description, status, template, is_public, refresh_interval } = req.body;
+  const { name, slug, description, status, template, is_public, refresh_interval, custom_layout, custom_layout_css, custom_layout_html } = req.body;
   if (!name || !slug) {
     return res.redirect('/admin/pages/' + req.params.id + '/edit?msg=error&type=error');
   }
@@ -180,7 +180,7 @@ router.put('/pages/:id', (req, res) => {
   if (slugExists && slugExists.id !== req.params.id) {
     return res.redirect('/admin/pages/' + req.params.id + '/edit?msg=error&type=error');
   }
-  pages.update(req.params.id, { name, slug, description, status, template, is_public, refresh_interval });
+  pages.update(req.params.id, { name, slug, description, status, template, is_public, refresh_interval, custom_layout: req.body.custom_layout ? 1 : 0, custom_layout_css, custom_layout_html });
   const { notifications } = require('../db/models');
   const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
   admins.forEach(a => {
