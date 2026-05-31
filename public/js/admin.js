@@ -102,3 +102,16 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 });
+
+// CSRF token helper — attach token to every fetch
+function csrfFetch(url, options) {
+  options = options || {};
+  options.headers = options.headers || {};
+  options.headers['X-CSRF-Token'] = document.getElementById('csrfToken') ? document.getElementById('csrfToken').value : '';
+  // Also add to body if form data
+  if (options.body && typeof options.body === 'string') {
+    const sep = options.body.includes('?') ? '&' : '?';
+    options.body += sep + '_csrf=' + encodeURIComponent(document.getElementById('csrfToken') ? document.getElementById('csrfToken').value : '');
+  }
+  return fetch(url, options);
+}

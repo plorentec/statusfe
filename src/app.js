@@ -16,11 +16,21 @@ const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
 const adminExtraRoutes = require('./routes/admin-extra');
 const { session } = require('./middleware/session');
+const { csrfMiddleware, csrfProtection } = require('./middleware/csrf');
+const { globalLimiter, authLimiter, apiLimiter } = require('./middleware/rate-limit');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Security headers
 app.use(helmet({ contentSecurityPolicy: false }));
+
+// Rate limiting
+app.use(globalLimiter);
+app.use('/auth/login', authLimiter);
+app.use('/auth/register', authLimiter);
+app.use('/api/v1', apiLimiter);
+
 app.use(compression());
 app.use(cors());
 app.use(express.json());
@@ -40,6 +50,10 @@ app.use((req, res, next) => {
 app.use(cookieParser(process.env.SESSION_SECRET || 'statusfe-session-secret-change-in-production'));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.use(session);
+
+// CSRF protection: generate token for all requests, validate on mutations
+app.use(csrfMiddleware);
+app.use(csrfProtection);
 
 const { pages, components, incidents, analytics, dependencies, notifications } = require('./db/models');
 const db = require('./db/init');
