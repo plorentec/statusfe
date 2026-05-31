@@ -202,6 +202,7 @@ Make page public
 <% components.forEach(c => { %>
 <label class="component-checkbox">
 <input type="checkbox" name="component_ids" value="<%= c.id %>" <%= (assignedComponentIds || []).includes(c.id) ? 'checked' : '' %>>
+<%= c.name %> <small class="text-muted">(<%= c.group_name || 'Other' %>)</small>
 </label>
 <% }) %>
 </div>
