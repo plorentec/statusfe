@@ -113,7 +113,8 @@
 <div class="page-header">
 <div class="page-header-inner">
 <%- include('partials/_logo'); %>
-<% if (page.logo_url) { %><img src="<%= (page.logo_url || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;')" alt="<%= page.name %>" class="logo"><% } %>
+<% var logoSrc = (page.logo_url || '').replace(/"/g, '&quot;'); %>
+<% if (page.logo_url) { %><img src=""<%= logoSrc %>" alt=""<%= page.name %>" class="logo"><% } %>
 <div>
 <h1><%= page.name %></h1>
 <p><%= page.description || 'System Status' %></p>
@@ -187,7 +188,8 @@
 <div class="container">
 <div class="header-content">
 <%- include('partials/_logo'); %>
-<% if (page.logo_url) { %><img src="<%= (page.logo_url || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;')" alt="<%= page.name %>" class="logo"><% } %>
+<% var logoSrc = (page.logo_url || '').replace(/"/g, '&quot;'); %>
+<% if (page.logo_url) { %><img src=""<%= logoSrc %>" alt=""<%= page.name %>" class="logo"><% } %>
 <div>
 <h1><%= page.name %></h1>
 <p class="subtitle"><%= page.description || 'System Status' %></p>
@@ -261,7 +263,8 @@
 <div class="container">
 <div class="header-content">
 <%- include('partials/_logo'); %>
-<% if (page.logo_url) { %><img src="<%= (page.logo_url || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;')" alt="<%= page.name %>" class="logo"><% } %>
+<% var logoSrc = (page.logo_url || '').replace(/"/g, '&quot;'); %>
+<% if (page.logo_url) { %><img src=""<%= logoSrc %>" alt=""<%= page.name %>" class="logo"><% } %>
 <div>
 <h1><%= page.name %></h1>
 <p class="subtitle"><%= page.description || 'System Status' %></p>
@@ -335,12 +338,9 @@
 
 <script>
 <% if (page.custom_layout) { %>
+  function escapeJsString(str) { if (typeof str !== 'string') return str; return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/</g, '\\u003c').replace(/>/g, '\\u003e'); }
 // Custom layout mode — data available for JS
-window.STATUSFE_DATA = {
-  page: { name: '<%- page.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/</g, '\\u003c').replace(/>/g, '\\u003e') %>', slug: '<%= page.slug %>', status: '<%= page.status %>', description: '<%- (page.description || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/</g, '\\u003c').replace(/>/g, '\\u003e') %>' },
-  components: <%= JSON.stringify(componentsData).replace(/</g, '\\u003c') %>,
-  incidents: <%= JSON.stringify(incidentsData).replace(/</g, '\\u003c') %>
-};
+window.STATUSFE_DATA = {,  page: { name: '<%= escapeJsString(page.name)%>', slug: '<%= page.slug %>', status: '<%= page.status %>', description: '<%= escapeJsString(page.description || '')%>' },,  components: <%= JSON.stringify(componentsData).replace(/</g, '\\u003c')%>,,  incidents: <%= JSON.stringify(incidentsData).replace(/</g, '\\u003c')%>
 <% } else { %>
 setInterval(() => {
   fetch('/api/v1/status/<%= page.slug %>').then(r => r.json()).then(d => {
