@@ -174,7 +174,7 @@ function testEmail() {
   result.innerHTML = '<p class="text-muted">Sending test email...</p>';
   fetch('/admin/email-settings/test', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': document.getElementById('csrfToken').value },
     body: JSON.stringify({ to: to })
   })
   .then(r => r.json())

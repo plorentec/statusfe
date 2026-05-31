@@ -189,7 +189,9 @@ function loadAnalytics() {
   }
 
   const hours = document.getElementById('timeRange').value;
-  fetch('/admin/analytics-detail?id=' + encodeURIComponent(targetId) + '&type=' + type + '&hours=' + hours)
+  fetch('/admin/analytics-detail?id=' + encodeURIComponent(targetId) + '&type=' + type + '&hours=' + hours, {
+    headers: { 'X-CSRF-Token': document.getElementById('csrfToken').value }
+  })
     .then(r => {
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
@@ -250,14 +252,14 @@ function changeRetention() {
   const days = document.getElementById('retentionSelect').value;
   fetch('/admin/analytics/retention', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': document.getElementById('csrfToken').value },
     body: 'retention_days=' + days
   }).then(() => location.reload());
 }
 
 function cleanupData() {
   if (!confirm('Delete all analytics data older than the retention period? This cannot be undone.')) return;
-  fetch('/admin/analytics/cleanup', { method: 'POST' })
+  fetch('/admin/analytics/cleanup', { method: 'POST', headers: { 'X-CSRF-Token': document.getElementById('csrfToken').value } })
     .then(r => r.json())
     .then(data => {
       if (data.ok) {

@@ -96,6 +96,7 @@ Status Mappings
 <span class="user-role"><%= user.role %></span>
 </div>
 <form action="/auth/logout" method="post">
+<input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
 <button type="submit" class="btn-logout">Logout</button>
 </form>
 </div>
@@ -110,7 +111,26 @@ Status Mappings
 <%- body %>
 </main>
 </div>
+<input type="hidden" id="csrfToken" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
 <script src="/js/admin.js"></script>
+<script>
+// Auto-inject CSRF token into every admin form
+document.addEventListener('DOMContentLoaded', function() {
+  var token = document.getElementById('csrfToken').value;
+  if (!token) return;
+  var forms = document.querySelectorAll('form[method="post"]');
+  for (var i = 0; i < forms.length; i++) {
+    var hidden = forms[i].querySelector('input[name="_csrf"]');
+    if (!hidden) {
+      var input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = '_csrf';
+      input.value = token;
+      forms[i].appendChild(input);
+    }
+  }
+});
+</script>
 <script>
 (function() {
   document.body.classList.add('dark');
