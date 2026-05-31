@@ -5,7 +5,7 @@ const bcrypt = require('bcryptjs');
 const db = require('../db/init');
 const fs = require('fs');
 const path = require('path');
-const { pages, components, componentGroups, apiKeys, incidents, maintenance, notifications, settings } = require('../db/models');
+const { pages, components, componentGroups, apiKeys, incidents, maintenance, notifications, settings, auditLog } = require('../db/models');
 const { requireAuth } = require('../middleware/session');
 
 router.use(requireAuth);
@@ -860,6 +860,44 @@ router.post('/2fa/verify', (req, res) => {
   }
   res.cookie('_2fa_verified', '1', { httpOnly: true, maxAge: 8 * 60 * 60 * 1000, sameSite: 'lax' });
   res.redirect('/admin');
+});
+
+// GET /admin/2fa/setup — show QR code
+router.get('/2fa/setup', (req, res) => {
+  if (!req.user) return res.redirect('/login');
+  const user = db.prepare('SELECT * FROM users WHERE id=?').get(req.user.id);
+  if (!user.totp_secret) {
+    const { generateSecret } = require('../utils/totp');
+    const secret = generateSecret();
+    db.prepare('UPDATE users SET totp_secret=? WHERE id=?').run(secret, req.user.id);
+    user.totp_secret = secret;
+  }
+  const { getURI } = require('../utils/totp');
+  const uri = getURI(user.totp_secret, user.email, 'StatusFe');
+  const qr = require('qrcode').toDataURL(uri);
+  res.render('admin/2fa-setup', { title: '2FA Setup', user, qr, totpEnabled: !!user.totp_enabled });
+});
+
+// POST /admin/2fa/setup — enable/disable 2FA
+router.post('/2fa/setup', (req, res) => {
+  const { action, code } = req.body;
+  const user = db.prepare('SELECT * FROM users WHERE id=?').get(req.user.id);
+  const { verify } = require('../utils/totp');
+
+  if (action === 'enable') {
+    if (!user.totp_secret || !verify(code, user.totp_secret, 'StatusFe', user.email)) {
+      return res.redirect('/admin/2fa/setup?msg=invalid&type=error');
+    }
+    db.prepare('UPDATE users SET totp_enabled=1 WHERE id=?').run(req.user.id);
+    auditLog.create({ user_id: req.user.id, action: '2fa_enabled', details: '2FA enabled', ip: req.ip, user_agent: req.get('User-Agent') || '' });
+  } else if (action === 'disable') {
+    if (!verify(code, user.totp_secret, 'StatusFe', user.email)) {
+      return res.redirect('/admin/2fa/setup?msg=invalid&type=error');
+    }
+    db.prepare('UPDATE users SET totp_enabled=0, totp_secret=NULL WHERE id=?').run(req.user.id);
+    auditLog.create({ user_id: req.user.id, action: '2fa_disabled', details: '2FA disabled', ip: req.ip, user_agent: req.get('User-Agent') || '' });
+  }
+  res.redirect('/admin/2fa/setup');
 });
 
 // GET /admin/audit/download — download audit log as CSV

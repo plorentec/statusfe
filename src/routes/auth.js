@@ -122,7 +122,7 @@ router.post('/set-password', (req, res) => {
 // ===== 2FA SETUP =====
 
 // GET /admin/2fa/setup — show QR code
-router.get('/admin/2fa/setup', (req, res) => {
+router.get('/2fa/setup', (req, res) => {
   if (!req.user) return res.redirect('/login');
   const user = db.prepare('SELECT * FROM users WHERE id=?').get(req.user.id);
   if (!user.totp_secret) {
@@ -136,7 +136,7 @@ router.get('/admin/2fa/setup', (req, res) => {
 });
 
 // POST /admin/2fa/setup — enable/disable 2FA
-router.post('/admin/2fa/setup', (req, res) => {
+router.post('/2fa/setup', (req, res) => {
   const { action, code } = req.body;
   const user = db.prepare('SELECT * FROM users WHERE id=?').get(req.user.id);
 
