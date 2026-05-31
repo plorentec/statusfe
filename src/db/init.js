@@ -379,7 +379,14 @@ if (!adminPage) {
     db.prepare('INSERT INTO page_components (page_id, component_id, position) VALUES (?,?,?)').run(
       adminId, compId, c.pos
     );
-  });
+});
+
+// Migrations
+try { db.prepare("ALTER TABLE users ADD COLUMN totp_secret TEXT").run(); } catch(e) {}
+try { db.prepare("ALTER TABLE users ADD COLUMN totp_enabled INTEGER DEFAULT 0").run(); } catch(e) {}
+try { db.prepare("CREATE TABLE IF NOT EXISTS audit_log (id TEXT PRIMARY KEY, user_id TEXT, action TEXT, target TEXT, details TEXT, ip TEXT, user_agent TEXT, created_at TEXT DEFAULT (datetime('now')))").run(); } catch(e) {}
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log(user_id)").run(); } catch(e) {}
+try { db.prepare("CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at)").run(); } catch(e) {}
 
   console.log('Seeded: admin page, API key, 6 components');
 }

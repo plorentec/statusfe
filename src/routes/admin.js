@@ -12,6 +12,7 @@ router.use(requireAuth);
 
 // GET /admin - Dashboard
 router.get('/', (req, res) => {
+  const user = db.prepare('SELECT id, name, email, role, totp_enabled FROM users WHERE id=?').get(req.user.id);
   const pageCount = db.prepare('SELECT COUNT(*) as count FROM pages').get().count;
   const componentCount = db.prepare('SELECT COUNT(*) as count FROM components').get().count;
   const incidentCount = db.prepare('SELECT COUNT(*) as count FROM incidents').get().count;
@@ -73,7 +74,7 @@ router.get('/', (req, res) => {
 
   res.render('admin/dashboard', {
     title: 'Dashboard',
-    user: req.user,
+    user,
     message: res.locals.message,
     messageType: res.locals.messageType,
     stats: { pageCount, componentCount, incidentCount, userCount, operationalCount, openIncidents },
@@ -817,6 +818,28 @@ router.post('/email-settings/test', (req, res) => {
   email.sendEmail(to, 'Test email from StatusFe', '<h2>Success!</h2><p>If you received this, your SMTP settings are configured correctly.</p>')
     .then(result => res.json(result))
     .catch(err => res.json({ ok: false, error: err.message }));
+});
+
+// ===== AUDIT LOG =====
+router.get('/audit', (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.redirect('/admin?msg=admin&type=error');
+  }
+  const logs = auditLog.list(100);
+  res.render('admin/audit', {
+    title: 'Audit Log',
+    user: req.user,
+    message: res.locals.message,
+    messageType: res.locals.messageType,
+    logs
+  });
+});
+
+router.post('/admin/audit/cleanup', (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin required' });
+  const days = parseInt(req.body.retention_days) || 90;
+  auditLog.cleanOld(days);
+  res.json({ ok: true });
 });
 
 module.exports = router;

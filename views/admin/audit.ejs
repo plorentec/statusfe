@@ -1,0 +1,55 @@
+<div class="card">
+<h3>Audit Log</h3>
+<div class="table-container">
+<table class="admin-table">
+<thead>
+<tr>
+<th>Date</th>
+<th>User</th>
+<th>Action</th>
+<th>Target</th>
+<th>Details</th>
+<th>IP</th>
+</tr>
+</thead>
+<tbody>
+<% if (logs.length === 0) { %>
+<tr><td colspan="6" class="empty-cell">No audit entries yet.</td></tr>
+<% } else { %>
+<% logs.forEach(l => { %>
+<tr>
+<td><%= l.created_at %></td>
+<td><%= l.user_id ? (l.user_id === req.user.id ? 'You' : l.user_id.substring(0,8)) : '—' %></td>
+<td>
+<span class="status-badge <%= l.action === 'login' ? 'status-operational' : l.action === 'login_failed' || l.action === '2fa_failed' ? 'status-major_outage' : 'status-degraded_performance' %>">
+<%= l.action.replace(/_/g, ' ') %>
+</span>
+</td>
+<td><%= l.target || '—' %></td>
+<td><%= (l.details || '').substring(0, 60) %></td>
+<td><%= (l.ip || '').substring(0, 15) %></td>
+</tr>
+<% }) %>
+<% } %>
+</tbody>
+</table>
+</div>
+<div style="margin-top: 15px; display: flex; gap: 10px; align-items: center;">
+<small class="text-muted">Last 100 entries</small>
+<button class="btn btn-sm" onclick="cleanupAudit()">Clean old entries</button>
+</div>
+</div>
+<script>
+function cleanupAudit() {
+  const days = prompt('Delete entries older than X days?', '90');
+  if (!days) return;
+  fetch('/admin/audit/cleanup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': document.getElementById('csrfToken').value },
+    body: 'retention_days=' + days
+  }).then(() => location.reload());
+}
+</script>
+<%- include("../partials/_csrf"); %>
+</body>
+</html>
