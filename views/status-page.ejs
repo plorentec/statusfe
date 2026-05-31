@@ -36,7 +36,7 @@
 .sp-status-banner.status-under_maintenance { background:#fff3cd; color:#856404; }
 </style>
 <% } %>
-<% if (page.custom_css) { %><style><%= page.custom_css %></style><% } %>
+<% if (page.custom_css) { %><style><%= (page.custom_css || '').replace(/<\/style>/gi, '').replace(/<!--/g, '').replace(/-->/g, '') %></style><% } %>
 </head>
 <body class="<%= page.custom_layout ? 'custom-layout' : (page.template === 'default' ? '' : 'template-' + page.template) %>">
 
@@ -113,7 +113,7 @@
 <div class="page-header">
 <div class="page-header-inner">
 <%- include('partials/_logo'); %>
-<% if (page.logo_url) { %><img src="<%= page.logo_url %>" alt="<%= page.name %>" class="logo"><% } %>
+<% if (page.logo_url) { %><img src="<%= (page.logo_url || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;')" alt="<%= page.name %>" class="logo"><% } %>
 <div>
 <h1><%= page.name %></h1>
 <p><%= page.description || 'System Status' %></p>
@@ -187,7 +187,7 @@
 <div class="container">
 <div class="header-content">
 <%- include('partials/_logo'); %>
-<% if (page.logo_url) { %><img src="<%= page.logo_url %>" alt="<%= page.name %>" class="logo"><% } %>
+<% if (page.logo_url) { %><img src="<%= (page.logo_url || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;')" alt="<%= page.name %>" class="logo"><% } %>
 <div>
 <h1><%= page.name %></h1>
 <p class="subtitle"><%= page.description || 'System Status' %></p>
@@ -261,7 +261,7 @@
 <div class="container">
 <div class="header-content">
 <%- include('partials/_logo'); %>
-<% if (page.logo_url) { %><img src="<%= page.logo_url %>" alt="<%= page.name %>" class="logo"><% } %>
+<% if (page.logo_url) { %><img src="<%= (page.logo_url || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;')" alt="<%= page.name %>" class="logo"><% } %>
 <div>
 <h1><%= page.name %></h1>
 <p class="subtitle"><%= page.description || 'System Status' %></p>

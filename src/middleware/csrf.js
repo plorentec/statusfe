@@ -22,7 +22,10 @@ function csrfProtection(req, res, next) {
     return res.status(403).json({ error: 'CSRF token invalid' });
   }
 
-  if (!crypto.timingSafeEqual(Buffer.from(token), Buffer.from(stored))) {
+  if (!crypto.timingSafeEqual(
+    Buffer.from(token.padEnd(stored.length, '\0')),
+    Buffer.from(stored.padEnd(token.length, '\0'))
+  )) {
     return res.status(403).json({ error: 'CSRF token invalid' });
   }
 

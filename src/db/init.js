@@ -342,6 +342,7 @@ try {
   `);
 } catch(e) {}
 try { db.prepare("ALTER TABLE components ADD COLUMN group_id TEXT").run(); } catch(e) {}
+try { db.prepare("ALTER TABLE component_groups ADD COLUMN updated_at TEXT").run(); } catch(e) {}
 
 // Seed data
 const adminPage = db.prepare('SELECT id FROM pages WHERE slug = ?').get('admin');

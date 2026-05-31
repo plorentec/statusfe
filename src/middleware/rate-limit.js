@@ -27,4 +27,4 @@ const apiLimiter = rateLimit({
   message: { error: 'API rate limit exceeded.' }
 });
 
-module.exports = { globalLimiter, authLimiter, apiLimiter };
+module.exports = { rateLimit, globalLimiter, authLimiter, apiLimiter };

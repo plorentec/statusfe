@@ -4,7 +4,6 @@ const path = require('path');
 const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
 const compression = require('compression');
-const cors = require('cors');
 const ejs = require('ejs');
 
 // Clear EJS cache on every startup
@@ -28,7 +27,7 @@ const adminRoutes = require('./routes/admin');
 const adminExtraRoutes = require('./routes/admin-extra');
 const { session } = require('./middleware/session');
 const { csrfMiddleware, csrfProtection } = require('./middleware/csrf');
-const { globalLimiter, authLimiter, apiLimiter } = require('./middleware/rate-limit');
+const { globalLimiter, authLimiter, apiLimiter, rateLimit } = require('./middleware/rate-limit');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -41,9 +40,26 @@ app.use(globalLimiter);
 app.use('/auth/login', authLimiter);
 app.use('/auth/register', authLimiter);
 app.use('/api/v1', apiLimiter);
+// Admin endpoints: moderate rate limit to prevent abuse
+app.use('/admin', rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many admin requests, please try again later.' }
+}));
 
 app.use(compression());
-app.use(cors());
+app.use((req, res, next) => {
+  // Only enable CORS for status pages and API (embed widgets, external consumers)
+  if (req.path.startsWith('/status/') || req.path.startsWith('/embed/') || req.path.startsWith('/api/')) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  }
+  if (req.method === 'OPTIONS') return res.end();
+  next();
+});
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -59,6 +75,9 @@ app.use((req, res, next) => {
 app.use(cookieParser(process.env.SESSION_SECRET || 'statusfe-session-secret-change-in-production'));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.use(session);
+
+// API routes BEFORE CSRF — they use API key auth, not CSRF
+app.use('/api/v1', apiRoutes);
 
 // CSRF protection: generate token for all requests, validate on mutations
 app.use(csrfMiddleware);
@@ -207,8 +226,6 @@ app.get('/', (req, res) => {
   if (req.user) return res.redirect('/admin');
   res.redirect('/login');
 });
-
-app.use('/api/v1', apiRoutes);
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 

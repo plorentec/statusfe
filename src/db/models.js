@@ -434,12 +434,15 @@ module.exports.apiKeys = {
 
   authenticate(key) {
     if (!key) return null;
-    const rows = db.prepare('SELECT * FROM api_keys WHERE is_active=1').all();
-    for (const row of rows) {
-      if (require('bcryptjs').compareSync(key, row.key_hash)) {
-        db.prepare('UPDATE api_keys SET last_used_at=datetime(\'now\') WHERE id=?').run(row.id);
-        const page = db.prepare('SELECT slug FROM pages WHERE id=?').get(row.page_id);
-        return { id: row.id, name: row.name, permissions: JSON.parse(row.permissions), page_id: row.page_id, page_slug: page?.slug, rate_limit: row.rate_limit };
+    const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    const hash = require('bcryptjs').hashSync(key, 1);
+    // First find candidate by hash prefix (fast index lookup), then verify full hash
+    const row = db.prepare("SELECT * FROM api_keys WHERE is_active=1 AND (expires_at IS NULL OR expires_at > ?) AND key_hash LIKE ?").all(now, hash.substring(0, 12) + '%');
+    for (const r of row) {
+      if (require('bcryptjs').compareSync(key, r.key_hash)) {
+        db.prepare('UPDATE api_keys SET last_used_at=datetime(\'now\') WHERE id=?').run(r.id);
+        const page = db.prepare('SELECT slug FROM pages WHERE id=?').get(r.page_id);
+        return { id: r.id, name: r.name, permissions: JSON.parse(r.permissions), page_id: r.page_id, page_slug: page?.slug, rate_limit: r.rate_limit };
       }
     }
     return null;
