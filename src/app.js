@@ -41,8 +41,16 @@ app.use(cookieParser(process.env.SESSION_SECRET || 'statusfe-session-secret-chan
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.use(session);
 
-const { pages, components, incidents, analytics, dependencies } = require('./db/models');
+const { pages, components, incidents, analytics, dependencies, notifications } = require('./db/models');
 const db = require('./db/init');
+
+// Make unread notification count available to all admin views
+app.use((req, res, next) => {
+  if (req.user && req.path.startsWith('/admin')) {
+    res.locals.unread = notifications.listUnread(req.user.id);
+  }
+  next();
+});
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, '..', 'views'));
