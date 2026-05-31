@@ -7,12 +7,34 @@
 <meta name="refresh-interval" content="<%= typeof refreshInterval !== 'undefined' ? refreshInterval : '0' %>">
 <% if (page.custom_layout && page.custom_layout_css) { %>
 <style><%= page.custom_layout_css %></style>
-<% } else if (page.template === 'grid') { %>
-<link rel="stylesheet" href="/css/template-grid.css">
-<% } else if (page.template === 'dark') { %>
-<link rel="stylesheet" href="/css/template-dark.css">
-<% } else { %>
-<link rel="stylesheet" href="/css/status.css">
+<% } %>
+<% if (page.custom_layout) { %>
+<style>
+/* Default styles for custom layout placeholders — override with your own CSS */
+.sp-component-item { display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid #e5e7eb; }
+.sp-component-item:last-child { border-bottom:none; }
+.sp-component-name { font-weight:500; }
+.sp-component-status { font-size:13px; padding:3px 10px; border-radius:20px; font-weight:500; }
+.sp-component-item.status-operational .sp-component-status { background:#dcffe4; color:#065f46; }
+.sp-component-item.status-degraded_performance .sp-component-status { background:#fef3c7; color:#856404; }
+.sp-component-item.status-partial_outage .sp-component-status { background:#ffe5cc; color:#9c4f00; }
+.sp-component-item.status-major_outage .sp-component-status { background:#ffcccc; color:#cc0000; }
+.sp-component-item.status-under_maintenance .sp-component-status { background:#fff3cd; color:#856404; }
+.sp-incident-item { padding:16px 0; border-bottom:1px solid #e5e7eb; }
+.sp-incident-item:last-child { border-bottom:none; }
+.sp-incident-item strong { display:block; margin-bottom:4px; }
+.sp-incident-status { font-size:12px; padding:2px 8px; border-radius:12px; display:inline-block; margin-top:4px; }
+.sp-incident-item.status-investigating .sp-incident-status { background:#ffcccc; color:#cc0000; }
+.sp-incident-item.status-identified .sp-incident-status { background:#ffe5cc; color:#9c4f00; }
+.sp-incident-item.status-monitoring .sp-incident-status { background:#fef3c7; color:#856404; }
+.sp-incident-item.status-resolved .sp-incident-status { background:#dcffe4; color:#065f46; }
+.sp-status-banner { padding:16px 24px; border-radius:8px; font-weight:600; text-align:center; margin-bottom:24px; }
+.sp-status-banner.status-operational { background:#dcffe4; color:#065f46; }
+.sp-status-banner.status-degraded_performance { background:#fef3c7; color:#856404; }
+.sp-status-banner.status-partial_outage { background:#ffe5cc; color:#9c4f00; }
+.sp-status-banner.status-major_outage { background:#ffcccc; color:#cc0000; }
+.sp-status-banner.status-under_maintenance { background:#fff3cd; color:#856404; }
+</style>
 <% } %>
 <% if (page.custom_css) { %><style><%= page.custom_css %></style><% } %>
 </head>
@@ -39,15 +61,45 @@
 <% if (page.custom_layout && page.custom_layout_html) { %>
 <!-- ===== CUSTOM LAYOUT ===== -->
 <%
+  function formatStatus(s) { return {operational:'Operational',under_maintenance:'Under Maintenance',degraded_performance:'Degraded Performance',partial_outage:'Partial Outage',major_outage:'Major Outage',investigating:'Investigating',identified:'Identified',monitoring:'Monitoring',resolved:'Resolved'}[s]||s; }
+
+  // Render components as HTML list items
+  function renderComponentsHTML(comps) {
+    if (!comps || comps.length === 0) return '<p>No components</p>';
+    let html = '';
+    comps.forEach(c => {
+      const status = c.current_status || c.status;
+      html += '<div class="sp-component-item status-' + status + '">';
+      html += '<span class="sp-component-name">' + c.name + '</span>';
+      html += '<span class="sp-component-status">' + formatStatus(status) + '</span>';
+      html += '</div>';
+    });
+    return html;
+  }
+
+  // Render incidents as HTML list items
+  function renderIncidentsHTML(incs) {
+    if (!incs || incs.length === 0) return '<p>No active incidents</p>';
+    let html = '';
+    incs.forEach(i => {
+      html += '<div class="sp-incident-item status-' + i.status + '">';
+      html += '<strong>' + i.name + '</strong>';
+      html += '<span class="sp-incident-status">' + formatStatus(i.status) + '</span>';
+      html += '<p>' + (i.message||'').replace(/\n/g,'<br>') + '</p>';
+      html += '</div>';
+    });
+    return html;
+  }
+
   let layoutHtml = page.custom_layout_html;
-  layoutHtml = layoutHtml.replace(/\{\{components\}\}/g, JSON.stringify(componentsData));
-  layoutHtml = layoutHtml.replace(/\{\{incidents\}\}/g, JSON.stringify(incidentsData));
+  layoutHtml = layoutHtml.replace(/\{\{components\}\}/g, renderComponentsHTML(components));
+  layoutHtml = layoutHtml.replace(/\{\{incidents\}\}/g, renderIncidentsHTML(incidents));
   layoutHtml = layoutHtml.replace(/\{\{page_name\}\}/g, page.name);
-  layoutHtml = layoutHtml.replace(/\{\{page_status\}\}/g, page.status);
+  layoutHtml = layoutHtml.replace(/\{\{page_status\}\}/g, formatStatus(page.status));
   layoutHtml = layoutHtml.replace(/\{\{page_description\}\}/g, page.description || '');
-  layoutHtml = layoutHtml.replace(/\{\{formatStatus\}\}/g, 'function(s){return{operational:"Operational",under_maintenance:"Under Maintenance",degraded_performance:"Degraded Performance",partial_outage:"Partial Outage",major_outage:"Major Outage",investigating:"Investigating",identified:"Identified",monitoring:"Monitoring",resolved:"Resolved"}[s]||s;}');
   layoutHtml = layoutHtml.replace(/\{\{pageSlug\}\}/g, page.slug);
   layoutHtml = layoutHtml.replace(/\{\{refreshInterval\}\}/g, refreshInterval || '0');
+  layoutHtml = layoutHtml.replace(/\{\{pageStatusValue\}\}/g, page.status);
 %>
 <%- layoutHtml %>
 <% } else if (page.template === 'default') { %>
