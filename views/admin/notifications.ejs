@@ -51,7 +51,22 @@
 <tbody>
 <% notifications.forEach(n => { %>
 <tr class="<%= n.is_read ? '' : 'unread' %>">
-<td><span class="notif-type notif-<%= n.type %>"><% if (n.type === 'status_change') { %>&#x1f504;<% } else if (n.type === 'incident_created') { %>&#x26a0;&#xfe0f;<% } else if (n.type === 'incident_updated') { %>&#x270f;&#xfe0f;<% } else { %><%= n.type %><% } %> <%= n.type %></span></td>
+<td><span class="notif-type notif-<%= n.type %>"><% 
+  const icons = {
+    status_change: '&#x1f504;',
+    incident_created: '&#x26a0;&#xfe0f;',
+    incident_updated: '&#x270f;&#xfe0f;',
+    component_created: '&#x2795;',
+    component_updated: '&#x270f;&#xfe0f;',
+    component_deleted: '&#x1f5d1;&#xfe0f;',
+    page_created: '&#x2b1c;',
+    page_updated: '&#x270f;&#xfe0f;',
+    page_deleted: '&#x1f5d1;&#xfe0f;',
+    maintenance_created: '&#x1f553;',
+    maintenance_updated: '&#x270f;&#xfe0f;',
+    maintenance_deleted: '&#x1f5d1;&#xfe0f;'
+  };
+%><%= icons[n.type] || '&#x1f514;' %> <%= n.type %></span></td>
 <td><strong><%= n.title %></strong></td>
 <td><%= (n.message || '').substring(0, 150) %></td>
 <td><%= n.created_at %></td>
