@@ -29,7 +29,7 @@
 <thead>
 <tr>
 <th>Name</th>
-<th>Page</th>
+<th>Pages</th>
 <th>Position</th>
 <th>Components</th>
 <th>Created</th>
@@ -43,7 +43,11 @@
 <% groups.forEach(g => { %>
 <tr>
 <td><strong><%= g.name %></strong></td>
-<td><% if (g.page_id) { const p = pages.find(x => x.id === g.page_id); %><%= p ? p.name : 'Global' %><% } else { %>Global<% } %></td>
+<td><% const gs = groupPageMap[g.id] || []; if (gs.length === 0) { %><span class="badge badge-success">Global</span><% } else { %>
+  <% gs.forEach((p, i) => { %>
+    <span class="badge badge-info"><%= p.name %><% if (i < gs.length-1) { %>, <% } %></span>
+  <% }) %>
+<% } %></td>
 <td><%= g.position %></td>
 <td><%= groupComponentCounts[g.id] || 0 %></td>
 <td><%= g.created_at %></td>
@@ -73,14 +77,16 @@
 <input type="text" id="name" name="name" value="<%= group.name || '' %>" required placeholder="Infrastructure, Application, etc.">
 </div>
 <div class="form-group">
-<label for="page_id">Page (optional)</label>
-<select id="page_id" name="page_id">
-<option value="">Global (all pages)</option>
+<label>Pages (select one or more, leave empty for global)</label>
+<div class="checkbox-group" style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; padding: 10px;">
 <% pages.forEach(p => { %>
-<option value="<%= p.id %>" <%= group.page_id === p.id ? 'selected' : '' %>><%= p.name %></option>
+<label class="checkbox-label" style="display: block; padding: 4px 0;">
+<input type="checkbox" name="page_ids" value="<%= p.id %>" <%= (selectedPageIds || []).includes(p.id) ? 'checked' : '' %>>
+<%= p.name %>
+</label>
 <% }) %>
-</select>
-<small class="text-muted">Leave empty for global group, or select a specific page.</small>
+</div>
+<small class="text-muted">Leave all unchecked for a global group (visible on all pages). Select specific pages to restrict this group.</small>
 </div>
 <div class="form-group">
 <label for="position">Position</label>
@@ -100,5 +106,22 @@
 </div>
 <script src="/js/admin.js"></script>
 <%- include("../partials/_csrf"); %>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var token = document.getElementById('csrfToken').value;
+  if (!token) return;
+  var forms = document.querySelectorAll('form[method="post"], form[method="POST"]');
+  for (var i = 0; i < forms.length; i++) {
+    var hidden = forms[i].querySelector('input[name="_csrf"]');
+    if (!hidden) {
+      var input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = '_csrf';
+      input.value = token;
+      forms[i].appendChild(input);
+    }
+  }
+});
+</script>
 </body>
 </html>

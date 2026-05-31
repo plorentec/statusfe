@@ -965,27 +965,39 @@ module.exports.componentGroups = {
   list(pageId) {
     let q = 'SELECT * FROM component_groups WHERE 1=1';
     const p = [];
-    if (pageId) { q += ' AND page_id=?'; p.push(pageId); }
+    if (pageId) { q += ' AND id IN (SELECT group_id FROM group_pages WHERE page_id=?)'; p.push(pageId); }
     q += ' ORDER BY position, name';
     return db.prepare(q).all(...p);
   },
 
   get(id) { return db.prepare('SELECT * FROM component_groups WHERE id=?').get(id); },
 
+  getPages(id) {
+    return db.prepare("SELECT p.* FROM pages p JOIN group_pages gp ON gp.page_id=p.id WHERE gp.group_id=?").all(id);
+  },
+
+  getPageIds(id) {
+    return db.prepare("SELECT page_id FROM group_pages WHERE group_id=?").all(id).map(r => r.page_id);
+  },
+
   countComponents(id) {
     return db.prepare("SELECT COUNT(*) as c FROM components WHERE group_id=?").get(id).c;
   },
 
-  create({ name, page_id, position }) {
+  create({ name, page_ids, position }) {
     const id = uuidv4();
-    db.prepare('INSERT INTO component_groups (id, name, page_id, position) VALUES (?,?,?,?)').run(id, name, page_id||null, position||0);
+    db.prepare('INSERT INTO component_groups (id, name, position) VALUES (?,?,?)').run(id, name, parseInt(position) || 0);
+    if (page_ids && Array.isArray(page_ids) && page_ids.length > 0) {
+      const stmt = db.prepare('INSERT INTO group_pages (group_id, page_id) VALUES (?,?)');
+      for (const pid of page_ids) { stmt.run(id, pid); }
+    }
     return this.get(id);
   },
 
   update(id, data) {
     const fields = [];
     const params = [];
-    const allowed = ['name','page_id','position'];
+    const allowed = ['name','position'];
     for (const k of allowed) {
       if (data[k] !== undefined) { fields.push(k+'=?'); params.push(data[k]); }
     }
@@ -993,12 +1005,20 @@ module.exports.componentGroups = {
       params.push(id);
       db.prepare(`UPDATE component_groups SET ${fields.join(',')}, updated_at=datetime('now') WHERE id=?`).run(...params);
     }
+    // Update page associations
+    if (data.page_ids !== undefined) {
+      db.prepare('DELETE FROM group_pages WHERE group_id=?').run(id);
+      if (Array.isArray(data.page_ids) && data.page_ids.length > 0) {
+        const stmt = db.prepare('INSERT INTO group_pages (group_id, page_id) VALUES (?,?)');
+        for (const pid of data.page_ids) { stmt.run(id, pid); }
+      }
+    }
     return this.get(id);
   },
 
   delete(id) {
-    // Unassign components from this group
     db.prepare("UPDATE components SET group_id=NULL WHERE group_id=?").run(id);
+    db.prepare('DELETE FROM group_pages WHERE group_id=?').run(id);
     db.prepare('DELETE FROM component_groups WHERE id=?').run(id);
     return true;
   }
