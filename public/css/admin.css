@@ -917,8 +917,13 @@ body.dark select option {
 .notif-badge { background: #ef4444; color: #fff; font-size: 11px; padding: 1px 6px; border-radius: 10px; margin-left: 8px; }
 .notif-type { font-size: 12px; font-weight: 500; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; }
 .notif-status_change { background: rgba(16,185,129,0.15); color: #34d399; }
-.notif-incident { background: rgba(239,68,68,0.15); color: #f87171; }
-.notif-maintenance { background: rgba(245,158,11,0.15); color: #fbbf24; }
+.notif-incident_created, .notif-incident_updated { background: rgba(239,68,68,0.15); color: #f87171; }
+.notif-component_created, .notif-component_updated { background: rgba(99,102,241,0.15); color: #818cf8; }
+.notif-component_deleted { background: rgba(239,68,68,0.15); color: #f87171; }
+.notif-page_created, .notif-page_updated { background: rgba(14,165,233,0.15); color: #38bdf8; }
+.notif-page_deleted { background: rgba(239,68,68,0.15); color: #f87171; }
+.notif-maintenance_created, .notif-maintenance_updated { background: rgba(245,158,11,0.15); color: #fbbf24; }
+.notif-maintenance_deleted { background: rgba(239,68,68,0.15); color: #f87171; }
 .sidebar-nav .notif-badge { position: absolute; right: 16px; }
 .sidebar-nav a { position: relative; }
 
