@@ -105,5 +105,8 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 });
 </script>
+<% if (typeof csrfToken !== 'undefined') { %>
+<input type="hidden" id="csrfToken" value="<%= csrfToken %>">
+<% } %>
 </body>
 </html>

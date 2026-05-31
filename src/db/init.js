@@ -345,6 +345,28 @@ try {
 } catch(e) {}
 try { db.prepare("ALTER TABLE components ADD COLUMN group_id TEXT").run(); } catch(e) {}
 try { db.prepare("ALTER TABLE component_groups ADD COLUMN updated_at TEXT").run(); } catch(e) {}
+try { db.prepare("ALTER TABLE component_groups ADD COLUMN page_ids TEXT").run(); } catch(e) {}
+// Migrate: create group_pages table for multi-page groups
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS group_pages (
+      group_id TEXT NOT NULL,
+      page_id TEXT NOT NULL,
+      PRIMARY KEY (group_id, page_id),
+      FOREIGN KEY (group_id) REFERENCES component_groups(id) ON DELETE CASCADE,
+      FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE CASCADE
+    );
+  `);
+} catch(e) {}
+// Migrate: copy existing page_id values to group_pages
+try {
+  const groupsWithPage = db.prepare("SELECT id, page_id FROM component_groups WHERE page_id IS NOT NULL AND page_id != ''").all();
+  for (const g of groupsWithPage) {
+    db.prepare("INSERT OR IGNORE INTO group_pages (group_id, page_id) VALUES (?,?)").run(g.id, g.page_id);
+  }
+} catch(e) {}
+// Migrate: remove old page_id column
+try { db.prepare("ALTER TABLE component_groups DROP COLUMN page_id").run(); } catch(e) {}
 
 // Seed data
 const adminPage = db.prepare('SELECT id FROM pages WHERE slug = ?').get('admin');

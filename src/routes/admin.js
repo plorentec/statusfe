@@ -430,8 +430,10 @@ router.get('/groups', (req, res) => {
   const allGroups = componentGroups.list();
   const allPages = pages.list();
   const groupComponentCounts = {};
+  const groupPageMap = {};
   for (const g of allGroups) {
     groupComponentCounts[g.id] = componentGroups.countComponents(g.id);
+    groupPageMap[g.id] = componentGroups.getPages(g.id);
   }
   res.render('admin/groups', {
     title: 'Component Groups',
@@ -441,6 +443,7 @@ router.get('/groups', (req, res) => {
     groups: allGroups,
     pages: allPages,
     groupComponentCounts,
+    groupPageMap,
     groupMode: 'list'
   });
 });
@@ -455,16 +458,18 @@ router.get('/groups/new', (req, res) => {
     groups: componentGroups.list(),
     pages: allPages,
     groupMode: 'create',
-    group: {}
+    group: {},
+    selectedPageIds: []
   });
 });
 
 router.post('/groups', (req, res) => {
-  const { name, page_id, position } = req.body;
+  const { name, page_ids, position } = req.body;
   if (!name) {
     return res.redirect('/admin/groups/new?msg=error&type=error');
   }
-  componentGroups.create({ name, page_id: page_id || null, position: parseInt(position) || 0 });
+  const selected = page_ids && Array.isArray(page_ids) ? page_ids : [];
+  componentGroups.create({ name, page_ids: selected, position: parseInt(position) || 0 });
   res.redirect('/admin/groups?msg=success&type=success');
 });
 
@@ -474,6 +479,7 @@ router.get('/groups/:id/edit', (req, res) => {
     return res.redirect('/admin/groups?msg=error&type=error');
   }
   const allPages = pages.list();
+  const selectedPageIds = componentGroups.getPageIds(req.params.id);
   res.render('admin/groups', {
     title: 'Edit Group',
     user: req.user,
@@ -482,7 +488,8 @@ router.get('/groups/:id/edit', (req, res) => {
     groups: componentGroups.list(),
     pages: allPages,
     groupMode: 'edit',
-    group
+    group,
+    selectedPageIds
   });
 });
 
@@ -491,11 +498,12 @@ router.put('/groups/:id', (req, res) => {
   if (!group) {
     return res.redirect('/admin/groups?msg=error&type=error');
   }
-  const { name, page_id, position } = req.body;
+  const { name, page_ids, position } = req.body;
   if (!name) {
     return res.redirect('/admin/groups/' + req.params.id + '/edit?msg=error&type=error');
   }
-  componentGroups.update(req.params.id, { name, page_id: page_id || null, position: parseInt(position) || 0 });
+  const selected = page_ids && Array.isArray(page_ids) ? page_ids : [];
+  componentGroups.update(req.params.id, { name, page_ids: selected, position: parseInt(position) || 0 });
   res.redirect('/admin/groups?msg=success&type=success');
 });
 
@@ -877,7 +885,7 @@ router.get('/2fa/setup', (req, res) => {
   const { getURI } = require('../utils/totp');
   const uri = getURI(user.totp_secret, user.email, 'StatusFe');
   const qr = require('qrcode').toDataURL(uri);
-  res.render('admin/2fa-setup', { title: '2FA Setup', user, qr, totpEnabled: !!user.totp_enabled });
+  res.render('admin/2fa-setup', { title: '2FA Setup', user, qr, totpEnabled: !!user.totp_enabled, csrfToken: res.locals.csrfToken });
 });
 
 // POST /admin/2fa/setup — enable/disable 2FA

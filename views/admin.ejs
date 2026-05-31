@@ -117,7 +117,7 @@ Audit Log
 document.addEventListener('DOMContentLoaded', function() {
   var token = document.getElementById('csrfToken').value;
   if (!token) return;
-  var forms = document.querySelectorAll('form[method="post"]');
+  var forms = document.querySelectorAll('form[method="post"], form[method="POST"]');
   for (var i = 0; i < forms.length; i++) {
     var hidden = forms[i].querySelector('input[name="_csrf"]');
     if (!hidden) {
@@ -126,6 +126,18 @@ document.addEventListener('DOMContentLoaded', function() {
       input.name = '_csrf';
       input.value = token;
       forms[i].appendChild(input);
+    }
+  }
+  // Also handle forms with _method
+  var methodForms = document.querySelectorAll('form[action*="?_method="]');
+  for (var i = 0; i < methodForms.length; i++) {
+    var hidden = methodForms[i].querySelector('input[name="_csrf"]');
+    if (!hidden) {
+      var input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = '_csrf';
+      input.value = token;
+      methodForms[i].appendChild(input);
     }
   }
 });
