@@ -48,6 +48,7 @@ db.exec(`
     custom_css TEXT,
     custom_html TEXT,
     is_public INTEGER DEFAULT 1,
+    custom_layout INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   );
@@ -323,6 +324,9 @@ try {
 
 // Migrate: add per-page refresh interval
 try { db.prepare("ALTER TABLE pages ADD COLUMN refresh_interval INTEGER DEFAULT 0").run(); } catch(e) {}
+try { db.prepare("ALTER TABLE pages ADD COLUMN custom_layout INTEGER DEFAULT 0").run(); } catch(e) {}
+try { db.prepare("ALTER TABLE pages ADD COLUMN custom_layout_css TEXT").run(); } catch(e) {}
+try { db.prepare("ALTER TABLE pages ADD COLUMN custom_layout_html TEXT").run(); } catch(e) {}
 
 // Seed data
 const adminPage = db.prepare('SELECT id FROM pages WHERE slug = ?').get('admin');
