@@ -1,4 +1,7 @@
 const crypto = require('crypto');
+const Database = require('better-sqlite3');
+const path = require('path');
+const fs = require('fs');
 
 const SESSION_SECRET = process.env.SESSION_SECRET || 'statusfe-session-secret-change-in-production';
 
@@ -21,8 +24,20 @@ function verifySignedCookie(cookie) {
   return null;
 }
 
-// In-memory session store
-const sessions = new Map();
+// SQLite session store
+const DB_PATH = path.join(__dirname, '..', '..', 'data', 'sessions.db');
+const dir = path.dirname(DB_PATH);
+if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+const db = new Database(DB_PATH);
+db.pragma('journal_mode = WAL');
+db.pragma('foreign_keys = ON');
+db.exec(`
+  CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    data TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+  )
+`);
 
 function createSession(user) {
   const sessionId = crypto.randomBytes(32).toString('hex');
@@ -36,7 +51,7 @@ function createSession(user) {
   };
   const sessionValue = JSON.stringify(sessionData);
   const signedValue = signCookie(sessionValue);
-  sessions.set(sessionId, sessionData);
+  db.prepare('INSERT INTO sessions (id, data) VALUES (?, ?)').run(sessionId, sessionValue);
   return signedValue;
 }
 
@@ -44,11 +59,12 @@ function getSession(cookie) {
   if (!cookie) return null;
   const sessionData = verifySignedCookie(cookie);
   if (!sessionData) return null;
-  const store = sessions.get(sessionData.id);
-  if (!store) return null;
+  const row = db.prepare('SELECT data FROM sessions WHERE id=?').get(sessionData.id);
+  if (!row) return null;
+  const store = JSON.parse(row.data);
   // Check 24-hour expiration
   if (Date.now() - store.createdAt > 24 * 60 * 60 * 1000) {
-    sessions.delete(store.id);
+    db.prepare('DELETE FROM sessions WHERE id=?').run(sessionData.id);
     return null;
   }
   return store;
@@ -58,9 +74,16 @@ function destroySession(cookie) {
   if (!cookie) return;
   const sessionData = verifySignedCookie(cookie);
   if (sessionData && sessionData.id) {
-    sessions.delete(sessionData.id);
+    db.prepare('DELETE FROM sessions WHERE id=?').run(sessionData.id);
   }
 }
+
+// Clean expired sessions every hour
+setInterval(() => {
+  try {
+    db.prepare("DELETE FROM sessions WHERE created_at < datetime('now', '-24 hours')").run();
+  } catch(e) {}
+}, 60 * 60 * 1000);
 
 function session(req, res, next) {
   res.locals.user = null;
@@ -125,7 +148,7 @@ function session(req, res, next) {
   res.flash = function(message, type) {
     type = type || 'success';
     const key = '_flash_' + crypto.randomBytes(8).toString('hex');
-    sessions.set(key, { message, type, createdAt: Date.now() });
+    db.prepare('INSERT INTO sessions (id, data) VALUES (?, ?)').run(key, JSON.stringify({ message, type, createdAt: Date.now() }));
     res.cookie('_flash_key', key, { httpOnly: true, maxAge: 10000, sameSite: 'lax' });
   };
 
@@ -143,4 +166,4 @@ function optionalAuth(req, res, next) {
   next();
 }
 
-module.exports = { session, requireAuth, optionalAuth, createSession, getSession, destroySession, sessions };
+module.exports = { session, requireAuth, optionalAuth, createSession, getSession, destroySession, db };
