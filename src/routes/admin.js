@@ -829,6 +829,7 @@ router.get('/audit', (req, res) => {
   res.render('admin/audit', {
     title: 'Audit Log',
     user: req.user,
+    userId: req.user.id,
     message: res.locals.message,
     messageType: res.locals.messageType,
     logs

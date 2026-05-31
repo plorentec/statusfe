@@ -30,7 +30,7 @@ Cleanup Old Entries
 <% logs.forEach(l => { %>
 <tr>
 <td><%= l.created_at %></td>
-<td><%= l.user_id ? (l.user_id === req.user.id ? 'You' : l.user_id.substring(0,8)) : '—' %></td>
+<td><%= l.user_id ? (l.user_id === userId ? 'You' : l.user_id.substring(0,8)) : '—' %></td>
 <td>
 <span class="status-badge <%= l.action === 'login' ? 'status-operational' : l.action === 'login_failed' || l.action === '2fa_failed' ? 'status-major_outage' : 'status-degraded_performance' %>">
 <%= l.action.replace(/_/g, ' ') %>
