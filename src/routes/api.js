@@ -7,6 +7,11 @@ const triggerWebhook = require('../utils/webhooks');
 
 // ===== PUBLIC (no auth) =====
 
+// Public: health check
+router.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 // Public: list pages (only public ones)
 router.get('/pages', (req, res) => {
   res.json({ pages: pages.list({ is_public: 1 }), total: pages.list({ is_public: 1 }).length });
@@ -283,6 +288,8 @@ router.get('/pages/:pageId/webhooks', (req, res) => {
 router.post('/pages/:pageId/webhooks', requirePerm('write'), (req, res) => {
   const { url, events, secret } = req.body;
   if (!url) return res.status(400).json({ error: 'url required' });
+  const { validateWebhookUrl } = require('../utils/webhooks');
+  if (!validateWebhookUrl(url)) return res.status(400).json({ error: 'Invalid webhook URL. Only http/https URLs to public hosts are allowed.' });
   const page = pages.getById(req.params.pageId) || pages.getBySlug(req.params.pageId);
   if (!page) return res.status(404).json({ error: 'Not found' });
   res.status(201).json({ webhook: webhooks.create({ page_id: page.id, url, events, secret }) });

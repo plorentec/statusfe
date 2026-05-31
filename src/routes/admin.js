@@ -322,6 +322,9 @@ router.put('/components/:id', (req, res) => {
 
 // Quick status change from component list
 router.post('/components/:id/status', (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.redirect('/admin/components?msg=error&type=error');
+  }
   const { status } = req.body;
   const valid = ['operational','degraded_performance','partial_outage','major_outage','under_maintenance'];
   if (!valid.includes(status)) {
@@ -738,6 +741,9 @@ router.get('/users', (req, res) => {
 });
 
 router.post('/users', (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.redirect('/admin/users?msg=error&type=error');
+  }
   const { email, password, name, role } = req.body;
   if (!email || !password || !name) {
     return res.redirect('/admin/users?msg=error&type=error');
