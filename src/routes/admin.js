@@ -842,4 +842,43 @@ router.post('/admin/audit/cleanup', (req, res) => {
   res.json({ ok: true });
 });
 
+// GET /admin/2fa/verify — verify 2FA code for session
+router.get('/2fa/verify', (req, res) => {
+  if (!req.user) return res.redirect('/login');
+  res.render('admin/2fa-verify', { title: 'Verify 2FA', user: req.user });
+});
+
+// POST /admin/2fa/verify — verify 2FA code and set cookie
+router.post('/2fa/verify', (req, res) => {
+  if (!req.user) return res.redirect('/login');
+  const code = req.body.code;
+  const user = db.prepare('SELECT totp_secret FROM users WHERE id=?').get(req.user.id);
+  if (!user || !user.totp_secret) return res.redirect('/admin');
+  const { verify } = require('../utils/totp');
+  if (!verify(code, user.totp_secret, 'StatusFe', req.user.email)) {
+    return res.redirect('/admin/2fa/verify?msg=invalid&type=error');
+  }
+  res.cookie('_2fa_verified', '1', { httpOnly: true, maxAge: 8 * 60 * 60 * 1000, sameSite: 'lax' });
+  res.redirect('/admin');
+});
+
+// GET /admin/audit/download — download audit log as CSV
+router.get('/audit/download', (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin required' });
+  const logs = auditLog.list(10000);
+  const csv = 'Date,User,Action,Target,Details,IP\n' + logs.map(l =>
+    `"${l.created_at}","${(l.user_id||'').substring(0,8)}","${l.action}","${(l.target||'').replace(/"/g,'""')}","${(l.details||'').replace(/"/g,'""')}","${(l.ip||'').substring(0,15)}"`
+  ).join('\n');
+  const today = new Date().toISOString().split('T')[0];
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename="audit-log-${today}.csv"`);
+  res.send(csv);
+});
+
+// GET /admin/audit/count
+router.get('/audit/count', (req, res) => {
+  const total = db.prepare('SELECT COUNT(*) as c FROM audit_log').get().c;
+  res.json({ total });
+});
+
 module.exports = router;

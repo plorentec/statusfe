@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2FA Verification - StatusFe Admin</title>
+<link rel="stylesheet" href="/css/admin.css">
+<script>document.body.classList.add('dark');</script>
+</head>
+<body>
+<div class="auth-container">
+<div class="auth-card">
+<div class="auth-header">
+<h1>StatusFe</h1>
+<p>Enter your 2FA code</p>
+</div>
+<% if (req.query.msg === 'invalid') { %>
+<div class="flash flash-error">Invalid code. Please try again.</div>
+<% } %>
+<form action="/admin/2fa/verify" method="post" class="auth-form">
+<div class="form-group">
+<label for="code">Verification Code</label>
+<input type="text" id="code" name="code" required autofocus placeholder="Enter 6-digit code" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code">
+<small class="text-muted">Open your authenticator app and enter the code.</small>
+</div>
+<button type="submit" class="btn btn-primary btn-full">Verify</button>
+</form>
+<p class="auth-footer"><a href="/auth/logout">Logout</a></p>
+</div>
+</div>
+</body>
+</html>
