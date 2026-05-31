@@ -336,7 +336,20 @@ router.post('/incidents', (req, res) => {
   if (!component_id || !name || !message) {
     return res.redirect('/admin/incidents/new?msg=error&type=error');
   }
-  incidents.create({ component_id, name, status, impact, starts_at, resolved_at, message, visible: visible ? 1 : 0 });
+  const inc = incidents.create({ component_id, name, status, impact, starts_at, resolved_at, message, visible: visible ? 1 : 0 });
+  if (inc) {
+    const { notifications } = require('../db/models');
+    const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
+    admins.forEach(a => {
+      notifications.create({
+        user_id: a.id,
+        component_id: component_id,
+        type: 'incident_created',
+        title: 'New incident: ' + name,
+        message: name + ' — ' + status + ': ' + message
+      });
+    });
+  }
   res.redirect('/admin/incidents?msg=success&type=success');
 });
 
@@ -363,7 +376,21 @@ router.put('/incidents/:id', (req, res) => {
     return res.redirect('/admin/incidents?msg=error&type=error');
   }
   const { component_id, name, status, impact, starts_at, resolved_at, message, visible, cascade_status } = req.body;
-  incidents.update(req.params.id, { component_id, name, status, impact, starts_at, resolved_at, message, visible: visible ? 1 : 0, cascade_status });
+  const oldStatus = inc.status;
+  const updated = incidents.update(req.params.id, { component_id, name, status, impact, starts_at, resolved_at, message, visible: visible ? 1 : 0, cascade_status });
+  if (updated && oldStatus !== status) {
+    const { notifications } = require('../db/models');
+    const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
+    admins.forEach(a => {
+      notifications.create({
+        user_id: a.id,
+        component_id: component_id || inc.component_id,
+        type: 'incident_updated',
+        title: 'Incident updated: ' + name,
+        message: name + ': ' + oldStatus + ' → ' + status
+      });
+    });
+  }
   res.redirect('/admin/incidents?msg=success&type=success');
 });
 

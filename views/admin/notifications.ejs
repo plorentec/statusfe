@@ -35,7 +35,7 @@
 </div>
 
 <% if (!hasNotifications) { %>
-<div class="card"><p class="text-muted">No notifications yet.</p></div>
+<div class="card"><p class="text-muted">No notifications yet. Notifications are created when component statuses change or incidents are created/updated.</p></div>
 <% } else { %>
 <div class="table-container">
 <table class="admin-table">
@@ -51,9 +51,9 @@
 <tbody>
 <% notifications.forEach(n => { %>
 <tr class="<%= n.is_read ? '' : 'unread' %>">
-<td><span class="notif-type notif-<%= n.type %>"><%= n.type %></span></td>
+<td><span class="notif-type notif-<%= n.type %>"><% if (n.type === 'status_change') { %>&#x1f504;<% } else if (n.type === 'incident_created') { %>&#x26a0;&#xfe0f;<% } else if (n.type === 'incident_updated') { %>&#x270f;&#xfe0f;<% } else { %><%= n.type %><% } %> <%= n.type %></span></td>
 <td><strong><%= n.title %></strong></td>
-<td><%= (n.message || '').substring(0, 100) %></td>
+<td><%= (n.message || '').substring(0, 150) %></td>
 <td><%= n.created_at %></td>
 <td class="actions">
 <% if (!n.is_read) { %>

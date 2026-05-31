@@ -177,12 +177,37 @@ router.post('/incidents', requirePerm('write'), async (req, res) => {
   const incident = incidents.create({ component_id, page_id, name, status, impact, starts_at, resolved_at, message, visible });
   const pid = incident.page_id || page_id;
   if (pid) await triggerWebhook(pid, 'incident.created', { incident_id: incident.id, name: incident.name, status: incident.status });
+  if (incident) {
+    const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
+    admins.forEach(a => {
+      notifications.create({
+        user_id: a.id,
+        component_id: component_id,
+        type: 'incident_created',
+        title: 'New incident: ' + name,
+        message: name + ' — ' + status + ': ' + message
+      });
+    });
+  }
   res.status(201).json({ incident });
 });
 router.put('/incidents/:id', requirePerm('write'), async (req, res) => {
   const incident = incidents.get(req.params.id);
   if (!incident) return res.status(404).json({ error: 'Not found' });
+  const oldStatus = incident.status;
   const updated = incidents.update(req.params.id, req.body);
+  if (updated && oldStatus !== updated.status) {
+    const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
+    admins.forEach(a => {
+      notifications.create({
+        user_id: a.id,
+        component_id: updated.component_id,
+        type: 'incident_updated',
+        title: 'Incident updated: ' + updated.name,
+        message: updated.name + ': ' + oldStatus + ' → ' + updated.status
+      });
+    });
+  }
   await triggerWebhook(updated.page_id, 'incident.updated', { incident_id: updated.id, status: updated.status });
   res.json({ incident: updated });
 });
