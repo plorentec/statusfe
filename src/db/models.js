@@ -1047,3 +1047,27 @@ module.exports.users = {
   }
 };
 
+// ===== AUDIT LOG =====
+module.exports.auditLog = {
+  create({ user_id, action, target, details, ip, user_agent }) {
+    const id = require('uuid').v4();
+    db.prepare('INSERT INTO audit_log (id, user_id, action, target, details, ip, user_agent) VALUES (?,?,?,?,?,?)').run(
+      id, user_id, action, target||'', details||'', ip||'', user_agent||''
+    );
+  },
+
+  list(limit) {
+    limit = limit || 50;
+    return db.prepare('SELECT * FROM audit_log ORDER BY created_at DESC LIMIT ?').all(limit);
+  },
+
+  listByUser(userId, limit) {
+    limit = limit || 50;
+    return db.prepare('SELECT * FROM audit_log WHERE user_id=? ORDER BY created_at DESC LIMIT ?').all(userId, limit);
+  },
+
+  cleanOld(days) {
+    db.prepare("DELETE FROM audit_log WHERE created_at < datetime('now', ?)").run(`-${days} days`);
+  }
+};
+

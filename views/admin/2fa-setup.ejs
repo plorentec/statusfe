@@ -1,78 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title><%= title %> - StatusFe Admin</title>
+<link rel="stylesheet" href="/css/admin.css">
+<script>document.body.classList.add('dark');</script>
+</head>
+<body>
+<div class="admin-layout">
 <aside class="sidebar">
 <div class="sidebar-header">
 <h2 style="display:flex;align-items:center;gap:8px;">
-<span style="display:inline-flex;align-items:center;gap:8px;font-weight:800;font-size:20px;letter-spacing:-0.5px;"><span style="display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;background:linear-gradient(135deg,#10b981,#059669);border-radius:8px;color:#fff;font-size:16px;font-weight:900;line-height:1;">S</span><span>Status<span style="color:#10b981;">Fe</span></span></span>
+<span style="display:inline-flex;align-items:center;gap:8px;font-weight:800;font-size:22px;letter-spacing:-0.5px;"><span style="display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;background:linear-gradient(135deg,#10b981,#059669);border-radius:8px;color:#fff;font-size:18px;font-weight:900;line-height:1;">S</span><span>Status<span style="color:#10b981;">Fe</span></span></span>
 </h2>
 <span class="sidebar-subtitle">Admin Panel <a href="/admin/customize" style="color:#10b981;text-decoration:none;margin-left:4px;font-size:13px;">Customize</a></span>
 </div>
 <nav class="sidebar-nav">
 <a href="/admin" class="<%= title === 'Dashboard' ? 'active' : '' %>">
 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-<span>Dashboard</span>
+Dashboard
 </a>
 <a href="/admin/pages" class="<%= title === 'Pages' ? 'active' : '' %>">
 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
-<span>Pages</span>
+Pages
 </a>
-<!-- Components with Dependencies submenu -->
 <a href="javascript:void(0)" class="sidebar-parent <%= ['Components','Dependencies'].includes(title) ? 'active' : '' %>">
 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-<span>Components</span>
+Components
 <svg class="submenu-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
 </a>
 <nav class="sidebar-submenu">
-<a href="/admin/components" class="<%= title === 'Components' ? 'active' : '' %>">
-<span>All Components</span>
-</a>
-<a href="/admin/groups" class="<%= title === 'Groups' ? 'active' : '' %>">
-<span>Groups</span>
-</a>
-<a href="/admin/dependencies" class="<%= title === 'Dependencies' ? 'active' : '' %>">
-<span>Dependencies</span>
-</a>
+<a href="/admin/components" class="<%= title === 'Components' ? 'active' : '' %>">All Components</a>
+<a href="/admin/dependencies" class="<%= title === 'Dependencies' ? 'active' : '' %>">Dependencies</a>
+<a href="/admin/groups" class="<%= title === 'Component Groups' ? 'active' : '' %>">Groups</a>
 </nav>
 <a href="/admin/incidents" class="<%= title === 'Incidents' ? 'active' : '' %>">
 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-<span>Incidents</span>
+Incidents
 </a>
 <a href="/admin/maintenance" class="<%= title === 'Maintenance' ? 'active' : '' %>">
 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-<span>Maintenance</span>
+Maintenance
 </a>
 <a href="/admin/notifications" class="<%= title === 'Notifications' ? 'active' : '' %>">
 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
-<span>Notifications</span><% if (typeof unread !== 'undefined' && unread > 0) { %><span class="notif-badge"><%= unread %></span><% } %>
+Notifications<% if (typeof unread !== 'undefined' && unread > 0) { %><span class="notif-badge"><%= unread %></span><% } %>
 </a>
 <a href="/admin/analytics" class="<%= title === 'Analytics' ? 'active' : '' %>">
 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-<span>Analytics</span>
+Analytics
 </a>
-<!-- API with submenus -->
 <a href="javascript:void(0)" class="sidebar-parent <%= ['API Keys','API Docs'].includes(title) ? 'active' : '' %>">
 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
-<span>API</span>
+API
 <svg class="submenu-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
 </a>
 <nav class="sidebar-submenu">
-<a href="/admin/api-keys" class="<%= title === 'API Keys' ? 'active' : '' %>">
-<span>API Keys</span>
-</a>
-<a href="/admin/docs" class="<%= title === 'API Docs' ? 'active' : '' %>">
-<span>API Docs</span>
-</a>
+<a href="/admin/api-keys" class="<%= title === 'API Keys' ? 'active' : '' %>">API Keys</a>
+<a href="/admin/docs" class="<%= title === 'API Docs' ? 'active' : '' %>">API Docs</a>
 </nav>
 <a href="/admin/users" class="<%= title === 'Users' ? 'active' : '' %>">
 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
 Users
 </a>
-<a href="/admin/2fa/setup" class="<%= title === '2FA Setup' ? 'active' : '' %>">
-<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-2FA
+<a href="javascript:void(0)" class="sidebar-parent <%= title === 'Configuration' ? 'active' : '' %>">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+Configuration
+<svg class="submenu-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
 </a>
-<a href="/admin/audit" class="<%= title === 'Audit Log' ? 'active' : '' %>">
-<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-Audit Log
-</a>
+<nav class="sidebar-submenu">
+<a href="/admin/config/component-statuses" class="<%= title === 'Component Statuses' ? 'active' : '' %>">Component Statuses</a>
+<a href="/admin/config/incident-statuses" class="<%= title === 'Incident Statuses' ? 'active' : '' %>">Incident Statuses</a>
+<a href="/admin/config/mappings" class="<%= title === 'Status Mappings' ? 'active' : '' %>">Status Mappings</a>
 </nav>
 </nav>
 <div class="sidebar-footer">
@@ -84,5 +84,35 @@ Audit Log
 <button type="submit" class="btn-logout">Logout</button>
 </form>
 </div>
-</div>
 </aside>
+<main class="admin-main">
+<div class="admin-header">
+<h1><%= title %></h1>
+<% if (message) { %>
+<div class="flash flash-<%= messageType %>"><%= message %></div>
+<% } %>
+</div>
+<%- body %>
+</main>
+</div>
+<%- include('partials/_csrf'); %>
+<script src="/js/admin.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var token = document.getElementById('csrfToken').value;
+  if (!token) return;
+  var forms = document.querySelectorAll('form[method="post"]');
+  for (var i = 0; i < forms.length; i++) {
+    var hidden = forms[i].querySelector('input[name="_csrf"]');
+    if (!hidden) {
+      var input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = '_csrf';
+      input.value = token;
+      forms[i].appendChild(input);
+    }
+  }
+});
+</script>
+</body>
+</html>

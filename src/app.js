@@ -48,9 +48,11 @@ const adminExtraRoutes = require('./routes/admin-extra');
 const { session } = require('./middleware/session');
 const { csrfMiddleware, csrfProtection } = require('./middleware/csrf');
 const { globalLimiter, authLimiter, apiLimiter, rateLimit } = require('./middleware/rate-limit');
+const { generateSelfSignedCert } = require('./utils/ssl');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const HTTPS_ENABLED = process.env.HTTPS === 'true';
 
 // Security headers
 app.use(helmet({ contentSecurityPolicy: false }));
@@ -270,3 +272,22 @@ app.listen(PORT, '0.0.0.0', () => {
 });
 
 module.exports = app;
+
+// Start server with optional HTTPS
+if (HTTPS_ENABLED) {
+  const { generateSelfSignedCert } = require('./utils/ssl');
+  const https = require('https');
+  const fs = require('fs');
+  const { certPath, keyPath } = generateSelfSignedCert();
+  const sslApp = https.createServer({
+    key: fs.readFileSync(keyPath),
+    cert: fs.readFileSync(certPath)
+  }, app);
+  sslApp.listen(PORT, () => {
+    console.log(`StatusFe HTTPS: https://0.0.0.0:${PORT} (self-signed certificate)`);
+  });
+} else {
+  app.listen(PORT, () => {
+    console.log(`\n  StatusFe: http://0.0.0.0:${PORT}`);
+  });
+}
