@@ -108,7 +108,23 @@ router.post('/components', requirePerm('write'), (req, res) => {
   res.status(201).json({ component: c });
 });
 router.put('/components/:id', requirePerm('write'), (req, res) => { res.json({ component: components.update(req.params.id, req.body) }); });
-router.delete('/components/:id', requirePerm('admin'), (req, res) => { components.delete(req.params.id); res.json({ message: 'Deleted' }); });
+router.delete('/components/:id', requirePerm('admin'), (req, res) => {
+  const comp = components.get(req.params.id);
+  if (comp) {
+    const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
+    admins.forEach(a => {
+      notifications.create({
+        user_id: a.id,
+        component_id: req.params.id,
+        type: 'component_deleted',
+        title: 'Component deleted: ' + comp.name,
+        message: comp.name + ' has been permanently deleted'
+      });
+    });
+  }
+  components.delete(req.params.id);
+  res.json({ message: 'Deleted' });
+});
 
 // Assign component to page
 router.post('/pages/:pageId/components/:componentId', requirePerm('write'), async (req, res) => {
