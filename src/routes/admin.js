@@ -292,7 +292,8 @@ router.get('/components/:id/edit', (req, res) => {
     components: components.list(),
     componentMode: 'edit',
     component: comp,
-    groups: componentGroups.list()
+    groups: componentGroups.list(),
+    pages: pages.list()
   });
 });
 
@@ -762,7 +763,7 @@ router.post('/users', (req, res) => {
   const passwordHash = bcrypt.hashSync(password, 10);
   const id = uuidv4();
   db.prepare('INSERT INTO users (id, email, password_hash, name, role, totp_enabled, totp_secret) VALUES (?,?,?,?,?,?,?)').run(
-    id, email, passwordHash, name, role || 'user'
+    id, email, passwordHash, name, role || 'user', 0, null
   );
   
   // Send welcome email if SMTP is configured
@@ -808,7 +809,7 @@ router.get('/email-settings', (req, res) => {
 router.post('/email-settings', (req, res) => {
   const { smtp_host, smtp_port, smtp_user, smtp_pass, smtp_secure, smtp_from, smtp_from_name } = req.body;
   settings.setSMTP({ smtp_host, smtp_port, smtp_user, smtp_pass, smtp_secure, smtp_from, smtp_from_name });
-  res.redirect('/admin/notifications?msg=success&type=success');
+  res.redirect('/admin/email-settings?msg=success&type=success');
 });
 
 router.post('/email-settings/test', (req, res) => {
@@ -846,7 +847,7 @@ router.post('/admin/audit/cleanup', (req, res) => {
 // GET /admin/2fa/verify — verify 2FA code for session
 router.get('/2fa/verify', (req, res) => {
   if (!req.user) return res.redirect('/login');
-  res.render('admin/2fa-verify', { title: 'Verify 2FA', user: req.user, msg: req.query.msg, type: req.query.type });
+  res.render('admin/2fa-verify', { title: 'Verify 2FA', user: req.user, msg: req.query.msg, type: req.query.type, csrfToken: res.locals.csrfToken });
 });
 
 // POST /admin/2fa/verify — verify 2FA code and set cookie
@@ -919,5 +920,44 @@ router.get('/audit/count', (req, res) => {
   const total = db.prepare('SELECT COUNT(*) as c FROM audit_log').get().c;
   res.json({ total });
 });
+
+// GET /admin/changelog
+router.get('/changelog', (req, res) => {
+  if (req.user.role !== 'admin') return res.redirect('/admin?msg=admin&type=error');
+  res.render('admin/changelog', {
+    title: 'Changelog',
+    user: req.user,
+    message: res.locals.message,
+    messageType: res.locals.messageType
+  });
+});
+
+// Check for updates
+router.get('/admin/check-update', async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin required' });
+  try {
+    const https = require('https');
+    https.get('https://api.github.com/repos/plorentec/statusfe/releases/latest', {
+      headers: { 'User-Agent': 'StatusFe/2.0' }
+    }, (ghRes) => {
+      let data = '';
+      ghRes.on('data', chunk => data += chunk);
+      ghRes.on('end', () => {
+        try {
+          const release = JSON.parse(data);
+          const currentVersion = '2.0.0';
+          const latestTag = release.tag_name || release.name || currentVersion;
+          const hasUpdate = latestTag !== currentVersion;
+          res.json({ currentVersion, latestVersion: latestTag, hasUpdate, url: release.html_url, publishedAt: release.published_at });
+        } catch(e) {
+          res.json({ currentVersion, latestVersion: currentVersion, hasUpdate: false, error: e.message });
+        }
+      });
+    }).on('error', (err) => res.json({ currentVersion, latestVersion: 'unknown', hasUpdate: false, error: err.message }));
+  } catch(e) {
+    res.json({ currentVersion, latestVersion: 'unknown', hasUpdate: false });
+  }
+});
+
 
 module.exports = router;

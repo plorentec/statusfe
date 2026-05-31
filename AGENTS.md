@@ -1,7 +1,10 @@
 # StatusFe — Agent Instructions
 
+## Version
+**2.0.0** — Changelog: `/admin/changelog`
+
 ## Tech stack
-Node.js + Express 4, EJS templates, better-sqlite3 (WAL mode), cookie-based sessions (in-memory, signed HMAC), bcryptjs, nodemailer, uuid. No test framework, no linter, no formatter, no CI.
+Node.js + Express 4, EJS templates, better-sqlite3 (WAL mode), cookie-based sessions (SQLite persisted, signed HMAC), bcryptjs, nodemailer, uuid, otpauth, qrcode, express-rate-limit. No test framework, no linter, no formatter, no CI.
 
 ## Run
 ```

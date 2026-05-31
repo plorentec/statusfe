@@ -18,6 +18,7 @@
 <div class="flash flash-error">Invalid code. Please try again.</div>
 <% } %>
 <form action="/admin/2fa/verify" method="post" class="auth-form">
+<input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
 <div class="form-group">
 <label for="code">Verification Code</label>
 <input type="text" id="code" name="code" required autofocus placeholder="Enter 6-digit code" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code">
