@@ -1,8 +1,11 @@
 const db = require('../db/init');
 
 function require2FA(req, res, next) {
+  // Skip if not authenticated
+  if (!req.user) return next();
+  
   // Skip if not admin or write role
-  if (req.user && req.user.role === 'user') return next();
+  if (req.user.role === 'user') return next();
   
   // Check if user has 2FA enabled
   const user = db.prepare('SELECT totp_enabled FROM users WHERE id=?').get(req.user.id);
