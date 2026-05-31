@@ -13,6 +13,8 @@ if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
+db.pragma('busy_timeout = 5000');
+db.pragma('synchronous = NORMAL');
 
 // Migrate: add 'key' column to api_keys if it doesn't exist
 try {
@@ -447,3 +449,17 @@ defaultMappings.forEach(m => {
 
 // Export db instance
 module.exports = db;
+
+// Auto-backup SQLite every hour to prevent data loss
+setInterval(() => {
+  try {
+    const backupPath = path.join(dir, 'statusfe.db.backup');
+    db.backup(backupPath);
+    // Keep last 7 backups
+    const backups = fs.readdirSync(dir).filter(f => f.startsWith('statusfe.db.backup'));
+    backups.sort();
+    while (backups.length > 7) {
+      fs.unlinkSync(path.join(dir, backups.shift()));
+    }
+  } catch(e) { /* silent */ }
+}, 60 * 60 * 1000);

@@ -22,9 +22,10 @@
     "dotenv": "^16.4.5",
     "ejs": "^5.0.2",
     "express": "^4.21.0",
+    "express-rate-limit": "^7.5.0",
     "helmet": "^8.0.0",
     "nodemailer": "^8.0.9",
-    "express-rate-limit": "^7.5.0",
+    "pg": "^8.21.0",
     "uuid": "^10.0.0"
   }
 }
