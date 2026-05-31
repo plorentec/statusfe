@@ -1,23 +1,10 @@
 # StatusFe
 
-Sistema de páginas de estado open source construido con Node.js, Express y SQLite.
+Open source status page system — self-hosted, production-ready.
 
-Open source status page system built with Node.js, Express, and SQLite.
+**v2.0.0** — 2FA, audit log, multi-page groups, security hardening
 
-## Features / Características
-
-- Multiple status pages / Múltiples páginas de estado
-- Components with status tracking / Componentes con seguimiento de estado
-- **Same component across multiple pages / Mismo componente en varias páginas** (unique among open source alternatives)
-- Incidents and maintenance windows / Incidentes y ventanas de mantenimiento
-- REST API with key-based authentication / API REST con autenticación por clave
-- Webhooks for status changes / Webhooks para cambios de estado
-- User management / Gestión de usuarios
-- Custom CSS/HTML per page / CSS/HTML personalizado por página
-
-## Quick Start / Inicio Rápido
-
-### Docker (Recommended / Recomendado)
+## Quick Start
 
 ```bash
 git clone https://github.com/plorentec/statusfe.git
@@ -26,101 +13,172 @@ cp .env.example .env
 docker compose up -d
 ```
 
-> **Note:** If you get a SQLite error (`no such table: api_keys`), delete the old volume first:
-> ```bash
-> docker compose down
-> docker volume rm statusfe_statusfe-data
-> docker compose up -d
-> ```
+Access at `http://localhost:3000` (default)
 
-Access at `http://localhost:3000` / Acceso en `http://localhost:3000`
+### Default Credentials
+- **Email:** `admin@status.local`
+- **Password:** `admin123`
 
-Default admin credentials: `admin@status.local` / `admin123` / Credenciales admin por defecto: `admin@status.local` / `admin123`
+## Features
 
-### Manual Installation (Apache, etc.) / Instalación Manual (Apache, etc.)
+### Security
+- **2FA (TOTP)** — Mandatory for admin/write roles, optional for users. Works with Google Authenticator, Authy, etc.
+- **Audit Log** — All admin actions logged with CSV export. Daily rotation, configurable retention.
+- **CSRF Protection** — Cookie-based tokens, auto-injected into all forms.
+- **Rate Limiting** — Login (10/15min), API (60/min), Admin (60/min).
+- **API Key Security** — bcrypt hashed, expiration enforcement, scoped permissions (`read`, `write`, `admin`).
+- **XSS Prevention** — Sanitized custom CSS/HTML/logo rendering.
+- **SSRF Protection** — Webhook URLs validated against localhost and private IPs.
+- **HTTPS** — Self-signed certs auto-generated with `HTTPS=true` in `.env`.
 
-**Prerequisites:** Node.js 20+, npm / **Requisitos:** Node.js 20+, npm
+### Core
+- **Status Pages** — Multiple pages with custom templates (default, grid, dark).
+- **Components** — Track service health with 5 status levels.
+- **Incidents** — Public incident reports with status tracking.
+- **Maintenance** — Scheduled maintenance windows.
+- **Component Groups** — Group components, assign to one or multiple pages.
+- **Component Dependencies** — Cascade status changes across related components.
+- **Embed Widget** — Customizable status badge: `/embed/:slug?style=compact|detailed|minimal`.
 
+### Admin
+- **Multi-page Management** — Create and manage multiple status pages.
+- **Analytics Dashboard** — Page views, uptime percentage, 30-day charts.
+- **Notifications** — Auto-created on status changes, mark read/delete.
+- **API Keys** — Generate scoped keys for programmatic access.
+- **Custom CSS/HTML** — Full customization for status pages.
+- **Changelog** — Version history with update checker (queries GitHub API).
+
+## Configuration
+
+### Environment Variables
+| Variable | Description | Default |
+|---|---|---|
+| `PORT` | HTTP port | `3000` |
+| `SESSION_SECRET` | Session signing secret | auto-generated on first run |
+| `HTTPS` | Enable HTTPS with self-signed cert | `false` |
+
+### Docker
+```yaml
+# docker-compose.yml
+services:
+  statusfe:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - statusfe-data:/app/data
+    env_file: .env
+
+volumes:
+  statusfe-data:
+```
+
+### Manual Install
 ```bash
-git clone https://github.com/plorentec/statusfe.git
-cd statusfe
+npm install
 cp .env.example .env
-
-npm install --production
-
-# Start the server / Iniciar el servidor
 npm start
 ```
 
-Access at `http://localhost:3000` / Acceso en `http://localhost:3000`
+## Architecture
 
-### As a System Service (systemd) / Como Servicio del Sistema (systemd)
-
-```bash
-# Clone and install / Clonar e instalar
-git clone https://github.com/plorentec/statusfe.git /var/www/statusfe
-cd /var/www/statusfe
-cp .env.example .env
-npm install --production
-
-# Copy systemd service / Copiar servicio systemd
-sudo cp systemd/statusfe.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable statusfe
-sudo systemctl start statusfe
-
-# Check status / Verificar estado
-sudo systemctl status statusfe
 ```
-
-## Updating / Actualizando
-
-### Docker
-
-```bash
-cd /path/to/statusfe
-git pull
-docker compose pull
-docker compose up -d --build
+src/app.js            ← Express entry point
+src/routes/api.js     ← REST API (/api/v1)
+src/routes/admin.js   ← Admin UI CRUD
+src/routes/admin-extra.js ← Notifications, analytics, config
+src/routes/auth.js    ← Login/register/logout
+src/middleware/session.js ← SQLite session store
+src/middleware/csrf.js  ← CSRF protection
+src/middleware/require-2fa.js ← 2FA enforcement
+src/db/init.js        ← Schema + migrations + seed data
+src/db/models.js      ← CRUD helpers
+src/utils/totp.js     ← TOTP implementation
+src/utils/ssl.js      ← Self-signed SSL generation
+views/                ← EJS templates
+public/               ← Static assets
+data/statusfe.db      ← SQLite database (WAL mode)
 ```
-
-### Manual / systemd
-
-```bash
-cd /var/www/statusfe
-git pull
-npm install --production
-sudo systemctl restart statusfe
-```
-
-## Configuration / Configuración
-
-Copy `.env.example` to `.env` and adjust / Copia `.env.example` a `.env` y ajusta:
-
-| Variable | Description / Descripción | Default |
-|----------|--------------------------|---------|
-| `PORT` | Server port / Puerto del servidor | `3000` |
-| `SESSION_SECRET` | Session signing key / Clave de firma de sesión | `change-me-to-a-random-string` |
-
-**Important:** Change `SESSION_SECRET` in production to a random string. / **Importante:** Cambia `SESSION_SECRET` en producción por una cadena aleatoria.
-
-## Default Credentials / Credenciales por Defecto
-
-| Email | Password / Contraseña | Role / Rol |
-|-------|----------------------|------------|
-| admin@status.local | admin123 | admin |
-
-**Important:** Change these credentials after first login. / **Importante:** Cambia estas credenciales después del primer inicio de sesión.
 
 ## API
 
-Full API documentation is available at `/admin/docs` after logging in. / La documentación completa de la API está disponible en `/admin/docs` después de iniciar sesión.
+Base: `/api/v1`
 
-API key authentication supports / La autenticación con clave API soporta:
-- `Authorization: Bearer <key>` header / Cabecera
-- `x-api-key: <key>` header / Cabecera
-- `?api_key=<key>` query parameter / Parámetro de consulta
+### Authentication
+Include API key as:
+- `Authorization: Bearer <key>`
+- `x-api-key: <key>` header
+- `?api_key=<key>` query param
 
-## License / Licencia
+### Endpoints
+```
+GET  /api/v1/health              — Health check
+GET  /api/v1/components          — All components
+GET  /api/v1/components/:id       — Single component
+PUT  /api/v1/components/:id/status — Update status (write perm)
+GET  /api/v1/pages               — All pages
+GET  /status/:slug               — Public status page
+GET  /embed/:slug                — Embed widget
+```
+
+### Permissions
+- `read` — Read components and status
+- `write` — Update component status
+- `admin` — All permissions (includes read + write)
+
+## Database
+
+Single SQLite file (`data/statusfe.db`) with:
+- WAL mode for concurrent access
+- `busy_timeout=5000ms`
+- `synchronous=NORMAL`
+- Hourly auto-backup (7 rolling copies)
+- Foreign keys enabled
+
+## Migrations
+
+Migrations run automatically on every startup:
+- `audit_log` table (user actions, CSV export)
+- `component_groups` + `group_pages` (many-to-many)
+- `users.totp_enabled`, `users.totp_secret` (2FA)
+- `api_keys.expires_at` (key expiration)
+
+## Security Notes
+
+- Registration disabled after first user is created
+- 2FA mandatory for admin/write roles
+- Session secret auto-generated on first run, persisted in `data/session_secret.txt`
+- No caching headers on any response (`Cache-Control: no-cache`)
+- CORS restricted to `/status/`, `/embed/`, `/api/` only
+
+## Troubleshooting
+
+### SQLite error after Docker rebuild
+```bash
+docker compose down
+docker volume rm statusfe_statusfe-data
+docker compose up -d
+```
+
+### Reset admin password
+```bash
+docker exec -it statusfe node -e "
+const db = require('./src/db/init');
+const bcrypt = require('bcryptjs');
+db.prepare('UPDATE users SET password_hash=? WHERE email=?').run(
+  bcrypt.hashSync('newpassword', 10), 'admin@status.local'
+);
+"
+```
+
+### Check database schema
+```bash
+docker exec -it statusfe node -e "
+const db = require('./src/db/init');
+console.log(db.prepare('SELECT name FROM sqlite_master WHERE type=\"table\"').all());
+"
+```
+
+## License
 
 MIT
