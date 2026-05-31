@@ -468,7 +468,13 @@ router.post('/groups', (req, res) => {
   if (!name) {
     return res.redirect('/admin/groups/new?msg=error&type=error');
   }
-  const selected = page_ids && Array.isArray(page_ids) ? page_ids : [];
+  // Handle array from form (page_ids[] or page_ids)
+  let selected = [];
+  if (Array.isArray(page_ids)) {
+    selected = page_ids.filter(Boolean);
+  } else if (typeof page_ids === 'string' && page_ids) {
+    selected = [page_ids];
+  }
   componentGroups.create({ name, page_ids: selected, position: parseInt(position) || 0 });
   res.redirect('/admin/groups?msg=success&type=success');
 });
@@ -502,7 +508,12 @@ router.put('/groups/:id', (req, res) => {
   if (!name) {
     return res.redirect('/admin/groups/' + req.params.id + '/edit?msg=error&type=error');
   }
-  const selected = page_ids && Array.isArray(page_ids) ? page_ids : [];
+  let selected = [];
+  if (Array.isArray(page_ids)) {
+    selected = page_ids.filter(Boolean);
+  } else if (typeof page_ids === 'string' && page_ids) {
+    selected = [page_ids];
+  }
   componentGroups.update(req.params.id, { name, page_ids: selected, position: parseInt(position) || 0 });
   res.redirect('/admin/groups?msg=success&type=success');
 });
