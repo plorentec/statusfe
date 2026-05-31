@@ -84,7 +84,7 @@ setInterval(() => {
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const HTTPS_ENABLED = process.env.HTTPS !== 'false';
+const HTTPS_ENABLED = process.env.HTTPS === 'true';
 
 // Security headers
 app.use(helmet({ contentSecurityPolicy: false }));
@@ -300,13 +300,20 @@ if (HTTPS_ENABLED) {
   const https = require('https');
   const fs = require('fs');
   const { certPath, keyPath } = generateSelfSignedCert();
-  const sslApp = https.createServer({
-    key: fs.readFileSync(keyPath),
-    cert: fs.readFileSync(certPath)
-  }, app);
-  sslApp.listen(PORT, () => {
-    console.log(`StatusFe HTTPS: https://0.0.0.0:${PORT} (self-signed certificate)`);
-  });
+  if (certPath && keyPath) {
+    const sslApp = https.createServer({
+      key: fs.readFileSync(keyPath),
+      cert: fs.readFileSync(certPath)
+    }, app);
+    sslApp.listen(PORT, () => {
+      console.log(`StatusFe HTTPS: https://0.0.0.0:${PORT} (self-signed certificate)`);
+    });
+  } else {
+    console.warn('HTTPS enabled but SSL cert generation failed. Falling back to HTTP.');
+    app.listen(PORT, () => {
+      console.log(`\n  StatusFe: http://0.0.0.0:${PORT}`);
+    });
+  }
 } else {
   app.listen(PORT, () => {
     console.log(`\n  StatusFe: http://0.0.0.0:${PORT}`);
