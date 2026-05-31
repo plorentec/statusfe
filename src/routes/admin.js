@@ -934,7 +934,7 @@ router.get('/changelog', (req, res) => {
 
 // Check for updates
 router.get('/check-update', async (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin required' });
+  if (!req.user || req.user.role !== 'admin') return res.status(403).json({ error: 'Admin required' });
   try {
     const https = require('https');
     https.get('https://api.github.com/repos/plorentec/statusfe/releases/latest', {
