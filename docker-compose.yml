@@ -3,8 +3,7 @@ services:
     build: .
     container_name: statusfe
     restart: unless-stopped
-    ports:
-      - "${PORT:-3000}:3000"
+    network_mode: host
     environment:
       - PORT=3000
       - SESSION_SECRET=${SESSION_SECRET:-change-me-to-a-random-string}
