@@ -5,13 +5,9 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm install --omit=dev
 
-COPY . .
-
 RUN mkdir -p /app/data
 
-RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
-RUN chown -R appuser:appgroup /app /app/data
-USER appuser
+COPY . .
 
 EXPOSE 3000
 
