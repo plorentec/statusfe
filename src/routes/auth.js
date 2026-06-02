@@ -131,8 +131,13 @@ router.get('/2fa/setup', (req, res) => {
     user.totp_secret = secret;
   }
   const uri = getURI(user.totp_secret, user.email, 'StatusFe');
-  const qr = require('qrcode').toDataURL(uri);
-  res.render('admin/2fa-setup', { title: '2FA Setup', user, qr, totpEnabled: !!user.totp_enabled });
+  require('qrcode').toDataURL(uri, (err, qrUrl) => {
+    if (err) {
+      console.error('QR Code generation error:', err);
+      return res.status(500).send('Failed to generate QR code');
+    }
+    res.render('admin/2fa-setup', { title: '2FA Setup', user, qr: qrUrl, totpEnabled: !!user.totp_enabled });
+  });
 });
 
 // POST /admin/2fa/setup — enable/disable 2FA
