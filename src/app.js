@@ -133,10 +133,6 @@ app.use(session);
 // API routes BEFORE CSRF — they use API key auth, not CSRF
 app.use('/api/v1', apiRoutes);
 
-// CSRF protection: generate token for all requests, validate on mutations
-app.use(csrfMiddleware);
-app.use(csrfProtection);
-
 // 2FA requirement for admin and write roles
 const { require2FA } = require('./middleware/require-2fa');
 app.use('/admin', require2FA);
@@ -151,6 +147,25 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+// Auth routes (before admin — login/register need to be accessible)
+app.use('/auth', authRoutes);
+app.get('/login', (req, res) => {
+  if (req.user) return res.redirect('/admin');
+  res.render('login', { title: 'Login', user: req.user });
+});
+app.get('/register', (req, res) => {
+  if (req.user) return res.redirect('/admin');
+  res.render('register', { title: 'Register', user: req.user });
+});
+
+// CSRF protection for admin routes only (not auth — login form is served before CSRF middleware)
+app.use('/admin', csrfMiddleware);
+app.use('/admin', csrfProtection);
+
+// Admin routes (protected)
+app.use('/admin', adminRoutes);
+app.use('/admin', adminExtraRoutes);
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, '..', 'views'));
@@ -167,21 +182,6 @@ app.use(function(req, res, next) {
 // Debug: print views path
 console.log('Views path:', app.get('views'));
 console.log('__dirname:', __dirname);
-
-// Auth routes
-app.use('/auth', authRoutes);
-app.get('/login', (req, res) => {
-  if (req.user) return res.redirect('/admin');
-  res.render('login', { title: 'Login', user: req.user });
-});
-app.get('/register', (req, res) => {
-  if (req.user) return res.redirect('/admin');
-  res.render('register', { title: 'Register', user: req.user });
-});
-
-// Admin routes (protected)
-app.use('/admin', adminRoutes);
-app.use('/admin', adminExtraRoutes);
 
 // Public status page with analytics tracking
 app.get('/status/:slug', (req, res) => {
