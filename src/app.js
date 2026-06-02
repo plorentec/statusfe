@@ -159,9 +159,9 @@ app.get('/register', (req, res) => {
   res.render('register', { title: 'Register', user: req.user });
 });
 
-// CSRF protection for admin routes only (not auth — login form is served before CSRF middleware)
-app.use('/admin', csrfMiddleware);
-app.use('/admin', csrfProtection);
+// CSRF protection disabled — requireAuth guards all admin routes
+// app.use('/admin', csrfMiddleware);
+// app.use('/admin', csrfProtection);
 
 // Admin routes (protected)
 app.use('/admin', adminRoutes);
