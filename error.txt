@@ -1,1 +1,26 @@
-&#x270f;&#xfe0f; page_updated
+ => CANCELED [2/6] WORKDIR /app                                                                                                                                                                          0.0s
+ => CACHED [3/6] COPY package.json package-lock.json* ./                                                                                                                                                 0.0s
+ => ERROR [4/6] COPY node_modules ./node_modules                                                                                                                                                         0.0s
+------
+ > [4/6] COPY node_modules ./node_modules:
+------
+[+] build 0/1
+ ? Image statusfe-statusfe Building                                                                                                                                                                       0.7s
+Dockerfile:6
+
+--------------------
+
+   4 |
+
+   5 |     COPY package.json package-lock.json* ./
+
+   6 | >>> COPY node_modules ./node_modules
+
+   7 |     COPY . .
+
+   8 |
+
+--------------------
+
+failed to solve: failed to compute cache key: failed to calculate checksum of ref m7zzfedzideo9z2szu9hak4g6::idng49ndwz2drvafzml9lch6c: "/node_modules": not found
+
