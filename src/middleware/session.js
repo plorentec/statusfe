@@ -1,11 +1,7 @@
 const crypto = require('crypto');
-const Database = require('better-sqlite3');
-const path = require('path');
-const fs = require('fs');
+const { queryOne, queryAll, run, getPool } = require('../db/database');
 
 const SESSION_SECRET = process.env.SESSION_SECRET || 'statusfe-session-secret-change-in-production';
-
-// Keep in sync with app.js — if env has SESSION_SECRET it's already set there
 
 function signCookie(value) {
   const hmac = crypto.createHmac('sha256', SESSION_SECRET);
@@ -14,7 +10,7 @@ function signCookie(value) {
 }
 
 function verifySignedCookie(cookie) {
-  if (!cookie || !cookie.includes('.')) return null;
+  if (!cookie || typeof cookie !== 'string' || !cookie.includes('.')) return null;
   const dotIndex = cookie.lastIndexOf('.');
   const value = cookie.substring(0, dotIndex);
   const hmac = crypto.createHmac('sha256', SESSION_SECRET);
@@ -26,22 +22,8 @@ function verifySignedCookie(cookie) {
   return null;
 }
 
-// SQLite session store
-const DB_PATH = path.join(__dirname, '..', '..', 'data', 'sessions.db');
-const dir = path.dirname(DB_PATH);
-if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-const db = new Database(DB_PATH);
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
-db.exec(`
-  CREATE TABLE IF NOT EXISTS sessions (
-    id TEXT PRIMARY KEY,
-    data TEXT NOT NULL,
-    created_at TEXT DEFAULT (datetime('now'))
-  )
-`);
-
-function createSession(user) {
+// Session store uses the shared PostgreSQL pool
+async function createSession(user) {
   const sessionId = crypto.randomBytes(32).toString('hex');
   const sessionData = {
     id: sessionId,
@@ -53,49 +35,47 @@ function createSession(user) {
   };
   const sessionValue = JSON.stringify(sessionData);
   const signedValue = signCookie(sessionValue);
-  db.prepare('INSERT INTO sessions (id, data) VALUES (?, ?)').run(sessionId, sessionValue);
+  await run('INSERT INTO sessions (id, data, created_at) VALUES ($1, $2, NOW())', [sessionId, sessionValue]);
   return signedValue;
 }
 
-function getSession(cookie) {
-  if (!cookie) return null;
+async function getSession(cookie) {
+  if (!cookie || typeof cookie !== 'string') return null;
   const sessionData = verifySignedCookie(cookie);
   if (!sessionData) return null;
-  const row = db.prepare('SELECT data FROM sessions WHERE id=?').get(sessionData.id);
+  const row = await queryOne('SELECT data FROM sessions WHERE id=$1', [sessionData.id]);
   if (!row) return null;
   const store = JSON.parse(row.data);
   // Check 24-hour expiration
   if (Date.now() - store.createdAt > 24 * 60 * 60 * 1000) {
-    db.prepare('DELETE FROM sessions WHERE id=?').run(sessionData.id);
+    await run('DELETE FROM sessions WHERE id=$1', [sessionData.id]);
     return null;
   }
   return store;
 }
 
-function destroySession(cookie) {
+async function destroySession(cookie) {
   if (!cookie) return;
   const sessionData = verifySignedCookie(cookie);
   if (sessionData && sessionData.id) {
-    db.prepare('DELETE FROM sessions WHERE id=?').run(sessionData.id);
+    await run('DELETE FROM sessions WHERE id=$1', [sessionData.id]);
   }
 }
 
 // Clean expired sessions every hour
-setInterval(() => {
+setInterval(async () => {
   try {
-    db.prepare("DELETE FROM sessions WHERE created_at < datetime('now', '-24 hours')").run();
+    await run("DELETE FROM sessions WHERE created_at < NOW() - INTERVAL '24 hours'");
   } catch(e) {}
 }, 60 * 60 * 1000);
 
-function session(req, res, next) {
+async function session(req, res, next) {
   res.locals.user = null;
   res.locals.message = null;
   res.locals.messageType = null;
 
-  // Always ensure req.session exists for CSRF middleware
   if (!req.session) req.session = {};
 
-  // Check URL params for flash messages (?msg=success, ?msg=error)
   const flashMsg = req.query.msg;
   if (flashMsg) {
     const msgs = {
@@ -122,15 +102,9 @@ function session(req, res, next) {
     }
   }
 
-  // Extract session cookie
   let sessionId = null;
-  if (req.signedCookies && req.signedCookies['session_id']) {
-    sessionId = req.signedCookies['session_id'];
-  }
-  if (!sessionId && req.cookies && req.cookies['session_id']) {
-    sessionId = req.cookies['session_id'];
-  }
-  if (!sessionId && req.headers && req.headers.cookie) {
+  // Parse cookie directly from headers to avoid cookie-parser interference
+  if (req.headers && req.headers.cookie) {
     const cookies = req.headers.cookie.split(';');
     for (const c of cookies) {
       const [name, ...parts] = c.trim().split('=');
@@ -139,9 +113,12 @@ function session(req, res, next) {
       }
     }
   }
+  if (!sessionId && req.cookies && req.cookies['session_id']) {
+    sessionId = req.cookies['session_id'];
+  }
 
   if (sessionId) {
-    const store = getSession(sessionId);
+    const store = await getSession(sessionId);
     if (store) {
       req.session = store;
       req.user = { id: store.userId, name: store.name, email: store.email, role: store.role };
@@ -149,11 +126,10 @@ function session(req, res, next) {
     }
   }
 
-  // Helper to set flash messages (legacy, used by some routes)
   res.flash = function(message, type) {
     type = type || 'success';
     const key = '_flash_' + crypto.randomBytes(8).toString('hex');
-    db.prepare('INSERT INTO sessions (id, data) VALUES (?, ?)').run(key, JSON.stringify({ message, type, createdAt: Date.now() }));
+    run('INSERT INTO sessions (id, data, created_at) VALUES ($1, $2, NOW())', [key, JSON.stringify({ message, type, createdAt: Date.now() })]).catch(() => {});
     res.cookie('_flash_key', key, { httpOnly: true, maxAge: 10000, sameSite: 'lax' });
   };
 
@@ -171,4 +147,21 @@ function optionalAuth(req, res, next) {
   next();
 }
 
-module.exports = { session, requireAuth, optionalAuth, createSession, getSession, destroySession, db };
+// Create sessions table on init
+async function initSessionTable() {
+  const pool = getPool();
+  const client = await pool.connect();
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS sessions (
+        id TEXT PRIMARY KEY,
+        data TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+  } finally {
+    client.release();
+  }
+}
+
+module.exports = { session, requireAuth, optionalAuth, createSession, getSession, destroySession, initSessionTable };

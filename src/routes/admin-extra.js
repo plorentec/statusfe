@@ -4,15 +4,15 @@ const fs = require('fs');
 const path = require('path');
 const { requireAuth } = require('../middleware/session');
 const { notifications, analytics, dependencies, settings, pages, components, componentStatuses, incidentStatuses, statusMappings } = require('../db/models');
-const db = require('../db/init');
+const { queryOne, queryAll, run } = require('../db/database');
 
 router.use(requireAuth);
 
 // GET /admin/notifications
-router.get('/notifications', (req, res) => {
-  const notifs = notifications.list(req.user.id, 50);
-  const unread = notifications.listUnread(req.user.id);
-  const smtp = settings.getSMTP();
+router.get('/notifications', async (req, res) => {
+  const notifs = await notifications.list(req.user.id, 50);
+  const unread = await notifications.listUnread(req.user.id);
+  const smtp = await settings.getSMTP();
   res.render('admin/notifications', {
     title: 'Notifications',
     user: req.user,
@@ -24,30 +24,29 @@ router.get('/notifications', (req, res) => {
 });
 
 // POST /admin/notifications/:id/read
-router.post('/notifications/:id/read', (req, res) => {
+router.post('/notifications/:id/read', async (req, res) => {
   notifications.markRead(req.params.id);
   res.redirect('/admin/notifications');
 });
 
 // POST /admin/notifications/read-all
-router.post('/notifications/read-all', (req, res) => {
+router.post('/notifications/read-all', async (req, res) => {
   notifications.markAllRead(req.user.id);
   res.redirect('/admin/notifications');
 });
 
 // DELETE /admin/notifications/:id
-router.delete('/notifications/:id', (req, res) => {
+router.delete('/notifications/:id', async (req, res) => {
   notifications.delete(req.params.id);
   res.redirect('/admin/notifications');
 });
 
 // GET /admin/analytics
-router.get('/analytics', (req, res) => {
-  const db = require('../db/init');
-  const pages = require('../db/models').pages.list();
-  const allComponents = require('../db/models').components.list();
-  const componentUptime = analytics.getAllComponentsUptime(30);
-  const retention = settings.get('analytics_retention_days') || '365';
+router.get('/analytics', async (req, res) => {
+  const pagesList = await pages.list();
+  const allComponents = await components.list();
+  const componentUptime = await analytics.getAllComponentsUptime(30);
+  const retention = await settings.get('analytics_retention_days') || '365';
 
   // Disk usage
   const dbPath = path.join(__dirname, '..', '..', 'data', 'statusfe.db');
@@ -84,26 +83,27 @@ router.get('/analytics', (req, res) => {
 
   // Build page->components mapping
   const pageComponents = {};
-  pages.forEach(p => {
+  for (const p of pagesList) {
+    const statusHistoryRows = await queryAll(`
+      SELECT new_status, created_at FROM status_history
+      WHERE component_id=$1 AND created_at >= NOW() - ($2 || ' days')::interval
+      ORDER BY created_at DESC LIMIT 30
+    `, [p.id, '30']);
     pageComponents[p.id] = allComponents.map(c => ({
       ...c,
-      status_history: db.prepare(`
-        SELECT new_status, created_at FROM status_history
-        WHERE component_id=? AND created_at >= datetime('now', ?)
-        ORDER BY created_at DESC LIMIT 30
-      `).all(c.id, '-30 days')
+      status_history: statusHistoryRows.filter(sh => sh.component_id === c.id)
     }));
-  });
+  }
 
   // Add total views to pages
-  pages.forEach(p => {
-    p.totalViews = analytics.getTotalViews(p.id);
-  });
+  for (const p of pagesList) {
+    p.totalViews = await analytics.getTotalViews(p.id);
+  }
 
   res.render('admin/analytics', {
     title: 'Analytics',
     user: req.user,
-    pages,
+    pages: pagesList,
     components: allComponents,
     componentUptime,
     pageComponents,
@@ -113,25 +113,26 @@ router.get('/analytics', (req, res) => {
 });
 
 // POST /admin/analytics/retention
-router.post('/analytics/retention', (req, res) => {
+router.post('/analytics/retention', async (req, res) => {
   const { retention_days } = req.body;
   const val = parseInt(retention_days);
   if (!val || val < 30 || val > 3650) {
     return res.redirect('/admin/analytics?msg=invalid&type=error');
   }
-  settings.set('analytics_retention_days', String(val));
+  await settings.set('analytics_retention_days', String(val));
   res.redirect('/admin/analytics?msg=success&type=success');
 });
 
 // POST /admin/analytics/cleanup
-router.post('/analytics/cleanup', (req, res) => {
+router.post('/analytics/cleanup', async (req, res) => {
   const deleted = analytics.cleanOldData();
   res.json({ ok: true, deleted });
 });
 
 // GET /admin/analytics-detail — admin-only endpoint for chart data
-router.get('/analytics-detail', (req, res) => {
-  const { id, type, hours } = req.query;
+router.get('/analytics-detail', async (req, res) => {
+  const { id: rawId, type, hours, component_id } = req.query;
+  const id = component_id || rawId;
   if (!id || !type) return res.status(400).json({ error: 'id and type required' });
   
   // Default 72h if not specified
@@ -157,14 +158,14 @@ router.get('/analytics-detail', (req, res) => {
   const datasets = [];
   
   if (type === 'page') {
-    const page = pages.getById(id) || pages.getBySlug(id);
+    const page = await pages.getById(id) || await pages.getBySlug(id);
     if (!page) return res.status(404).json({ error: 'Page not found' });
     
-    const views = db.prepare(`
-      SELECT strftime('%Y-%m-%d-%H', created_at) as hour, COUNT(*) as cnt
-      FROM page_views WHERE page_id=? AND created_at >= datetime('now', '-' || ? || ' hours')
+    const views = await queryAll(`
+      SELECT TO_CHAR(created_at, 'YYYY-MM-DD-HH') as hour, COUNT(*) as cnt
+      FROM page_views WHERE page_id=$1 AND created_at >= NOW() - ($2 || ' hours')::interval
       GROUP BY hour ORDER BY hour
-    `).all(id, String(h));
+    `, [id, String(h)]);
     
     const viewData = new Array(h).fill(0);
     views.forEach(v => {
@@ -182,19 +183,20 @@ router.get('/analytics-detail', (req, res) => {
       borderWidth: 2
     });
     
-    const pageComps = db.prepare(`
+    const pageComps = await queryAll(`
       SELECT c.id, c.name
       FROM components c JOIN page_components pc ON c.id = pc.component_id
-      WHERE pc.page_id=?
-    `).all(id);
+      WHERE pc.page_id=$1
+    `, [id]);
     
     const colors = ['rgb(16,185,129)','rgb(245,158,11)','rgb(239,68,68)','rgb(139,92,246)','rgb(14,165,233)','rgb(236,72,153)'];
-    pageComps.forEach((c, ci) => {
-      const history = db.prepare(`
-        SELECT new_status, strftime('%Y-%m-%d-%H', created_at) as hour
-        FROM status_history WHERE component_id=? AND created_at >= datetime('now', '-' || ? || ' hours')
+    for (let ci = 0; ci < pageComps.length; ci++) {
+      const c = pageComps[ci];
+      const history = await queryAll(`
+        SELECT new_status, TO_CHAR(created_at, 'YYYY-MM-DD-HH') as hour
+        FROM status_history WHERE component_id=$1 AND created_at >= NOW() - ($2 || ' hours')::interval
         ORDER BY created_at DESC
-      `).all(c.id, String(h));
+      `, [c.id, String(h)]);
       
       const hourStatus = {};
       history.forEach(hs => { if (!hourStatus[hs.hour]) hourStatus[hs.hour] = hs.new_status; });
@@ -216,19 +218,19 @@ router.get('/analytics-detail', (req, res) => {
         borderWidth: 1.5,
         pointRadius: 0
       });
-    });
+    }
     
     res.json({ name: page.name, type: 'page', labels, datasets, hours: h });
     
   } else if (type === 'component') {
-    const comp = components.get(id);
+    const comp = await components.get(id);
     if (!comp) return res.status(404).json({ error: 'Component not found' });
     
-    const history = db.prepare(`
-      SELECT new_status, strftime('%Y-%m-%d-%H', created_at) as hour
-      FROM status_history WHERE component_id=? AND created_at >= datetime('now', '-' || ? || ' hours')
+    const history = await queryAll(`
+      SELECT new_status, TO_CHAR(created_at, 'YYYY-MM-DD-HH') as hour
+      FROM status_history WHERE component_id=$1 AND created_at >= NOW() - ($2 || ' hours')::interval
       ORDER BY created_at DESC
-    `).all(id, String(h));
+    `, [id, String(h)]);
     
     const hourStatus = {};
     history.forEach(hs => { if (!hourStatus[hs.hour]) hourStatus[hs.hour] = hs.new_status; });
@@ -256,16 +258,16 @@ router.get('/analytics-detail', (req, res) => {
 });
 
 // ===== DEPENDENCIES =====
-router.get('/dependencies', (req, res) => {
-  const allComponents = components.list();
-  const allDeps = db.prepare(`
+router.get('/dependencies', async (req, res) => {
+  const allComponents = await components.list();
+  const allDeps = await queryAll(`
     SELECT cd.*, 
       c1.name as componentName, c2.name as dependsOnName
     FROM component_dependencies cd
     JOIN components c1 ON cd.component_id = c1.id
     JOIN components c2 ON cd.depends_on = c2.id
     ORDER BY c1.name
-  `).all();
+  `);
   
   res.render('admin/dependencies', {
     title: 'Dependencies',
@@ -275,7 +277,7 @@ router.get('/dependencies', (req, res) => {
   });
 });
 
-router.post('/dependencies', (req, res) => {
+router.post('/dependencies', async (req, res) => {
   const { component_id, depends_on, cascade_status } = req.body;
   if (!component_id || !depends_on) {
     return res.redirect('/admin/dependencies?msg=error&type=error');
@@ -284,7 +286,7 @@ router.post('/dependencies', (req, res) => {
     return res.redirect('/admin/dependencies?msg=self_dep&type=error');
   }
   // Check for circular deps
-  const existing = db.prepare('SELECT id FROM component_dependencies WHERE component_id=? AND depends_on=?').get(component_id, depends_on);
+  const existing = await queryOne('SELECT id FROM component_dependencies WHERE component_id=$1 AND depends_on=$2', [component_id, depends_on]);
   if (existing) {
     return res.redirect('/admin/dependencies?msg=exists&type=error');
   }
@@ -292,24 +294,24 @@ router.post('/dependencies', (req, res) => {
   res.redirect('/admin/dependencies?msg=success&type=success');
 });
 
-router.delete('/dependencies/:id', (req, res) => {
+router.delete('/dependencies/:id', async (req, res) => {
   dependencies.delete(req.params.id);
   res.redirect('/admin/dependencies?msg=deleted&type=success');
 });
 
 // ===== PAGE CUSTOMIZATION =====
-router.get('/customize', (req, res) => {
-  const settings = require('../db/models').settings;
+router.get('/customize', async (req, res) => {
+  const settingsLocal = require('../db/models').settings;
   const customization = {
-    primary_color: settings.get('custom_primary_color') || '#10b981',
-    secondary_color: settings.get('custom_secondary_color') || '#059669',
-    bg_color: settings.get('custom_bg_color') || '#f8f9fb',
-    text_color: settings.get('custom_text_color') || '#1a1a2e',
-    font_family: settings.get('custom_font_family') || '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-    logo_text: settings.get('custom_logo_text') || 'StatusFe',
-    logo_color: settings.get('custom_logo_color') || '#10b981',
-    page_structure: settings.get('custom_page_structure') || 'default',
-    border_radius: settings.get('custom_border_radius') || '12',
+    primary_color: settingsLocal.get('custom_primary_color') || '#10b981',
+    secondary_color: settingsLocal.get('custom_secondary_color') || '#059669',
+    bg_color: settingsLocal.get('custom_bg_color') || '#f8f9fb',
+    text_color: settingsLocal.get('custom_text_color') || '#1a1a2e',
+    font_family: settingsLocal.get('custom_font_family') || '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    logo_text: settingsLocal.get('custom_logo_text') || 'StatusFe',
+    logo_color: settingsLocal.get('custom_logo_color') || '#10b981',
+    page_structure: settingsLocal.get('custom_page_structure') || 'default',
+    border_radius: settingsLocal.get('custom_border_radius') || '12',
   };
   res.render('admin/customize', {
     title: 'Customize',
@@ -320,24 +322,24 @@ router.get('/customize', (req, res) => {
   });
 });
 
-router.post('/customize', (req, res) => {
+router.post('/customize', async (req, res) => {
   const { primary_color, secondary_color, bg_color, text_color, font_family, logo_text, logo_color, page_structure, border_radius } = req.body;
-  const settings = require('../db/models').settings;
-  settings.set('custom_primary_color', primary_color);
-  settings.set('custom_secondary_color', secondary_color);
-  settings.set('custom_bg_color', bg_color);
-  settings.set('custom_text_color', text_color);
-  settings.set('custom_font_family', font_family);
-  settings.set('custom_logo_text', logo_text);
-  settings.set('custom_logo_color', logo_color);
-  settings.set('custom_page_structure', page_structure);
-  settings.set('custom_border_radius', border_radius);
+  const settingsLocal = require('../db/models').settings;
+  await settingsLocal.set('custom_primary_color', primary_color);
+  await settingsLocal.set('custom_secondary_color', secondary_color);
+  await settingsLocal.set('custom_bg_color', bg_color);
+  await settingsLocal.set('custom_text_color', text_color);
+  await settingsLocal.set('custom_font_family', font_family);
+  await settingsLocal.set('custom_logo_text', logo_text);
+  await settingsLocal.set('custom_logo_color', logo_color);
+  await settingsLocal.set('custom_page_structure', page_structure);
+  await settingsLocal.set('custom_border_radius', border_radius);
   res.redirect('/admin/customize?msg=success&type=success');
 });
 
 // ===== CONFIGURATION: Component Statuses =====
-router.get('/config/component-statuses', (req, res) => {
-  const statuses = componentStatuses.list();
+router.get('/config/component-statuses', async (req, res) => {
+  const statuses = await componentStatuses.list();
   res.render('admin/config-statuses', {
     title: 'Component Statuses',
     user: req.user,
@@ -348,7 +350,7 @@ router.get('/config/component-statuses', (req, res) => {
   });
 });
 
-router.post('/config/component-statuses', (req, res) => {
+router.post('/config/component-statuses', async (req, res) => {
   const { value, label, color, position } = req.body;
   if (!value || !label) {
     return res.redirect('/admin/config/component-statuses?msg=error&type=error');
@@ -362,15 +364,15 @@ router.post('/config/component-statuses', (req, res) => {
   res.redirect('/admin/config/component-statuses?msg=success&type=success');
 });
 
-router.delete('/config/component-statuses/:value', (req, res) => {
+router.delete('/config/component-statuses/:value', async (req, res) => {
   const ok = componentStatuses.delete(req.params.value);
   if (!ok) return res.redirect('/admin/config/component-statuses?msg=system&type=error');
   res.redirect('/admin/config/component-statuses?msg=deleted&type=success');
 });
 
 // ===== CONFIGURATION: Incident Statuses =====
-router.get('/config/incident-statuses', (req, res) => {
-  const statuses = incidentStatuses.list();
+router.get('/config/incident-statuses', async (req, res) => {
+  const statuses = await incidentStatuses.list();
   res.render('admin/config-statuses', {
     title: 'Incident Statuses',
     user: req.user,
@@ -381,7 +383,7 @@ router.get('/config/incident-statuses', (req, res) => {
   });
 });
 
-router.post('/config/incident-statuses', (req, res) => {
+router.post('/config/incident-statuses', async (req, res) => {
   const { value, label, color, position } = req.body;
   if (!value || !label) {
     return res.redirect('/admin/config/incident-statuses?msg=error&type=error');
@@ -395,17 +397,17 @@ router.post('/config/incident-statuses', (req, res) => {
   res.redirect('/admin/config/incident-statuses?msg=success&type=success');
 });
 
-router.delete('/config/incident-statuses/:value', (req, res) => {
+router.delete('/config/incident-statuses/:value', async (req, res) => {
   const ok = incidentStatuses.delete(req.params.value);
   if (!ok) return res.redirect('/admin/config/incident-statuses?msg=system&type=error');
   res.redirect('/admin/config/incident-statuses?msg=deleted&type=success');
 });
 
 // ===== CONFIGURATION: Status Mappings =====
-router.get('/config/mappings', (req, res) => {
-  const mappings = statusMappings.list();
-  const compStatuses = componentStatuses.list();
-  const incStatuses = incidentStatuses.list();
+router.get('/config/mappings', async (req, res) => {
+  const mappings = await statusMappings.list();
+  const compStatuses = await componentStatuses.list();
+  const incStatuses = await incidentStatuses.list();
   res.render('admin/config-mappings', {
     title: 'Status Mappings',
     user: req.user,
@@ -417,7 +419,7 @@ router.get('/config/mappings', (req, res) => {
   });
 });
 
-router.post('/config/mappings', (req, res) => {
+router.post('/config/mappings', async (req, res) => {
   const { incident_status, component_status } = req.body;
   if (!incident_status || !component_status) {
     return res.redirect('/admin/config/mappings?msg=error&type=error');
@@ -431,7 +433,7 @@ router.post('/config/mappings', (req, res) => {
   res.redirect('/admin/config/mappings?msg=success&type=success');
 });
 
-router.delete('/config/mappings/:incidentStatus/:componentStatus', (req, res) => {
+router.delete('/config/mappings/:incidentStatus/:componentStatus', async (req, res) => {
   statusMappings.delete(req.params.incidentStatus, req.params.componentStatus);
   res.redirect('/admin/config/mappings?msg=deleted&type=success');
 });

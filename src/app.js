@@ -40,7 +40,7 @@ ejs.escape = function(str) {
     .replace(/'/g, '&#39;');
 };
 
-require('./db/init');
+const { init } = require('./db/init');
 const apiRoutes = require('./routes/api');
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
@@ -51,24 +51,23 @@ const { globalLimiter, authLimiter, apiLimiter, rateLimit } = require('./middlew
 const { generateSelfSignedCert } = require('./utils/ssl');
 
 // Daily cleanup of old analytics data and audit log rotation
-setInterval(() => {
+setInterval(async () => {
   try {
     const { analytics } = require('./db/models');
-    const deleted = analytics.cleanOldData();
+    const deleted = await analytics.cleanOldData();
     if (deleted > 0) console.log(`Analytics cleanup: deleted ${deleted} old records`);
   } catch(e) { /* ignore */ }
   
-  // Rotate audit log: backup today's entries, then clean entries older than retention
   try {
     const fs = require('fs');
-    const db = require('./db/init');
+    const { queryAll } = require('./db/database');
     const today = new Date().toISOString().split('T')[0];
     const logDir = path.join(__dirname, '..', 'data', 'audit_logs');
     if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
     
     const logFile = path.join(logDir, `audit-log-${today}.csv`);
     if (!fs.existsSync(logFile)) {
-      const rows = db.prepare("SELECT * FROM audit_log WHERE DATE(created_at) = DATE('now')").all();
+      const rows = await queryAll("SELECT * FROM audit_log WHERE DATE(created_at) = CURRENT_DATE");
       const csv = 'Date,User,Action,Target,Details,IP\n' + rows.map(r =>
         `"${r.created_at}","${(r.user_id||'').substring(0,8)}","${r.action}","${(r.target||'').replace(/"/g,'""')}","${(r.details||'').replace(/"/g,'""')}","${(r.ip||'').substring(0,15)}"`
       ).join('\n');
@@ -76,9 +75,8 @@ setInterval(() => {
       console.log(`Audit log rotated: ${rows.length} entries saved to audit-log-${today}.csv`);
     }
     
-    // Clean audit entries older than 365 days (configurable via admin UI)
     const retentionDays = 365;
-    db.prepare("DELETE FROM audit_log WHERE created_at < datetime('now', ?)").run(`-${retentionDays} days`);
+    await require('./db/database').run("DELETE FROM audit_log WHERE created_at < NOW() - INTERVAL '" + retentionDays + " days'");
   } catch(e) { /* ignore */ }
 }, 24 * 60 * 60 * 1000);
 
@@ -94,7 +92,6 @@ app.use(globalLimiter);
 app.use('/auth/login', authLimiter);
 app.use('/auth/register', authLimiter);
 app.use('/api/v1', apiLimiter);
-// Admin endpoints: moderate rate limit to prevent abuse
 app.use('/admin', rateLimit({
   windowMs: 60 * 1000,
   max: 60,
@@ -105,7 +102,6 @@ app.use('/admin', rateLimit({
 
 app.use(compression());
 app.use((req, res, next) => {
-  // Only enable CORS for status pages and API (embed widgets, external consumers)
   if (req.path.startsWith('/status/') || req.path.startsWith('/embed/') || req.path.startsWith('/api/')) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -138,17 +134,20 @@ const { require2FA } = require('./middleware/require-2fa');
 app.use('/admin', require2FA);
 
 const { pages, components, incidents, analytics, dependencies, notifications } = require('./db/models');
-const db = require('./db/init');
 
 // Make unread notification count available to all admin views
 app.use((req, res, next) => {
   if (req.user && req.path.startsWith('/admin')) {
-    res.locals.unread = notifications.listUnread(req.user.id);
+    notifications.listUnread(req.user.id).then(count => {
+      res.locals.unread = count;
+      next();
+    }).catch(next);
+  } else {
+    next();
   }
-  next();
 });
 
-// Auth routes (before admin — login/register need to be accessible)
+// Auth routes
 app.use('/auth', authRoutes);
 app.get('/login', (req, res) => {
   if (req.user) return res.redirect('/admin');
@@ -158,10 +157,6 @@ app.get('/register', (req, res) => {
   if (req.user) return res.redirect('/admin');
   res.render('register', { title: 'Register', user: req.user });
 });
-
-// CSRF protection disabled — requireAuth guards all admin routes
-// app.use('/admin', csrfMiddleware);
-// app.use('/admin', csrfProtection);
 
 // Admin routes (protected)
 app.use('/admin', adminRoutes);
@@ -179,104 +174,108 @@ app.use(function(req, res, next) {
   next();
 });
 
-// Debug: print views path
 console.log('Views path:', app.get('views'));
 console.log('__dirname:', __dirname);
 
 // Public status page with analytics tracking
-app.get('/status/:slug', (req, res) => {
-  const page = pages.getBySlug(req.params.slug);
-  if (!page) return res.status(404).send('Not found');
-  
-  // Record view analytics
-  analytics.recordView(page.id, req.ip, req.get('User-Agent') || '', req.get('Referrer') || '');
-  
-  // Check dependencies and cascade status
-  const pageComps = db.prepare(`
-    SELECT c.*, pc.position,
-      (SELECT new_status FROM status_history WHERE component_id=c.id AND (page_id=? OR page_id IS NULL) ORDER BY created_at DESC LIMIT 1) as current_status
-    FROM components c JOIN page_components pc ON c.id=pc.component_id WHERE pc.page_id=? ORDER BY pc.position,c.name
-  `).all(page.id, page.id);
-  
-  // Resolve dependencies: if a component depends on another and cascade_status=1,
-  // inherit the upstream's non-operational status
-  const resolvedComps = pageComps.map(c => {
-    const deps = dependencies.listByDependsOn(c.id);
-    if (deps.length > 0) {
-      for (const dep of deps) {
-        const depComp = components.get(dep.depends_on);
-        if (depComp && depComp.status !== 'operational' && dep.cascade_status) {
-          return { ...c, current_status: depComp.status };
+app.get('/status/:slug', async (req, res) => {
+  try {
+    const page = await pages.getBySlug(req.params.slug);
+    if (!page) return res.status(404).send('Not found');
+    
+    analytics.recordView(page.id, req.ip, req.get('User-Agent') || '', req.get('Referrer') || '').catch(() => {});
+    
+    const { queryAll } = require('./db/database');
+    const pageComps = await queryAll(`
+      SELECT c.*, pc.position,
+        (SELECT new_status FROM status_history WHERE component_id=c.id AND (page_id=$1 OR page_id IS NULL) ORDER BY created_at DESC LIMIT 1) as current_status
+      FROM components c JOIN page_components pc ON c.id=pc.component_id WHERE pc.page_id=$2 ORDER BY pc.position,c.name
+    `, [page.id, page.id]);
+    
+    const resolvedComps = pageComps.map(c => {
+      const deps = dependencies.listDependsOnComponent(c.id);
+      if (deps.length > 0) {
+        for (const dep of deps) {
+          const depComp = components.get(dep.depends_on);
+          if (depComp && depComp.status !== 'operational' && dep.cascade_status) {
+            return { ...c, current_status: depComp.status };
+          }
         }
       }
+      return c;
+    });
+    
+    const incs = await incidents.list({ page_id: page.id, visible: 1 });
+    
+    const compIds = resolvedComps.map(c => c.id);
+    if (compIds.length > 0) {
+      const compIncs = await queryAll(`
+        SELECT * FROM incidents 
+        WHERE component_id IN (SELECT component_id FROM page_components WHERE page_id=$1) 
+        AND visible=1 AND status != 'resolved'
+        ORDER BY starts_at DESC
+      `, [page.id]);
+      const existingIds = new Set(incs.map(i => i.id));
+      compIncs.forEach(inc => { if (!existingIds.has(inc.id)) incs.push(inc); });
     }
-    return c;
-  });
-  
-  const incs = incidents.list({ page_id: page.id, visible: 1 });
-  
-  // Also get incidents for components on this page (incidents are tied to component, not page)
-  const compIds = resolvedComps.map(c => c.id);
-  if (compIds.length > 0) {
-    const compIncs = db.prepare(`
-      SELECT * FROM incidents 
-      WHERE component_id IN (SELECT component_id FROM page_components WHERE page_id=?) 
-      AND visible=1 AND status != 'resolved'
-      ORDER BY starts_at DESC
-    `).all(page.id);
-    const existingIds = new Set(incs.map(i => i.id));
-    compIncs.forEach(inc => { if (!existingIds.has(inc.id)) incs.push(inc); });
+    
+    const incidentsByComponent = {};
+    resolvedComps.forEach(c => { incidentsByComponent[c.id] = []; });
+    incs.forEach(inc => {
+      if (inc.component_id && incidentsByComponent[inc.component_id]) {
+        incidentsByComponent[inc.component_id].push(inc);
+      }
+    });
+    
+    resolvedComps.forEach(c => {
+      const activeInc = incidentsByComponent[c.id] && incidentsByComponent[c.id].find(i => i.status !== 'resolved');
+      if (activeInc) {
+        c.current_status = activeInc.status;
+      }
+    });
+    
+    const formatStatus = s => ({operational:'Operational',under_maintenance:'Under Maintenance',degraded_performance:'Degraded Performance',partial_outage:'Partial Outage',major_outage:'Major Outage',investigating:'Investigating',identified:'Identified',monitoring:'Monitoring',resolved:'Resolved'}[s] || s);
+    const refreshInterval = page.refresh_interval || 0;
+    res.render('status-page', { page, components: resolvedComps, incidents: incs, incidentsByComponent, formatStatus, refreshInterval: refreshInterval ? parseInt(refreshInterval) : 0 });
+  } catch(e) {
+    console.error('Status page error:', e);
+    res.status(500).send('Internal error');
   }
-  
-  // Group incidents by component (only for components on this page)
-  const incidentsByComponent = {};
-  resolvedComps.forEach(c => { incidentsByComponent[c.id] = []; });
-  incs.forEach(inc => {
-    if (inc.component_id && incidentsByComponent[inc.component_id]) {
-      incidentsByComponent[inc.component_id].push(inc);
-    }
-  });
-  
-  // Override component status with active incident status
-  resolvedComps.forEach(c => {
-    const activeInc = incidentsByComponent[c.id] && incidentsByComponent[c.id].find(i => i.status !== 'resolved');
-    if (activeInc) {
-      c.current_status = activeInc.status;
-    }
-  });
-  
-  const formatStatus = s => ({operational:'Operational',under_maintenance:'Under Maintenance',degraded_performance:'Degraded Performance',partial_outage:'Partial Outage',major_outage:'Major Outage',investigating:'Investigating',identified:'Identified',monitoring:'Monitoring',resolved:'Resolved'}[s] || s);
-  const refreshInterval = page.refresh_interval || 0;
-  res.render('status-page', { page, components: resolvedComps, incidents: incs, incidentsByComponent, formatStatus, refreshInterval: refreshInterval ? parseInt(refreshInterval) : 0 });
 });
 
 // Embed widget with customization
-app.get('/embed/:slug', (req, res) => {
-  const page = pages.getBySlug(req.params.slug);
-  if (!page) return res.status(404).send('Not found');
-  const comps = db.prepare(`
-    SELECT c.name, c.status,
-      (SELECT new_status FROM status_history WHERE component_id=c.id AND page_id=? ORDER BY created_at DESC LIMIT 1) as current_status
-    FROM components c JOIN page_components pc ON c.id=pc.component_id WHERE pc.page_id=? ORDER BY pc.position
-  `).all(page.id, page.id);
-  let status = 'operational';
-  const order = { operational: 0, under_maintenance: 1, degraded_performance: 2, partial_outage: 3, major_outage: 4 };
-  comps.forEach(c => { const s = c.current_status || c.status; if (order[s] > order[status]) status = s; });
-  
-  const style = req.query.style || 'compact';
-  const color = req.query.color || '#6366f1';
-  
-  const widgets = {
-    compact: `<div class="w"><div class="h"><span class="t">${page.name}</span></div><div class="b ${status}"><span class="d ${status}"></span>${status.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())}</div><a href="/status/${page.slug}">View full status &rarr;</a></div>`,
-    detailed: `<div class="w detailed"><div class="h"><span class="t">${page.name}</span><span class="b ${status}">${status.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())}</span></div><div class="cl"><div class="c"><span class="d ${status}"></span> All Systems Operational</div></div><a href="/status/${page.slug}">View full status &rarr;</a></div>`,
-    minimal: `<div class="w minimal"><span class="d ${status}"></span> ${status.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())}</div>`
-  };
-  
-  const widget = widgets[style] || widgets.compact;
-  
-  res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-  .w{font-family:sans-serif;max-width:400px;padding:12px 16px}.h{display:flex;align-items:center;gap:8px;margin-bottom:8px}.t{font-size:14px;font-weight:600}.b{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:500}.b-operational{background:#dcffe4;color:#006b39}.b-under_maintenance{background:#fff3cd;color:#856404}.b-degraded_performance{background:#fff3cd;color:#856404}.b-partial_outage{background:#ffe5cc;color:#9c4f00}.b-major_outage{background:#ffcccc;color:#cc0000}.d{width:8px;height:8px;border-radius:50%;display:inline-block}.d-operational{background:#006b39}.d-under_maintenance{background:#856404}.d-degraded_performance{background:#856404}.d-partial_outage{background:#9c4f00}.d-major_outage{background:#cc0000}a{display:block;margin-top:8px;font-size:12px;color:#006b39;text-decoration:none}.w.detailed{padding:16px}.w.detailed .c{display:flex;align-items:center;gap:6px;font-size:13px;margin-top:8px}.w.minimal{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;font-size:13px}.w.minimal .d{width:6px;height:6px}
-  </style></head><body>${widget}</body></html>`);
+app.get('/embed/:slug', async (req, res) => {
+  try {
+    const page = await pages.getBySlug(req.params.slug);
+    if (!page) return res.status(404).send('Not found');
+    const { queryAll } = require('./db/database');
+    const comps = await queryAll(`
+      SELECT c.name, c.status,
+        (SELECT new_status FROM status_history WHERE component_id=c.id AND page_id=$1 ORDER BY created_at DESC LIMIT 1) as current_status
+      FROM components c JOIN page_components pc ON c.id=pc.component_id WHERE pc.page_id=$2 ORDER BY pc.position
+    `, [page.id, page.id]);
+    let status = 'operational';
+    const order = { operational: 0, under_maintenance: 1, degraded_performance: 2, partial_outage: 3, major_outage: 4 };
+    comps.forEach(c => { const s = c.current_status || c.status; if (order[s] > order[status]) status = s; });
+    
+    const style = req.query.style || 'compact';
+    const color = req.query.color || '#6366f1';
+    
+    const widgets = {
+      compact: `<div class="w"><div class="h"><span class="t">${page.name}</span></div><div class="b ${status}"><span class="d ${status}"></span>${status.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())}</div><a href="/status/${page.slug}">View full status &rarr;</a></div>`,
+      detailed: `<div class="w detailed"><div class="h"><span class="t">${page.name}</span><span class="b ${status}">${status.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())}</span></div><div class="cl"><div class="c"><span class="d ${status}"></span> All Systems Operational</div></div><a href="/status/${page.slug}">View full status &rarr;</a></div>`,
+      minimal: `<div class="w minimal"><span class="d ${status}"></span> ${status.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())}</div>`
+    };
+    
+    const widget = widgets[style] || widgets.compact;
+    
+    res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    .w{font-family:sans-serif;max-width:400px;padding:12px 16px}.h{display:flex;align-items:center;gap:8px;margin-bottom:8px}.t{font-size:14px;font-weight:600}.b{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:500}.b-operational{background:#dcffe4;color:#006b39}.b-under_maintenance{background:#fff3cd;color:#856404}.b-degraded_performance{background:#fff3cd;color:#856404}.b-partial_outage{background:#ffe5cc;color:#9c4f00}.b-major_outage{background:#ffcccc;color:#cc0000}.d{width:8px;height:8px;border-radius:50%;display:inline-block}.d-operational{background:#006b39}.d-under_maintenance{background:#856404}.d-degraded_performance{background:#856404}.d-partial_outage{background:#9c4f00}.d-major_outage{background:#cc0000}a{display:block;margin-top:8px;font-size:12px;color:#006b39;text-decoration:none}.w.detailed{padding:16px}.w.detailed .c{display:flex;align-items:center;gap:6px;font-size:13px;margin-top:8px}.w.minimal{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;font-size:13px}.w.minimal .d{width:6px;height:6px}
+    </style></head><body>${widget}</body></html>`);
+  } catch(e) {
+    console.error('Embed error:', e);
+    res.status(500).send('Internal error');
+  }
 });
 
 // Redirect root to admin if logged in, otherwise to login
@@ -319,3 +318,7 @@ if (HTTPS_ENABLED) {
     console.log(`\n  StatusFe: http://0.0.0.0:${PORT}`);
   });
 }
+
+// Initialize DB and session table
+init();
+require('./middleware/session').initSessionTable().catch(e => console.error('Session table init failed:', e));

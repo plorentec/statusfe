@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../db/init');
+const { queryOne, queryAll, run } = require('../db/database');
 const { pages, components, incidents, apiKeys, webhooks, maintenance, notifications, analytics, dependencies, settings } = require('../db/models');
 const { auth, requirePerm } = require('../middleware/auth');
 const triggerWebhook = require('../utils/webhooks');
@@ -13,20 +13,21 @@ router.get('/health', (req, res) => {
 });
 
 // Public: list pages (only public ones)
-router.get('/pages', (req, res) => {
-  res.json({ pages: pages.list({ is_public: 1 }), total: pages.list({ is_public: 1 }).length });
+router.get('/pages', async (req, res) => {
+  const list = await pages.list({ is_public: 1 });
+  res.json({ pages: list, total: list.length });
 });
 
 // Public: get page by slug with components and incidents
-router.get('/pages/:slug', (req, res) => {
-  const page = pages.getBySlug(req.params.slug);
+router.get('/pages/:slug', async (req, res) => {
+  const page = await pages.getBySlug(req.params.slug);
   if (!page) return res.status(404).json({ error: 'Not found' });
-  const comps = db.prepare(`
+  const comps = await queryAll(`
     SELECT c.*, pc.position,
-      (SELECT new_status FROM status_history WHERE component_id=c.id AND page_id=? ORDER BY created_at DESC LIMIT 1) as current_status
-    FROM components c JOIN page_components pc ON c.id=pc.component_id WHERE pc.page_id=? ORDER BY pc.position,c.name
-  `).all(page.id, page.id);
-  const incs = incidents.list({ page_id: page.id, visible: 1 });
+      (SELECT new_status FROM status_history WHERE component_id=c.id AND page_id=$1 ORDER BY created_at DESC LIMIT 1) as current_status
+    FROM components c JOIN page_components pc ON c.id=pc.component_id WHERE pc.page_id=$1 ORDER BY pc.position,c.name
+  `, [page.id]);
+  const incs = await incidents.list({ page_id: page.id, visible: 1 });
   const incidentsByComponent = {};
   comps.forEach(c => { incidentsByComponent[c.id] = []; });
   incs.forEach(inc => {
@@ -38,33 +39,35 @@ router.get('/pages/:slug', (req, res) => {
 });
 
 // Public: list components
-router.get('/components', (req, res) => {
+router.get('/components', async (req, res) => {
   const f = {};
   if (req.query.status) f.status = req.query.status;
   if (req.query.group) f.group = req.query.group;
-  res.json({ components: components.list(f), total: components.list(f).length });
+  const list = await components.list(f);
+  res.json({ components: list, total: list.length });
 });
 
 // Public: list incidents
-router.get('/incidents', (req, res) => {
+router.get('/incidents', async (req, res) => {
   const f = { visible: 1 };
   if (req.query.page_id) f.page_id = req.query.page_id;
   if (req.query.status) f.status = req.query.status;
   if (req.query.limit) f.limit = parseInt(req.query.limit);
-  res.json({ incidents: incidents.list(f), total: incidents.list(f).length });
+  const list = await incidents.list(f);
+  res.json({ incidents: list, total: list.length });
 });
 
 // Public: status page data (JSON)
-router.get('/status/:slug', (req, res) => {
-  const page = pages.getBySlug(req.params.slug);
+router.get('/status/:slug', async (req, res) => {
+  const page = await pages.getBySlug(req.params.slug);
   if (!page) return res.status(404).json({ error: 'Not found' });
-  const comps = db.prepare(`
+  const comps = await queryAll(`
     SELECT c.*,
-      (SELECT new_status FROM status_history WHERE component_id=c.id AND page_id=? ORDER BY created_at DESC LIMIT 1) as current_status
-    FROM components c JOIN page_components pc ON c.id=pc.component_id WHERE pc.page_id=? ORDER BY pc.position,c.name
-  `).all(page.id, page.id);
+      (SELECT new_status FROM status_history WHERE component_id=c.id AND page_id=$1 ORDER BY created_at DESC LIMIT 1) as current_status
+    FROM components c JOIN page_components pc ON c.id=pc.component_id WHERE pc.page_id=$1 ORDER BY pc.position,c.name
+  `, [page.id]);
   
-  const allIncs = incidents.list({ page_id: page.id, visible: 1 });
+  const allIncs = await incidents.list({ page_id: page.id, visible: 1 });
   const incidentsByComponent = {};
   comps.forEach(c => { incidentsByComponent[c.id] = []; });
   allIncs.forEach(inc => {
@@ -82,35 +85,39 @@ router.use(auth);
 router.get('/info', (req, res) => res.json({ name: 'StatusFe API', version: '1.0', user: req.user.name, permissions: req.user.permissions }));
 
 // Pages (admin - requires auth)
-router.get('/pages/admin', (req, res) => res.json({ pages: pages.list(), total: pages.list().length }));
+router.get('/pages/admin', async (req, res) => {
+  const list = await pages.list();
+  res.json({ pages: list, total: list.length });
+});
 router.get('/pages/:id', (req, res) => { const p = pages.getById(req.params.id) || pages.getBySlug(req.params.id); if (!p) return res.status(404).json({ error: 'Not found' }); res.json({ page: p }); });
 router.post('/pages', requirePerm('write'), async (req, res) => {
   const { name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public } = req.body;
   if (!name || !slug) return res.status(400).json({ error: 'name and slug required' });
   if (pages.getBySlug(slug)) return res.status(409).json({ error: 'Slug exists' });
-  const page = pages.create({ name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public });
+  const page = await pages.create({ name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public });
   res.status(201).json({ page });
 });
-router.put('/pages/:id', requirePerm('write'), (req, res) => { res.json({ page: pages.update(req.params.id, req.body) }); });
-router.delete('/pages/:id', requirePerm('admin'), (req, res) => { pages.delete(req.params.id); res.json({ message: 'Deleted' }); });
+router.put('/pages/:id', requirePerm('write'), async (req, res) => { res.json({ page: await pages.update(req.params.id, req.body) }); });
+router.delete('/pages/:id', requirePerm('admin'), async (req, res) => { await pages.delete(req.params.id); res.json({ message: 'Deleted' }); });
 
 // Components (admin - requires auth)
-router.get('/components/admin', (req, res) => {
+router.get('/components/admin', async (req, res) => {
   const f = {};
   if (req.query.status) f.status = req.query.status;
   if (req.query.group) f.group = req.query.group;
-  res.json({ components: components.list(f), total: components.list(f).length });
+  const list = await components.list(f);
+  res.json({ components: list, total: list.length });
 });
 router.get('/components/:id', (req, res) => {
   const c = components.getWithPages(req.params.id);
   if (!c) return res.status(404).json({ error: 'Not found' });
   res.json({ component: c });
 });
-router.post('/components', requirePerm('write'), (req, res) => {
+router.post('/components', requirePerm('write'), async (req, res) => {
   const { name, description, status, group_name, position } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
-  const c = components.create({ name, description, status, group_name, position });
-  const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
+  const c = await components.create({ name, description, status, group_name, position });
+  const admins = await queryAll("SELECT id FROM users WHERE role=$1", ['admin']);
   admins.forEach(a => {
     notifications.create({
       user_id: a.id,
@@ -122,11 +129,11 @@ router.post('/components', requirePerm('write'), (req, res) => {
   });
   res.status(201).json({ component: c });
 });
-router.put('/components/:id', requirePerm('write'), (req, res) => {
+router.put('/components/:id', requirePerm('write'), async (req, res) => {
   const oldComp = components.get(req.params.id);
-  const c = components.update(req.params.id, req.body);
+  const c = await components.update(req.params.id, req.body);
   if (c && oldComp) {
-    const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
+    const admins = await queryAll("SELECT id FROM users WHERE role=$1", ['admin']);
     admins.forEach(a => {
       notifications.create({
         user_id: a.id,
@@ -139,10 +146,10 @@ router.put('/components/:id', requirePerm('write'), (req, res) => {
   }
   res.json({ component: c });
 });
-router.delete('/components/:id', requirePerm('admin'), (req, res) => {
+router.delete('/components/:id', requirePerm('admin'), async (req, res) => {
   const comp = components.get(req.params.id);
   if (comp) {
-    const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
+    const admins = await queryAll("SELECT id FROM users WHERE role=$1", ['admin']);
     admins.forEach(a => {
       notifications.create({
         user_id: a.id,
@@ -153,22 +160,22 @@ router.delete('/components/:id', requirePerm('admin'), (req, res) => {
       });
     });
   }
-  components.delete(req.params.id);
+  await components.delete(req.params.id);
   res.json({ message: 'Deleted' });
 });
 
 // Assign component to page
 router.post('/pages/:pageId/components/:componentId', requirePerm('write'), async (req, res) => {
   try {
-    components.assignToPage(req.params.pageId, req.params.componentId, req.body.position || 0);
-    const page = pages.getById(req.params.pageId) || pages.getBySlug(req.params.pageId);
+    await components.assignToPage(req.params.pageId, req.params.componentId, req.body.position || 0);
+    const page = await pages.getById(req.params.pageId) || await pages.getBySlug(req.params.pageId);
     await triggerWebhook(page.id, 'component.assigned', { page_id: req.params.pageId, component_id: req.params.componentId });
     res.json({ message: 'Assigned' });
   } catch(e) { res.status(400).json({ error: e.message }); }
 });
 
 router.delete('/pages/:pageId/components/:componentId', requirePerm('write'), async (req, res) => {
-  components.removeFromPage(req.params.pageId, req.params.componentId);
+  await components.removeFromPage(req.params.pageId, req.params.componentId);
   res.json({ message: 'Removed' });
 });
 
@@ -179,7 +186,7 @@ router.put('/components/:id/status', requirePerm('write'), async (req, res) => {
   const valid = ['operational','degraded_performance','partial_outage','major_outage','under_maintenance','investigating','identified','monitoring'];
   if (!valid.includes(status)) return res.status(400).json({ error: `Invalid. Use: ${valid.join(', ')}` });
   
-  const result = components.updateStatus(req.params.id, status, page_id);
+  const result = await components.updateStatus(req.params.id, status, page_id);
   const pid = page_id || (result.component.pages && result.component.pages[0] ? result.component.pages[0].id : null);
   
   // Trigger webhook
@@ -187,45 +194,46 @@ router.put('/components/:id/status', requirePerm('write'), async (req, res) => {
   
   // Create notifications for admins
   if (result.history) {
-    const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
+    const admins = await queryAll("SELECT id FROM users WHERE role=$1", ['admin']);
     const { notifications } = require('../db/models');
-    admins.forEach(a => {
-      notifications.create({
+    for (const a of admins) {
+      await notifications.create({
         user_id: a.id,
         component_id: req.params.id,
-        type: 'status_change',
+        type: 'component_status_changed',
         title: `Component ${result.component.name} status changed`,
         message: `${result.component.name}: ${result.history.old_status} → ${status}`
       });
-    });
+    }
   }
   
   res.json({ component: result.component, history: result.history });
 });
 
 // Component history
-router.get('/components/:id/history', (req, res) => {
-  const h = components.getHistory(req.params.id, req.query.page_id, parseInt(req.query.limit) || 50);
+router.get('/components/:id/history', async (req, res) => {
+  const h = await components.getHistory(req.params.id, req.query.page_id, parseInt(req.query.limit) || 50);
   res.json({ history: h, total: h.length });
 });
 
 // Incidents (admin - requires auth)
-router.get('/incidents/admin', (req, res) => {
+router.get('/incidents/admin', async (req, res) => {
   const f = { visible: 1 };
   if (req.query.page_id) f.page_id = req.query.page_id;
   if (req.query.status) f.status = req.query.status;
   if (req.query.limit) f.limit = parseInt(req.query.limit);
-  res.json({ incidents: incidents.list(f), total: incidents.list(f).length });
+  const list = await incidents.list(f);
+  res.json({ incidents: list, total: list.length });
 });
 router.get('/incidents/:id', (req, res) => { const i = incidents.get(req.params.id); if (!i) return res.status(404).json({ error: 'Not found' }); res.json({ incident: i }); });
 router.post('/incidents', requirePerm('write'), async (req, res) => {
   const { component_id, page_id, name, status, impact, starts_at, resolved_at, message, visible } = req.body;
   if (!name || !message) return res.status(400).json({ error: 'name and message required' });
-  const incident = incidents.create({ component_id, page_id, name, status, impact, starts_at, resolved_at, message, visible });
+  const incident = await incidents.create({ component_id, page_id, name, status, impact, starts_at, resolved_at, message, visible });
   const pid = incident.page_id || page_id;
   if (pid) await triggerWebhook(pid, 'incident.created', { incident_id: incident.id, name: incident.name, status: incident.status });
   if (incident) {
-    const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
+    const admins = await queryAll("SELECT id FROM users WHERE role=$1", ['admin']);
     admins.forEach(a => {
       notifications.create({
         user_id: a.id,
@@ -242,9 +250,9 @@ router.put('/incidents/:id', requirePerm('write'), async (req, res) => {
   const incident = incidents.get(req.params.id);
   if (!incident) return res.status(404).json({ error: 'Not found' });
   const oldStatus = incident.status;
-  const updated = incidents.update(req.params.id, req.body);
+  const updated = await incidents.update(req.params.id, req.body);
   if (updated && oldStatus !== updated.status) {
-    const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
+    const admins = await queryAll("SELECT id FROM users WHERE role=$1", ['admin']);
     admins.forEach(a => {
       notifications.create({
         user_id: a.id,
@@ -261,77 +269,78 @@ router.put('/incidents/:id', requirePerm('write'), async (req, res) => {
 router.delete('/incidents/:id', requirePerm('admin'), async (req, res) => {
   const incident = incidents.get(req.params.id);
   if (!incident) return res.status(404).json({ error: 'Not found' });
-  incidents.delete(req.params.id);
+  await incidents.delete(req.params.id);
   await triggerWebhook(incident.page_id, 'incident.deleted', { incident_id: req.params.id });
   res.json({ message: 'Deleted' });
 });
 
 // API Keys
-router.get('/api-keys', requirePerm('admin'), (req, res) => {
-  const keys = apiKeys.list(req.user.page_id || undefined);
+router.get('/api-keys', requirePerm('admin'), async (req, res) => {
+  const keys = await apiKeys.list(req.user.page_id || undefined);
   res.json({ api_keys: keys, total: keys.length });
 });
-router.post('/api-keys', requirePerm('admin'), (req, res) => {
+router.post('/api-keys', requirePerm('admin'), async (req, res) => {
   const { name, permissions, page_id, rate_limit, expires_at } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
-  const key = apiKeys.create({ name, permissions, page_id: page_id || req.user.page_id, rate_limit, expires_at });
+  const key = await apiKeys.create({ name, permissions, page_id: page_id || req.user.page_id, rate_limit, expires_at });
   res.status(201).json({ api_key: key });
 });
-router.delete('/api-keys/:id', requirePerm('admin'), (req, res) => { apiKeys.revoke(req.params.id); res.json({ message: 'Revoked' }); });
+router.delete('/api-keys/:id', requirePerm('admin'), async (req, res) => { await apiKeys.revoke(req.params.id); res.json({ message: 'Revoked' }); });
 
 // Webhooks
-router.get('/pages/:pageId/webhooks', (req, res) => {
-  const page = pages.getById(req.params.pageId) || pages.getBySlug(req.params.pageId);
+router.get('/pages/:pageId/webhooks', async (req, res) => {
+  const page = await pages.getById(req.params.pageId) || await pages.getBySlug(req.params.pageId);
   if (!page) return res.status(404).json({ error: 'Not found' });
-  res.json({ webhooks: webhooks.list(page.id), total: webhooks.list(page.id).length });
+  const list = await webhooks.list(page.id);
+  res.json({ webhooks: list, total: list.length });
 });
-router.post('/pages/:pageId/webhooks', requirePerm('write'), (req, res) => {
+router.post('/pages/:pageId/webhooks', requirePerm('write'), async (req, res) => {
   const { url, events, secret } = req.body;
   if (!url) return res.status(400).json({ error: 'url required' });
   const { validateWebhookUrl } = require('../utils/webhooks');
   if (!validateWebhookUrl(url)) return res.status(400).json({ error: 'Invalid webhook URL. Only http/https URLs to public hosts are allowed.' });
   const page = pages.getById(req.params.pageId) || pages.getBySlug(req.params.pageId);
   if (!page) return res.status(404).json({ error: 'Not found' });
-  res.status(201).json({ webhook: webhooks.create({ page_id: page.id, url, events, secret }) });
+  res.status(201).json({ webhook: await webhooks.create({ page_id: page.id, url, events, secret }) });
 });
-router.put('/webhooks/:id', requirePerm('write'), (req, res) => {
-  const w = webhooks.update(req.params.id, req.body);
+router.put('/webhooks/:id', requirePerm('write'), async (req, res) => {
+  const w = await webhooks.update(req.params.id, req.body);
   if (!w) return res.status(404).json({ error: 'Not found' });
   res.json({ webhook: w });
 });
-router.delete('/webhooks/:id', requirePerm('admin'), (req, res) => { webhooks.delete(req.params.id); res.json({ message: 'Deleted' }); });
+router.delete('/webhooks/:id', requirePerm('admin'), async (req, res) => { await webhooks.delete(req.params.id); res.json({ message: 'Deleted' }); });
 
 // Settings (placeholder)
 router.get('/settings', requirePerm('admin'), (req, res) => { res.json({ settings: {} }); });
 
 // Notifications (admin only)
-router.get('/notifications', requirePerm('admin'), (req, res) => {
-  const admin = db.prepare("SELECT id FROM users WHERE role='admin' ORDER BY created_at ASC LIMIT 1").get();
+router.get('/notifications', requirePerm('admin'), async (req, res) => {
+  const admin = await queryOne("SELECT id FROM users WHERE role=$1 ORDER BY created_at ASC LIMIT 1", ['admin']);
   if (!admin) return res.json({ notifications: [], total: 0 });
-  const notifs = notifications.list(admin.id, 50);
-  const unread = notifications.listUnread(admin.id);
+  const notifs = await notifications.list(admin.id, 50);
+  const unread = await notifications.listUnread(admin.id);
   res.json({ notifications: notifs, total: notifs.length, unread });
 });
-router.post('/notifications/:id/read', requirePerm('admin'), (req, res) => {
-  notifications.markRead(req.params.id);
+router.post('/notifications/:id/read', requirePerm('admin'), async (req, res) => {
+  await notifications.markRead(req.params.id);
   res.json({ message: 'Marked read' });
 });
-router.post('/notifications/read-all', requirePerm('admin'), (req, res) => {
-  const admin = db.prepare("SELECT id FROM users WHERE role='admin' ORDER BY created_at ASC LIMIT 1").get();
-  if (admin) notifications.markAllRead(admin.id);
+router.post('/notifications/read-all', requirePerm('admin'), async (req, res) => {
+  const admin = await queryOne("SELECT id FROM users WHERE role=$1 ORDER BY created_at ASC LIMIT 1", ['admin']);
+  if (admin) await notifications.markAllRead(admin.id);
   res.json({ message: 'All marked read' });
 });
-router.delete('/notifications/:id', requirePerm('admin'), (req, res) => {
-  notifications.delete(req.params.id);
+router.delete('/notifications/:id', requirePerm('admin'), async (req, res) => {
+  await notifications.delete(req.params.id);
   res.json({ message: 'Deleted' });
 });
 
 // Maintenance windows
-router.get('/maintenance', requirePerm('read'), (req, res) => {
+router.get('/maintenance', requirePerm('read'), async (req, res) => {
   const f = {};
   if (req.query.page_id) f.page_id = req.query.page_id;
   if (req.query.status) f.status = req.query.status;
-  const list = maintenance.list(f);
+  const list = await maintenance.list(f);
   res.json({ maintenance: list, total: list.length });
 });
 router.get('/maintenance/:id', requirePerm('read'), (req, res) => {
@@ -339,103 +348,105 @@ router.get('/maintenance/:id', requirePerm('read'), (req, res) => {
   if (!m) return res.status(404).json({ error: 'Not found' });
   res.json({ maintenance: m });
 });
-router.post('/maintenance', requirePerm('write'), (req, res) => {
+router.post('/maintenance', requirePerm('write'), async (req, res) => {
   const { page_id, component_id, title, description, starts_at, ends_at } = req.body;
   if (!title || !starts_at || !ends_at) return res.status(400).json({ error: 'title, starts_at and ends_at required' });
   let m;
   try {
-    m = maintenance.create({ page_id, component_id, title, description, starts_at, ends_at });
+    m = await maintenance.create({ page_id, component_id, title, description, starts_at, ends_at });
   } catch(e) {
     if (e.message.includes('FOREIGN KEY')) return res.status(400).json({ error: 'Invalid page_id or component_id' });
     throw e;
   }
   res.status(201).json({ maintenance: m });
 });
-router.put('/maintenance/:id', requirePerm('write'), (req, res) => {
-  const m = maintenance.update(req.params.id, req.body);
+router.put('/maintenance/:id', requirePerm('write'), async (req, res) => {
+  const m = await maintenance.update(req.params.id, req.body);
   if (!m) return res.status(404).json({ error: 'Not found' });
   res.json({ maintenance: m });
 });
-router.delete('/maintenance/:id', requirePerm('admin'), (req, res) => {
-  maintenance.delete(req.params.id);
+router.delete('/maintenance/:id', requirePerm('admin'), async (req, res) => {
+  await maintenance.delete(req.params.id);
   res.json({ message: 'Deleted' });
 });
 
 // Analytics
-router.get('/analytics', requirePerm('read'), (req, res) => {
-  const pagesList = pages.list();
-  const componentsList = components.list();
-  const retention = settings.get('analytics_retention_days') || '365';
+router.get('/analytics', requirePerm('read'), async (req, res) => {
+  const pagesList = await pages.list();
+  const componentsList = await components.list();
+  const retention = await settings.get('analytics_retention_days') || '365';
   
-  const pageData = pagesList.map(p => ({
+  const pageData = await Promise.all(pagesList.map(async p => ({
     id: p.id,
     name: p.name,
     slug: p.slug,
-    totalViews: analytics.getTotalViews(p.id),
-    uptime: analytics.getUptime(p.id, 30)
-  }));
+    totalViews: await analytics.getTotalViews(p.id),
+    uptime: await analytics.getUptime(p.id, 30)
+  })));
   
-  const componentData = componentsList.map(c => ({
+  const componentData = await Promise.all(componentsList.map(async c => ({
     id: c.id,
     name: c.name,
-    uptime: analytics.getComponentUptime(c.id, 30)
-  }));
+    uptime: await analytics.getComponentUptime(c.id, 30)
+  })));
   
   res.json({ pages: pageData, components: componentData, retention });
 });
 
 // Dependencies
-router.get('/dependencies', requirePerm('read'), (req, res) => {
+router.get('/dependencies', requirePerm('read'), async (req, res) => {
   const allComponents = components.list();
-  const allDeps = db.prepare(`
+  const allDeps = await queryAll(`
     SELECT cd.*, 
       c1.name as componentName, c2.name as dependsOnName
     FROM component_dependencies cd
     JOIN components c1 ON cd.component_id = c1.id
     JOIN components c2 ON cd.depends_on = c2.id
     ORDER BY c1.name
-  `).all();
+  `);
   res.json({ dependencies: allDeps, total: allDeps.length, components: allComponents });
 });
-router.post('/dependencies', requirePerm('write'), (req, res) => {
+router.post('/dependencies', requirePerm('write'), async (req, res) => {
   const { component_id, depends_on, cascade_status } = req.body;
   if (!component_id || !depends_on) return res.status(400).json({ error: 'component_id and depends_on required' });
   if (component_id === depends_on) return res.status(400).json({ error: 'Cannot depend on itself' });
-  const existing = db.prepare('SELECT id FROM component_dependencies WHERE component_id=? AND depends_on=?').get(component_id, depends_on);
+  const existing = await queryOne('SELECT id FROM component_dependencies WHERE component_id=$1 AND depends_on=$2', [component_id, depends_on]);
   if (existing) return res.status(409).json({ error: 'Dependency already exists' });
-  const dep = dependencies.create({ component_id, depends_on, cascade_status });
+  const dep = await dependencies.create({ component_id, depends_on, cascade_status });
   res.status(201).json({ dependency: dep });
 });
-router.delete('/dependencies/:id', requirePerm('admin'), (req, res) => {
-  dependencies.delete(req.params.id);
+router.delete('/dependencies/:id', requirePerm('admin'), async (req, res) => {
+  await dependencies.delete(req.params.id);
   res.json({ message: 'Deleted' });
 });
 
 // Users (admin only)
-router.get('/users', requirePerm('admin'), (req, res) => {
-  const users = db.prepare("SELECT id, email, name, role, created_at FROM users ORDER BY created_at").all();
+router.get('/users', requirePerm('admin'), async (req, res) => {
+  const users = await queryAll("SELECT id, email, name, role, created_at FROM users ORDER BY created_at");
   res.json({ users, total: users.length });
 });
-router.get('/users/:id', requirePerm('admin'), (req, res) => {
-  const user = db.prepare("SELECT id, email, name, role, created_at FROM users WHERE id=?").get(req.params.id);
+router.get('/users/:id', requirePerm('admin'), async (req, res) => {
+  const user = await queryOne("SELECT id, email, name, role, created_at FROM users WHERE id=$1", [req.params.id]);
   if (!user) return res.status(404).json({ error: 'Not found' });
   res.json({ user });
 });
-router.put('/users/:id', requirePerm('admin'), (req, res) => {
+router.put('/users/:id', requirePerm('admin'), async (req, res) => {
   const { name, role } = req.body;
   if (!name && !role) return res.status(400).json({ error: 'name or role required' });
   const fields = [];
   const params = [];
-  if (name) { fields.push('name=?'); params.push(name); }
-  if (role) { fields.push('role=?'); params.push(role); }
+  let p = 1;
+  if (name) { fields.push('name=$' + p); params.push(name); p++; }
+  if (role) { fields.push('role=$' + p); params.push(role); p++; }
   params.push(req.params.id);
-  db.prepare(`UPDATE users SET ${fields.join(',')}, updated_at=datetime('now') WHERE id=?`).run(...params);
-  const user = db.prepare("SELECT id, email, name, role, created_at FROM users WHERE id=?").get(req.params.id);
+  fields.push('updated_at=NOW()');
+  await run(`UPDATE users SET ${fields.join(', ')} WHERE id=$${p}`, params);
+  const user = await queryOne("SELECT id, email, name, role, created_at FROM users WHERE id=$1", [req.params.id]);
   res.json({ user });
 });
 
 // Analytics detail for admin UI
-router.get('/analytics-detail', requirePerm('read'), (req, res) => {
+router.get('/analytics-detail', requirePerm('read'), async (req, res) => {
   const { id, type } = req.query;
   if (!id || !type) return res.status(400).json({ error: 'id and type required' });
   
@@ -454,11 +465,11 @@ router.get('/analytics-detail', requirePerm('read'), (req, res) => {
     if (!page) return res.status(404).json({ error: 'Page not found' });
     
     // Get page views
-    const views = db.prepare(`
+    const views = await queryAll(`
       SELECT DATE(created_at) as date, COUNT(*) as cnt
-      FROM page_views WHERE page_id=? AND created_at >= datetime('now', '-30 days')
+      FROM page_views WHERE page_id=$1 AND created_at >= NOW() - INTERVAL '30 days'
       GROUP BY DATE(created_at) ORDER BY date
-    `).all(id).map(v => ({ date: v.date, cnt: v.cnt }));
+    `, [id]).map(v => ({ date: v.date, cnt: v.cnt }));
     
     const viewData = new Array(30).fill(0);
     views.forEach(v => {
@@ -477,19 +488,19 @@ router.get('/analytics-detail', requirePerm('read'), (req, res) => {
     });
     
     // Get component uptimes for this page
-    const pageComps = db.prepare(`
+    const pageComps = await queryAll(`
       SELECT c.id, c.name
       FROM components c JOIN page_components pc ON c.id = pc.component_id
-      WHERE pc.page_id=?
-    `).all(id);
+      WHERE pc.page_id=$1
+    `, [id]);
     
     const colors = ['rgb(16,185,129)','rgb(245,158,11)','rgb(239,68,68)','rgb(139,92,246)','rgb(14,165,233)','rgb(236,72,153)'];
-    pageComps.forEach((c, ci) => {
-      const history = db.prepare(`
+    for (const [ci, c] of pageComps.entries()) {
+      const history = await queryAll(`
         SELECT new_status, DATE(created_at) as date
-        FROM status_history WHERE component_id=? AND created_at >= datetime('now', '-30 days')
+        FROM status_history WHERE component_id=$1 AND created_at >= NOW() - INTERVAL '30 days'
         ORDER BY created_at DESC
-      `).all(c.id);
+      `, [c.id]);
       
       const dayStatus = {};
       history.forEach(h => { if (!dayStatus[h.date]) dayStatus[h.date] = h.new_status; });
@@ -512,7 +523,7 @@ router.get('/analytics-detail', requirePerm('read'), (req, res) => {
         borderWidth: 1.5,
         pointRadius: 0
       });
-    });
+    }
     
     res.json({ name: page.name, type: 'page', labels, datasets });
     
@@ -521,11 +532,11 @@ router.get('/analytics-detail', requirePerm('read'), (req, res) => {
     if (!comp) return res.status(404).json({ error: 'Component not found' });
     
     // Get status history for chart
-    const history = db.prepare(`
+    const history = await queryAll(`
       SELECT new_status, DATE(created_at) as date
-      FROM status_history WHERE component_id=? AND created_at >= datetime('now', '-30 days')
+      FROM status_history WHERE component_id=$1 AND created_at >= NOW() - INTERVAL '30 days'
       ORDER BY created_at DESC
-    `).all(id);
+    `, [id]);
     
     const dayStatus = {};
     history.forEach(h => { if (!dayStatus[h.date]) dayStatus[h.date] = h.new_status; });
