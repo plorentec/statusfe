@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><%= page.name %> - System Status</title>
 <meta name="refresh-interval" content="<%= typeof refreshInterval !== 'undefined' ? refreshInterval : '0' %>">
+<link rel="stylesheet" href="/css/status.css">
 <% if (page.custom_layout && page.custom_layout_css) { %>
 <style><%= page.custom_layout_css %></style>
 <% } %>
