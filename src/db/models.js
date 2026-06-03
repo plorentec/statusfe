@@ -68,7 +68,13 @@ module.exports.pages = {
     const params = [];
     const allowed = ['name','slug','description','status','template','timezone','logo_url','custom_css','custom_html','is_public','refresh_interval','custom_layout','custom_layout_css','custom_layout_html'];
     for (const k of allowed) {
-      if (data[k] !== undefined) { fields.push(k+'=$'+(params.length+1)); params.push(data[k]); }
+      if (data[k] !== undefined) {
+        let val = data[k];
+        if (k === 'is_public') val = (val === 'on' || val === 1 || val === true) ? 1 : 0;
+        if (k === 'custom_layout') val = (val === 'on' || val === 1 || val === true) ? 1 : 0;
+        fields.push(k+'=$'+(params.length+1));
+        params.push(val);
+      }
     }
     if (fields.length) {
       params.push(id);

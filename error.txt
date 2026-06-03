@@ -1,26 +1,121 @@
- => CANCELED [2/6] WORKDIR /app                                                                                                                                                                          0.0s
- => CACHED [3/6] COPY package.json package-lock.json* ./                                                                                                                                                 0.0s
- => ERROR [4/6] COPY node_modules ./node_modules                                                                                                                                                         0.0s
-------
- > [4/6] COPY node_modules ./node_modules:
-------
-[+] build 0/1
- ? Image statusfe-statusfe Building                                                                                                                                                                       0.7s
-Dockerfile:6
+[+] up 2/2
+ ? Container statusfe-postgres Healthy                                                                                                                                                                    5.9s
+ ? Container statusfe          Started                                                                                                                                                                    0.4s
+root@canovastv:~/statusfe# docker logs
+ollama             statusfe           statusfe-postgres
+root@canovastv:~/statusfe# docker logs statusfe
+Views path: /app/views
+__dirname: /app/src
 
---------------------
+  StatusFe: http://0.0.0.0:3000
+Seeded: admin page, API key, 6 components
+Seeded: default admin user (admin@status.local / admin123)
+Views path: /app/views
+__dirname: /app/src
 
-   4 |
+  StatusFe: http://0.0.0.0:3000
+/app/node_modules/pg/lib/client.js:646
+          Error.captureStackTrace(err)
+                ^
 
-   5 |     COPY package.json package-lock.json* ./
+error: invalid input syntax for type integer: "on"
+    at /app/node_modules/pg/lib/client.js:646:17
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async query (/app/src/db/database.js:37:12)
+    at async run (/app/src/db/database.js:55:18)
+    at async Object.update (/app/src/db/models.js:75:7)
+    at async /app/src/routes/admin.js:184:3 {
+  length: 145,
+  severity: 'ERROR',
+  code: '22P02',
+  detail: undefined,
+  hint: undefined,
+  position: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: "unnamed portal parameter $6 = '...'",
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'numutils.c',
+  line: '617',
+  routine: 'pg_strtoint32_safe'
+}
 
-   6 | >>> COPY node_modules ./node_modules
+Node.js v20.20.2
+Views path: /app/views
+__dirname: /app/src
 
-   7 |     COPY . .
+  StatusFe: http://0.0.0.0:3000
+/app/node_modules/pg/lib/client.js:646
+          Error.captureStackTrace(err)
+                ^
 
-   8 |
+error: invalid input syntax for type integer: "on"
+    at /app/node_modules/pg/lib/client.js:646:17
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async query (/app/src/db/database.js:37:12)
+    at async run (/app/src/db/database.js:55:18)
+    at async Object.update (/app/src/db/models.js:75:7)
+    at async /app/src/routes/admin.js:184:3 {
+  length: 145,
+  severity: 'ERROR',
+  code: '22P02',
+  detail: undefined,
+  hint: undefined,
+  position: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: "unnamed portal parameter $6 = '...'",
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'numutils.c',
+  line: '617',
+  routine: 'pg_strtoint32_safe'
+}
 
---------------------
+Node.js v20.20.2
+Views path: /app/views
+__dirname: /app/src
 
-failed to solve: failed to compute cache key: failed to calculate checksum of ref m7zzfedzideo9z2szu9hak4g6::idng49ndwz2drvafzml9lch6c: "/node_modules": not found
+  StatusFe: http://0.0.0.0:3000
+/app/node_modules/pg/lib/client.js:646
+          Error.captureStackTrace(err)
+                ^
 
+error: invalid input syntax for type integer: "on"
+    at /app/node_modules/pg/lib/client.js:646:17
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async query (/app/src/db/database.js:37:12)
+    at async run (/app/src/db/database.js:55:18)
+    at async Object.update (/app/src/db/models.js:75:7)
+    at async /app/src/routes/admin.js:184:3 {
+  length: 145,
+  severity: 'ERROR',
+  code: '22P02',
+  detail: undefined,
+  hint: undefined,
+  position: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: "unnamed portal parameter $6 = '...'",
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'numutils.c',
+  line: '617',
+  routine: 'pg_strtoint32_safe'
+}
+
+Node.js v20.20.2
+Views path: /app/views
+__dirname: /app/src
+
+  StatusFe: http://0.0.0.0:3000
