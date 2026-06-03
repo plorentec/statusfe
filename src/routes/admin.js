@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
-const db = require('../db/init');
+const { queryOne, queryAll, run } = require('../db/database');
 const fs = require('fs');
 const path = require('path');
 const { pages, components, componentGroups, apiKeys, incidents, maintenance, notifications, settings, auditLog } = require('../db/models');
@@ -11,26 +11,26 @@ const { requireAuth } = require('../middleware/session');
 router.use(requireAuth);
 
 // GET /admin - Dashboard
-router.get('/', (req, res) => {
-  const user = db.prepare('SELECT id, name, email, role, totp_enabled FROM users WHERE id=?').get(req.user.id);
-  const pageCount = db.prepare('SELECT COUNT(*) as count FROM pages').get().count;
-  const componentCount = db.prepare('SELECT COUNT(*) as count FROM components').get().count;
-  const incidentCount = db.prepare('SELECT COUNT(*) as count FROM incidents').get().count;
-  const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
-  const operationalCount = db.prepare("SELECT COUNT(*) as count FROM components WHERE status='operational'").get().count;
-  const openIncidents = db.prepare("SELECT COUNT(*) as count FROM incidents WHERE status != 'resolved'").get().count;
+router.get('/', async (req, res) => {
+  const user = await queryOne('SELECT id, name, email, role, totp_enabled FROM users WHERE id=$1', [req.user.id]);
+  const pageCount = (await queryOne('SELECT COUNT(*) as count FROM pages', [])).count;
+  const componentCount = (await queryOne('SELECT COUNT(*) as count FROM components', [])).count;
+  const incidentCount = (await queryOne('SELECT COUNT(*) as count FROM incidents', [])).count;
+  const userCount = (await queryOne('SELECT COUNT(*) as count FROM users', [])).count;
+  const operationalCount = (await queryOne("SELECT COUNT(*) as count FROM components WHERE status='operational'", [])).count;
+  const openIncidents = (await queryOne("SELECT COUNT(*) as count FROM incidents WHERE status != 'resolved'", [])).count;
 
-  const recentIncidents = db.prepare(`
+  const recentIncidents = await queryAll(`
     SELECT * FROM incidents ORDER BY starts_at DESC LIMIT 5
-  `).all();
+  `);
 
-  const pageStatuses = db.prepare(`
+  const pageStatuses = await queryAll(`
     SELECT p.name, p.slug, p.status,
       (SELECT new_status FROM status_history WHERE page_id=p.id ORDER BY created_at DESC LIMIT 1) as latest_status
     FROM pages p ORDER BY p.name
-  `).all();
+  `);
 
-  const unread = notifications.listUnread(req.user.id);
+  const unread = await notifications.listUnread(req.user.id);
 
   // Disk usage
   const dbPath = path.join(__dirname, '..', '..', 'data', 'statusfe.db');
@@ -86,8 +86,8 @@ router.get('/', (req, res) => {
 });
 
 // ===== PAGES CRUD =====
-router.get('/pages', (req, res) => {
-  const allPages = pages.list();
+router.get('/pages', async (req, res) => {
+  const allPages = await pages.list();
   res.render('admin/pages', {
     title: 'Pages',
     user: req.user,
@@ -98,15 +98,15 @@ router.get('/pages', (req, res) => {
   });
 });
 
-router.get('/pages/new', (req, res) => {
-  const allComponents = components.list();
+router.get('/pages/new', async (req, res) => {
+  const allComponents = await components.list();
   const assignedIds = [];
   res.render('admin/pages', {
     title: 'New Page',
     user: req.user,
     message: res.locals.message,
     messageType: res.locals.messageType,
-    pages: pages.list(),
+    pages: await pages.list(),
     pageMode: 'create',
     page: {},
     components: allComponents,
@@ -114,7 +114,7 @@ router.get('/pages/new', (req, res) => {
   });
 });
 
-router.post('/pages', (req, res) => {
+router.post('/pages', async (req, res) => {
   const { name, slug, description, status, template, is_public, refresh_interval, custom_layout, custom_layout_css, custom_layout_html } = req.body;
   if (!name || !slug) {
     return res.redirect('/admin/pages/new?msg=error&type=error');
@@ -122,42 +122,42 @@ router.post('/pages', (req, res) => {
   if (!/^[a-z0-9-]+$/.test(slug)) {
     return res.redirect('/admin/pages/new?msg=error&type=error');
   }
-  if (pages.getBySlug(slug)) {
+  if (await pages.getBySlug(slug)) {
     return res.redirect('/admin/pages/new?msg=error&type=error');
   }
-  const page = pages.create({ name, slug, description, status, template, is_public, refresh_interval, custom_layout: req.body.custom_layout ? 1 : 0, custom_layout_css, custom_layout_html });
-  const { notifications } = require('../db/models');
-  const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
-  admins.forEach(a => {
-    notifications.create({
+  const page = await pages.create({ name, slug, description, status, template, is_public, refresh_interval, custom_layout: req.body.custom_layout ? 1 : 0, custom_layout_css, custom_layout_html });
+  const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
+  for (const a of admins) {
+    await notifications.create({
       user_id: a.id,
       type: 'page_created',
       title: 'Page created: ' + name,
       message: name + ' (' + slug + ') added'
     });
-  });
+  }
   if (req.body.component_ids) {
     const ids = Array.isArray(req.body.component_ids) ? req.body.component_ids : [req.body.component_ids];
-    ids.forEach((compId, idx) => {
-      if (compId) components.assignToPage(page.id, compId, idx + 1);
-    });
+    for (let idx = 0; idx < ids.length; idx++) {
+      const compId = ids[idx];
+      if (compId) await components.assignToPage(page.id, compId, idx + 1);
+    }
   }
   res.redirect('/admin/pages?msg=success&type=success');
 });
 
-router.get('/pages/:id/edit', (req, res) => {
-  const page = pages.getById(req.params.id) || pages.getBySlug(req.params.id);
+router.get('/pages/:id/edit', async (req, res) => {
+  const page = await pages.getById(req.params.id) || await pages.getBySlug(req.params.id);
   if (!page) {
     return res.redirect('/admin/pages?msg=error&type=error');
   }
-  const allComponents = components.list();
-  const assignedIds = db.prepare(`SELECT component_id FROM page_components WHERE page_id=?`).all(page.id).map(r => r.component_id);
+  const allComponents = await components.list();
+  const assignedIds = (await queryAll('SELECT component_id FROM page_components WHERE page_id=$1', [page.id])).map(r => r.component_id);
   res.render('admin/pages', {
     title: 'Edit Page',
     user: req.user,
     message: res.locals.message,
     messageType: res.locals.messageType,
-    pages: pages.list(),
+    pages: await pages.list(),
     pageMode: 'edit',
     page,
     components: allComponents,
@@ -165,8 +165,8 @@ router.get('/pages/:id/edit', (req, res) => {
   });
 });
 
-router.put('/pages/:id', (req, res) => {
-  const page = pages.getById(req.params.id);
+router.put('/pages/:id', async (req, res) => {
+  const page = await pages.getById(req.params.id);
   if (!page) {
     return res.redirect('/admin/pages?msg=error&type=error');
   }
@@ -177,64 +177,63 @@ router.put('/pages/:id', (req, res) => {
   if (!/^[a-z0-9-]+$/.test(slug)) {
     return res.redirect('/admin/pages/' + req.params.id + '/edit?msg=error&type=error');
   }
-  const slugExists = pages.getBySlug(slug);
+  const slugExists = await pages.getBySlug(slug);
   if (slugExists && slugExists.id !== req.params.id) {
     return res.redirect('/admin/pages/' + req.params.id + '/edit?msg=error&type=error');
   }
-  pages.update(req.params.id, { name, slug, description, status, template, is_public, refresh_interval, custom_layout: req.body.custom_layout ? 1 : 0, custom_layout_css, custom_layout_html });
-  const { notifications } = require('../db/models');
-  const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
-  admins.forEach(a => {
-    notifications.create({
+  await pages.update(req.params.id, { name, slug, description, status, template, is_public, refresh_interval, custom_layout: req.body.custom_layout ? 1 : 0, custom_layout_css, custom_layout_html });
+  const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
+  for (const a of admins) {
+    await notifications.create({
       user_id: a.id,
       type: 'page_updated',
       title: 'Page updated: ' + name,
       message: name + ' changed by ' + req.user.name
     });
-  });
+  }
   if (req.body.component_ids) {
-    db.prepare('DELETE FROM page_components WHERE page_id=?').run(req.params.id);
+    await run('DELETE FROM page_components WHERE page_id=$1', [req.params.id]);
     const ids = Array.isArray(req.body.component_ids) ? req.body.component_ids : [req.body.component_ids];
-    ids.forEach((compId, idx) => {
-      if (compId) components.assignToPage(req.params.id, compId, idx + 1);
-    });
+    for (let idx = 0; idx < ids.length; idx++) {
+      const compId = ids[idx];
+      if (compId) await components.assignToPage(req.params.id, compId, idx + 1);
+    }
   } else {
-    db.prepare('DELETE FROM page_components WHERE page_id=?').run(req.params.id);
+    await run('DELETE FROM page_components WHERE page_id=$1', [req.params.id]);
   }
   res.redirect('/admin/pages?msg=success&type=success');
 });
 
-router.delete('/pages/:id', (req, res) => {
-  const page = pages.getById(req.params.id) || pages.getBySlug(req.params.id);
+router.delete('/pages/:id', async (req, res) => {
+  const page = await pages.getById(req.params.id) || await pages.getBySlug(req.params.id);
   if (!page) {
     return res.redirect('/admin/pages?msg=error&type=error');
   }
-  const { notifications } = require('../db/models');
-  const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
-  admins.forEach(a => {
-    notifications.create({
+  const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
+  for (const a of admins) {
+    await notifications.create({
       user_id: a.id,
       type: 'page_deleted',
       title: 'Page deleted: ' + page.name,
       message: page.name + ' (' + page.slug + ') permanently deleted'
     });
-  });
-  pages.delete(page.id);
+  }
+  await pages.delete(page.id);
   res.redirect('/admin/pages?msg=success&type=success');
 });
 
 // ===== COMPONENTS CRUD =====
-router.get('/components', (req, res) => {
-  const allComponents = components.list();
-  allComponents.forEach(c => {
-    c.activeIncidents = components.getActiveIncidents(c.id);
-    const activeInc = components.getActiveIncidentForComponent(c.id);
+router.get('/components', async (req, res) => {
+  const allComponents = await components.list();
+  for (const c of allComponents) {
+    c.activeIncidents = await components.getActiveIncidents(c.id);
+    const activeInc = await components.getActiveIncidentForComponent(c.id);
     if (activeInc) {
       c.status = activeInc.status;
       c.incidentName = activeInc.name;
       c.incidentImpact = activeInc.impact;
     }
-  });
+  }
   res.render('admin/components', {
     title: 'Components',
     user: req.user,
@@ -242,45 +241,44 @@ router.get('/components', (req, res) => {
     messageType: res.locals.messageType,
     components: allComponents,
     componentMode: 'list',
-    groups: componentGroups.list()
+    groups: await componentGroups.list()
   });
 });
 
-router.get('/components/new', (req, res) => {
+router.get('/components/new', async (req, res) => {
   res.render('admin/components', {
     title: 'New Component',
     user: req.user,
     message: res.locals.message,
     messageType: res.locals.messageType,
-    components: components.list(),
+    components: await components.list(),
     componentMode: 'create',
     component: {},
-    groups: componentGroups.list()
+    groups: await componentGroups.list()
   });
 });
 
-router.post('/components', (req, res) => {
+router.post('/components', async (req, res) => {
   const { name, description, status, group_name, group_id, position } = req.body;
   if (!name) {
     return res.redirect('/admin/components/new?msg=error&type=error');
   }
-  const comp = components.create({ name, description, status, group_name, group_id, position });
-  const { notifications } = require('../db/models');
-  const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
-  admins.forEach(a => {
-    notifications.create({
+  const comp = await components.create({ name, description, status, group_name, group_id, position });
+  const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
+  for (const a of admins) {
+    await notifications.create({
       user_id: a.id,
       component_id: comp.id,
       type: 'component_created',
       title: 'Component created: ' + name,
       message: name + ' added to system'
     });
-  });
+  }
   res.redirect('/admin/components?msg=success&type=success');
 });
 
-router.get('/components/:id/edit', (req, res) => {
-  const comp = components.get(req.params.id);
+router.get('/components/:id/edit', async (req, res) => {
+  const comp = await components.get(req.params.id);
   if (!comp) {
     return res.redirect('/admin/components?msg=error&type=error');
   }
@@ -289,16 +287,16 @@ router.get('/components/:id/edit', (req, res) => {
     user: req.user,
     message: res.locals.message,
     messageType: res.locals.messageType,
-    components: components.list(),
+    components: await components.list(),
     componentMode: 'edit',
     component: comp,
-    groups: componentGroups.list(),
-    pages: pages.list()
+    groups: await componentGroups.list(),
+    pages: await pages.list()
   });
 });
 
-router.put('/components/:id', (req, res) => {
-  const comp = components.get(req.params.id);
+router.put('/components/:id', async (req, res) => {
+  const comp = await components.get(req.params.id);
   if (!comp) {
     return res.redirect('/admin/components/' + req.params.id + '/edit?msg=error&type=error');
   }
@@ -307,23 +305,22 @@ router.put('/components/:id', (req, res) => {
     return res.redirect('/admin/components/' + req.params.id + '/edit?msg=error&type=error');
   }
   const oldData = { name: comp.name, description: comp.description, status: comp.status, group_name: comp.group_name, position: comp.position };
-  const updated = components.update(req.params.id, { name, description, status, group_name, position });
-  const { notifications } = require('../db/models');
-  const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
-  admins.forEach(a => {
-    notifications.create({
+  const updated = await components.update(req.params.id, { name, description, status, group_name, position });
+  const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
+  for (const a of admins) {
+    await notifications.create({
       user_id: a.id,
       component_id: req.params.id,
       type: 'component_updated',
       title: 'Component updated: ' + name,
       message: name + ' changed by ' + req.user.name
     });
-  });
+  }
   res.redirect('/admin/components?msg=success&type=success');
 });
 
 // Quick status change from component list
-router.post('/components/:id/status', (req, res) => {
+router.post('/components/:id/status', async (req, res) => {
   if (req.user.role !== 'admin') {
     return res.redirect('/admin/components?msg=error&type=error');
   }
@@ -332,54 +329,52 @@ router.post('/components/:id/status', (req, res) => {
   if (!valid.includes(status)) {
     return res.redirect('/admin/components?msg=invalid_status&type=error');
   }
-  const comp = components.get(req.params.id);
+  const comp = await components.get(req.params.id);
   if (!comp) {
     return res.redirect('/admin/components?msg=error&type=error');
   }
   if (comp.status === status) {
     return res.redirect('/admin/components?msg=success&type=success');
   }
-  const result = components.updateStatus(req.params.id, status);
+  const result = await components.updateStatus(req.params.id, status);
   if (result.history) {
-    const { notifications } = require('../db/models');
-    const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
-    admins.forEach(a => {
-      notifications.create({
+    const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
+    for (const a of admins) {
+      await notifications.create({
         user_id: a.id,
         component_id: req.params.id,
         type: 'status_change',
         title: 'Component ' + result.component.name + ' status changed',
         message: result.component.name + ': ' + result.history.old_status + ' → ' + status
       });
-    });
+    }
   }
   res.redirect('/admin/components?msg=status_updated&type=success');
 });
 
-router.delete('/components/:id', (req, res) => {
-  const comp = components.get(req.params.id);
+router.delete('/components/:id', async (req, res) => {
+  const comp = await components.get(req.params.id);
   if (!comp) {
     return res.redirect('/admin/components?msg=error&type=error');
   }
-  const { notifications } = require('../db/models');
-  const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
-  admins.forEach(a => {
-    notifications.create({
+  const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
+  for (const a of admins) {
+    await notifications.create({
       user_id: a.id,
       component_id: req.params.id,
       type: 'component_deleted',
       title: 'Component deleted: ' + comp.name,
       message: comp.name + ' has been permanently deleted'
     });
-  });
-  components.delete(req.params.id);
+  }
+  await components.delete(req.params.id);
   res.redirect('/admin/components?msg=success&type=success');
 });
 
 // ===== INCIDENTS CRUD =====
-router.get('/incidents', (req, res) => {
-  const allIncidents = incidents.list();
-  const allPages = pages.list();
+router.get('/incidents', async (req, res) => {
+  const allIncidents = await incidents.list();
+  const allPages = await pages.list();
   res.render('admin/incidents', {
     title: 'Incidents',
     user: req.user,
@@ -390,8 +385,8 @@ router.get('/incidents', (req, res) => {
   });
 });
 
-router.get('/incidents/new', (req, res) => {
-  const allComponents = components.list();
+router.get('/incidents/new', async (req, res) => {
+  const allComponents = await components.list();
   res.render('admin/incident-form', {
     title: 'New Incident',
     user: req.user,
@@ -403,37 +398,36 @@ router.get('/incidents/new', (req, res) => {
   });
 });
 
-router.post('/incidents', (req, res) => {
+router.post('/incidents', async (req, res) => {
   const { component_id, name, status, impact, starts_at, resolved_at, message, visible } = req.body;
   if (!component_id || !name || !message) {
     return res.redirect('/admin/incidents/new?msg=error&type=error');
   }
-  const inc = incidents.create({ component_id, name, status, impact, starts_at, resolved_at, message, visible: visible ? 1 : 0 });
+  const inc = await incidents.create({ component_id, name, status, impact, starts_at, resolved_at, message, visible: visible ? 1 : 0 });
   if (inc) {
-    const { notifications } = require('../db/models');
-    const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
-    admins.forEach(a => {
-      notifications.create({
+    const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
+    for (const a of admins) {
+      await notifications.create({
         user_id: a.id,
         component_id: component_id,
         type: 'incident_created',
         title: 'New incident: ' + name,
         message: name + ' — ' + status + ': ' + message
       });
-    });
+    }
   }
   res.redirect('/admin/incidents?msg=success&type=success');
 });
 
 // ===== COMPONENT GROUPS CRUD =====
-router.get('/groups', (req, res) => {
-  const allGroups = componentGroups.list();
-  const allPages = pages.list();
+router.get('/groups', async (req, res) => {
+  const allGroups = await componentGroups.list();
+  const allPages = await pages.list();
   const groupComponentCounts = {};
   const groupPageMap = {};
   for (const g of allGroups) {
-    groupComponentCounts[g.id] = componentGroups.countComponents(g.id);
-    groupPageMap[g.id] = componentGroups.getPages(g.id);
+    groupComponentCounts[g.id] = await componentGroups.countComponents(g.id);
+    groupPageMap[g.id] = await componentGroups.getPages(g.id);
   }
   res.render('admin/groups', {
     title: 'Component Groups',
@@ -448,14 +442,14 @@ router.get('/groups', (req, res) => {
   });
 });
 
-router.get('/groups/new', (req, res) => {
-  const allPages = pages.list();
+router.get('/groups/new', async (req, res) => {
+  const allPages = await pages.list();
   res.render('admin/groups', {
     title: 'New Group',
     user: req.user,
     message: res.locals.message,
     messageType: res.locals.messageType,
-    groups: componentGroups.list(),
+    groups: await componentGroups.list(),
     pages: allPages,
     groupMode: 'create',
     group: {},
@@ -463,7 +457,7 @@ router.get('/groups/new', (req, res) => {
   });
 });
 
-router.post('/groups', (req, res) => {
+router.post('/groups', async (req, res) => {
   const { name, page_ids, position } = req.body;
   if (!name) {
     return res.redirect('/admin/groups/new?msg=error&type=error');
@@ -475,23 +469,23 @@ router.post('/groups', (req, res) => {
   } else if (typeof page_ids === 'string' && page_ids) {
     selected = [page_ids];
   }
-  componentGroups.create({ name, page_ids: selected, position: parseInt(position) || 0 });
+  await componentGroups.create({ name, page_ids: selected, position: parseInt(position) || 0 });
   res.redirect('/admin/groups?msg=success&type=success');
 });
 
-router.get('/groups/:id/edit', (req, res) => {
-  const group = componentGroups.get(req.params.id);
+router.get('/groups/:id/edit', async (req, res) => {
+  const group = await componentGroups.get(req.params.id);
   if (!group) {
     return res.redirect('/admin/groups?msg=error&type=error');
   }
-  const allPages = pages.list();
-  const selectedPageIds = componentGroups.getPageIds(req.params.id);
+  const allPages = await pages.list();
+  const selectedPageIds = await componentGroups.getPageIds(req.params.id);
   res.render('admin/groups', {
     title: 'Edit Group',
     user: req.user,
     message: res.locals.message,
     messageType: res.locals.messageType,
-    groups: componentGroups.list(),
+    groups: await componentGroups.list(),
     pages: allPages,
     groupMode: 'edit',
     group,
@@ -499,8 +493,8 @@ router.get('/groups/:id/edit', (req, res) => {
   });
 });
 
-router.put('/groups/:id', (req, res) => {
-  const group = componentGroups.get(req.params.id);
+router.put('/groups/:id', async (req, res) => {
+  const group = await componentGroups.get(req.params.id);
   if (!group) {
     return res.redirect('/admin/groups?msg=error&type=error');
   }
@@ -514,22 +508,22 @@ router.put('/groups/:id', (req, res) => {
   } else if (typeof page_ids === 'string' && page_ids) {
     selected = [page_ids];
   }
-  componentGroups.update(req.params.id, { name, page_ids: selected, position: parseInt(position) || 0 });
+  await componentGroups.update(req.params.id, { name, page_ids: selected, position: parseInt(position) || 0 });
   res.redirect('/admin/groups?msg=success&type=success');
 });
 
-router.delete('/groups/:id', (req, res) => {
-  componentGroups.delete(req.params.id);
+router.delete('/groups/:id', async (req, res) => {
+  await componentGroups.delete(req.params.id);
   res.redirect('/admin/groups?msg=success&type=success');
 });
 
 // ===== INCIDENTS CRUD =====
-router.get('/incidents/:id/edit', (req, res) => {
-  const inc = incidents.get(req.params.id);
+router.get('/incidents/:id/edit', async (req, res) => {
+  const inc = await incidents.get(req.params.id);
   if (!inc) {
     return res.redirect('/admin/incidents?msg=error&type=error');
   }
-  const allComponents = components.list();
+  const allComponents = await components.list();
   res.render('admin/incident-form', {
     title: 'Edit Incident',
     user: req.user,
@@ -541,42 +535,41 @@ router.get('/incidents/:id/edit', (req, res) => {
   });
 });
 
-router.put('/incidents/:id', (req, res) => {
-  const inc = incidents.get(req.params.id);
+router.put('/incidents/:id', async (req, res) => {
+  const inc = await incidents.get(req.params.id);
   if (!inc) {
     return res.redirect('/admin/incidents?msg=error&type=error');
   }
   const { component_id, name, status, impact, starts_at, resolved_at, message, visible, cascade_status } = req.body;
   const oldStatus = inc.status;
-  const updated = incidents.update(req.params.id, { component_id, name, status, impact, starts_at, resolved_at, message, visible: visible ? 1 : 0, cascade_status });
+  const updated = await incidents.update(req.params.id, { component_id, name, status, impact, starts_at, resolved_at, message, visible: visible ? 1 : 0, cascade_status });
   if (updated && oldStatus !== status) {
-    const { notifications } = require('../db/models');
-    const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
-    admins.forEach(a => {
-      notifications.create({
+    const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
+    for (const a of admins) {
+      await notifications.create({
         user_id: a.id,
         component_id: component_id || inc.component_id,
         type: 'incident_updated',
         title: 'Incident updated: ' + name,
         message: name + ': ' + oldStatus + ' → ' + status
       });
-    });
+    }
   }
   res.redirect('/admin/incidents?msg=success&type=success');
 });
 
-router.delete('/incidents/:id', (req, res) => {
-  const inc = incidents.get(req.params.id);
+router.delete('/incidents/:id', async (req, res) => {
+  const inc = await incidents.get(req.params.id);
   if (!inc) {
     return res.redirect('/admin/incidents?msg=error&type=error');
   }
-  incidents.delete(req.params.id);
+  await incidents.delete(req.params.id);
   res.redirect('/admin/incidents?msg=success&type=success');
 });
 
 // ===== API KEYS CRUD =====
-router.get('/api-keys', (req, res) => {
-  const keys = apiKeys.list();
+router.get('/api-keys', async (req, res) => {
+  const keys = await apiKeys.list();
   res.render('admin/api-keys', {
     title: 'API Keys',
     user: req.user,
@@ -586,7 +579,7 @@ router.get('/api-keys', (req, res) => {
   });
 });
 
-router.post('/api-keys', (req, res) => {
+router.post('/api-keys', async (req, res) => {
   const { name, permissions } = req.body;
   if (!name) {
     return res.redirect('/admin/api-keys?msg=error&type=error');
@@ -599,34 +592,34 @@ router.post('/api-keys', (req, res) => {
   } else {
     permArray = ['read'];
   }
-  const result = apiKeys.create({ name, permissions: permArray });
+  const result = await apiKeys.create({ name, permissions: permArray });
   const permStr = (result.permissions || []).join(', ');
   res.redirect('/admin/api-keys?msg=key_created&type=success&key=' + encodeURIComponent(result.key) + '&perms=' + encodeURIComponent(permStr));
 });
 
-router.delete('/api-keys/:id', (req, res) => {
-  apiKeys.revoke(req.params.id);
+router.delete('/api-keys/:id', async (req, res) => {
+  await apiKeys.revoke(req.params.id);
   res.redirect('/admin/api-keys?msg=revoked&type=success');
 });
 
-router.post('/api-keys/:id/reactivate', (req, res) => {
-  apiKeys.activate(req.params.id);
+router.post('/api-keys/:id/reactivate', async (req, res) => {
+  await apiKeys.activate(req.params.id);
   res.redirect('/admin/api-keys?msg=reactivated&type=success');
 });
 
-router.delete('/api-keys/:id/permanent', (req, res) => {
-  apiKeys.permanentDelete(req.params.id);
+router.delete('/api-keys/:id/permanent', async (req, res) => {
+  await apiKeys.permanentDelete(req.params.id);
   res.redirect('/admin/api-keys?msg=key_deleted&type=success');
 });
 
 // ===== API DOCS =====
-router.get('/docs', (req, res) => {
-  const allKeys = apiKeys.list();
+router.get('/docs', async (req, res) => {
+  const allKeys = await apiKeys.list();
   // For docs page, include full keys for the dropdown selector
-  const keysWithFull = allKeys.map(k => {
-    const full = apiKeys.getFull(k.id);
+  const keysWithFull = (await Promise.all(allKeys.map(async k => {
+    const full = await apiKeys.getFull(k.id);
     return full ? {...k, key: full.key} : k;
-  });
+  })));
   console.log('RENDERING docs.ejs from:', res.app.get('views'));
   res.render('admin/docs', {
     title: 'API Docs',
@@ -638,10 +631,10 @@ router.get('/docs', (req, res) => {
 });
 
 // ===== MAINTENANCE WINDOWS =====
-router.get('/maintenance', (req, res) => {
-  const allMaintenance = maintenance.list();
-  const allPages = pages.list();
-  const allComponents = components.list();
+router.get('/maintenance', async (req, res) => {
+  const allMaintenance = await maintenance.list();
+  const allPages = await pages.list();
+  const allComponents = await components.list();
   res.render('admin/maintenance', {
     title: 'Maintenance',
     user: req.user,
@@ -653,9 +646,9 @@ router.get('/maintenance', (req, res) => {
   });
 });
 
-router.get('/maintenance/new', (req, res) => {
-  const allPages = pages.list();
-  const allComponents = components.list();
+router.get('/maintenance/new', async (req, res) => {
+  const allPages = await pages.list();
+  const allComponents = await components.list();
   res.render('admin/maintenance-form', {
     title: 'New Maintenance Window',
     user: req.user,
@@ -668,36 +661,35 @@ router.get('/maintenance/new', (req, res) => {
   });
 });
 
-router.post('/maintenance', (req, res) => {
+router.post('/maintenance', async (req, res) => {
   const { page_id, component_id, title, description, starts_at, ends_at } = req.body;
   if (!page_id || !title || !starts_at || !ends_at) {
     return res.redirect('/admin/maintenance/new?msg=error&type=error');
   }
-  const page = pages.getById(page_id) || pages.getBySlug(page_id);
+  const page = await pages.getById(page_id) || await pages.getBySlug(page_id);
   if (!page) {
     return res.redirect('/admin/maintenance/new?msg=error&type=error');
   }
-  const win = maintenance.create({ page_id: page.id, component_id: component_id || null, title, description, starts_at, ends_at });
-  const { notifications } = require('../db/models');
-  const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
-  admins.forEach(a => {
-    notifications.create({
+  const win = await maintenance.create({ page_id: page.id, component_id: component_id || null, title, description, starts_at, ends_at });
+  const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
+  for (const a of admins) {
+    await notifications.create({
       user_id: a.id,
       type: 'maintenance_created',
       title: 'Maintenance window: ' + title,
       message: title + ' scheduled for ' + page.name
     });
-  });
+  }
   res.redirect('/admin/maintenance?msg=success&type=success');
 });
 
-router.get('/maintenance/:id/edit', (req, res) => {
-  const win = maintenance.get(req.params.id);
+router.get('/maintenance/:id/edit', async (req, res) => {
+  const win = await maintenance.get(req.params.id);
   if (!win) {
     return res.redirect('/admin/maintenance?msg=error&type=error');
   }
-  const allPages = pages.list();
-  const allComponents = components.list();
+  const allPages = await pages.list();
+  const allComponents = await components.list();
   res.render('admin/maintenance-form', {
     title: 'Edit Maintenance Window',
     user: req.user,
@@ -710,51 +702,49 @@ router.get('/maintenance/:id/edit', (req, res) => {
   });
 });
 
-router.put('/maintenance/:id', (req, res) => {
-  const win = maintenance.get(req.params.id);
+router.put('/maintenance/:id', async (req, res) => {
+  const win = await maintenance.get(req.params.id);
   if (!win) {
     return res.redirect('/admin/maintenance?msg=error&type=error');
   }
   const { page_id, component_id, title, description, starts_at, ends_at } = req.body;
-  maintenance.update(req.params.id, { page_id, component_id, title, description, starts_at, ends_at });
-  const { notifications } = require('../db/models');
-  const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
-  admins.forEach(a => {
-    notifications.create({
+  await maintenance.update(req.params.id, { page_id, component_id, title, description, starts_at, ends_at });
+  const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
+  for (const a of admins) {
+    await notifications.create({
       user_id: a.id,
       type: 'maintenance_updated',
       title: 'Maintenance updated: ' + title,
       message: title + ' changed by ' + req.user.name
     });
-  });
+  }
   res.redirect('/admin/maintenance?msg=success&type=success');
 });
 
-router.delete('/maintenance/:id', (req, res) => {
-  const win = maintenance.get(req.params.id);
+router.delete('/maintenance/:id', async (req, res) => {
+  const win = await maintenance.get(req.params.id);
   if (!win) {
     return res.redirect('/admin/maintenance?msg=error&type=error');
   }
-  const { notifications } = require('../db/models');
-  const admins = db.prepare("SELECT id FROM users WHERE role='admin'").all();
-  admins.forEach(a => {
-    notifications.create({
+  const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
+  for (const a of admins) {
+    await notifications.create({
       user_id: a.id,
       type: 'maintenance_deleted',
       title: 'Maintenance deleted: ' + win.title,
       message: win.title + ' permanently deleted'
     });
-  });
-  maintenance.delete(req.params.id);
+  }
+  await maintenance.delete(req.params.id);
   res.redirect('/admin/maintenance?msg=success&type=success');
 });
 
 // ===== USERS CRUD =====
-router.get('/users', (req, res) => {
+router.get('/users', async (req, res) => {
   if (req.user.role !== 'admin') {
     return res.redirect('/admin?msg=admin&type=error');
   }
-  const users = db.prepare('SELECT id, email, name, role, created_at FROM users ORDER BY created_at DESC').all();
+  const users = await queryAll('SELECT id, email, name, role, created_at FROM users ORDER BY created_at DESC', []);
   res.render('admin/users', {
     title: 'Users',
     user: req.user,
@@ -764,7 +754,7 @@ router.get('/users', (req, res) => {
   });
 });
 
-router.post('/users', (req, res) => {
+router.post('/users', async (req, res) => {
   if (req.user.role !== 'admin') {
     return res.redirect('/admin/users?msg=error&type=error');
   }
@@ -775,14 +765,14 @@ router.post('/users', (req, res) => {
   if (password.length < 6) {
     return res.redirect('/admin/users?msg=error&type=error');
   }
-  const existing = db.prepare('SELECT id FROM users WHERE email=?').get(email);
+  const existing = await queryOne('SELECT id FROM users WHERE email=$1', [email]);
   if (existing) {
     return res.redirect('/admin/users?msg=error&type=error');
   }
   const passwordHash = bcrypt.hashSync(password, 10);
   const id = uuidv4();
-  db.prepare('INSERT INTO users (id, email, password_hash, name, role, totp_enabled, totp_secret) VALUES (?,?,?,?,?,?,?)').run(
-    id, email, passwordHash, name, role || 'user', 0, null
+  await run('INSERT INTO users (id, email, password_hash, name, role, totp_enabled, totp_secret) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+    [id, email, passwordHash, name, role || 'user', 0, null]
   );
   
   // Send welcome email if SMTP is configured
@@ -790,7 +780,7 @@ router.post('/users', (req, res) => {
   if (sendWelcome) {
     const emailUtils = require('../utils/email');
     const { passwordResets } = require('../db/models');
-    const token = passwordResets.create(id, 24);
+    const token = await passwordResets.create(id, 24);
     const baseUrl = (req.get('X-Forwarded-Proto') || 'http') + '://' + req.get('Host');
     const resetUrl = baseUrl + '/auth/set-password/' + token;
     emailUtils.sendWelcomeEmail(email, name, resetUrl).catch(() => {});
@@ -799,22 +789,22 @@ router.post('/users', (req, res) => {
   res.redirect('/admin/users?msg=created&type=success');
 });
 
-router.delete('/users/:id', (req, res) => {
-  const adminCount = db.prepare("SELECT COUNT(*) as count FROM users WHERE role='admin'").get().count;
+router.delete('/users/:id', async (req, res) => {
+  const adminCount = (await queryOne("SELECT COUNT(*) as count FROM users WHERE role='admin'", [])).count;
   if (req.user.id === req.params.id && adminCount <= 1) {
     return res.redirect('/admin/users?msg=last_admin&type=error');
   }
-  const user = db.prepare('SELECT id FROM users WHERE id=?').get(req.params.id);
+  const user = await queryOne('SELECT id FROM users WHERE id=$1', [req.params.id]);
   if (!user) {
     return res.redirect('/admin/users?msg=error&type=error');
   }
-  db.prepare('DELETE FROM users WHERE id=?').run(req.params.id);
+  await run('DELETE FROM users WHERE id=$1', [req.params.id]);
   res.redirect('/admin/users?msg=deleted&type=success');
 });
 
 // Email settings GET
-router.get('/email-settings', (req, res) => {
-  const smtp = settings.getSMTP();
+router.get('/email-settings', async (req, res) => {
+  const smtp = await settings.getSMTP();
   res.render('admin/email-settings', {
     title: 'Email Settings',
     user: req.user,
@@ -825,27 +815,30 @@ router.get('/email-settings', (req, res) => {
 });
 
 // Email settings save (POST to /admin/email-settings)
-router.post('/email-settings', (req, res) => {
+router.post('/email-settings', async (req, res) => {
   const { smtp_host, smtp_port, smtp_user, smtp_pass, smtp_secure, smtp_from, smtp_from_name } = req.body;
-  settings.setSMTP({ smtp_host, smtp_port, smtp_user, smtp_pass, smtp_secure, smtp_from, smtp_from_name });
+  await settings.setSMTP({ smtp_host, smtp_port, smtp_user, smtp_pass, smtp_secure, smtp_from, smtp_from_name });
   res.redirect('/admin/email-settings?msg=success&type=success');
 });
 
-router.post('/email-settings/test', (req, res) => {
+router.post('/email-settings/test', async (req, res) => {
   const { to } = req.body;
   if (!to) return res.json({ ok: false, error: 'No recipient specified' });
   const email = require('../utils/email');
-  email.sendEmail(to, 'Test email from StatusFe', '<h2>Success!</h2><p>If you received this, your SMTP settings are configured correctly.</p>')
-    .then(result => res.json(result))
-    .catch(err => res.json({ ok: false, error: err.message }));
+  try {
+    const result = await email.sendEmail(to, 'Test email from StatusFe', '<h2>Success!</h2><p>If you received this, your SMTP settings are configured correctly.</p>');
+    res.json(result);
+  } catch(err) {
+    res.json({ ok: false, error: err.message });
+  }
 });
 
 // ===== AUDIT LOG =====
-router.get('/audit', (req, res) => {
+router.get('/audit', async (req, res) => {
   if (req.user.role !== 'admin') {
     return res.redirect('/admin?msg=admin&type=error');
   }
-  const logs = auditLog.list(100);
+  const logs = await auditLog.list(100);
   res.render('admin/audit', {
     title: 'Audit Log',
     user: req.user,
@@ -856,24 +849,24 @@ router.get('/audit', (req, res) => {
   });
 });
 
-router.post('/admin/audit/cleanup', (req, res) => {
+router.post('/admin/audit/cleanup', async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin required' });
   const days = parseInt(req.body.retention_days) || 90;
-  auditLog.cleanOld(days);
+  await auditLog.cleanOld(days);
   res.json({ ok: true });
 });
 
 // GET /admin/2fa/verify — verify 2FA code for session
-router.get('/2fa/verify', (req, res) => {
+router.get('/2fa/verify', async (req, res) => {
   if (!req.user) return res.redirect('/login');
   res.render('admin/2fa-verify', { title: 'Verify 2FA', user: req.user, msg: req.query.msg, type: req.query.type, csrfToken: res.locals.csrfToken });
 });
 
 // POST /admin/2fa/verify — verify 2FA code and set cookie
-router.post('/2fa/verify', (req, res) => {
+router.post('/2fa/verify', async (req, res) => {
   if (!req.user) return res.redirect('/login');
   const code = req.body.code;
-  const user = db.prepare('SELECT totp_secret FROM users WHERE id=?').get(req.user.id);
+  const user = await queryOne('SELECT totp_secret FROM users WHERE id=$1', [req.user.id]);
   if (!user || !user.totp_secret) return res.redirect('/admin');
   const { verify } = require('../utils/totp');
   if (!verify(code, user.totp_secret, 'StatusFe', req.user.email)) {
@@ -884,13 +877,13 @@ router.post('/2fa/verify', (req, res) => {
 });
 
 // GET /admin/2fa/setup — show QR code
-router.get('/2fa/setup', (req, res) => {
+router.get('/2fa/setup', async (req, res) => {
   if (!req.user) return res.redirect('/login');
-  const user = db.prepare('SELECT * FROM users WHERE id=?').get(req.user.id);
+  const user = await queryOne('SELECT * FROM users WHERE id=$1', [req.user.id]);
   if (!user.totp_secret) {
     const { generateSecret } = require('../utils/totp');
     const secret = generateSecret();
-    db.prepare('UPDATE users SET totp_secret=? WHERE id=?').run(secret, req.user.id);
+    await run('UPDATE users SET totp_secret=$1 WHERE id=$2', [secret, req.user.id]);
     user.totp_secret = secret;
   }
   const { getURI } = require('../utils/totp');
@@ -905,31 +898,31 @@ router.get('/2fa/setup', (req, res) => {
 });
 
 // POST /admin/2fa/setup — enable/disable 2FA
-router.post('/2fa/setup', (req, res) => {
+router.post('/2fa/setup', async (req, res) => {
   const { action, code } = req.body;
-  const user = db.prepare('SELECT * FROM users WHERE id=?').get(req.user.id);
+  const user = await queryOne('SELECT * FROM users WHERE id=$1', [req.user.id]);
   const { verify } = require('../utils/totp');
 
   if (action === 'enable') {
     if (!user.totp_secret || !verify(code, user.totp_secret, 'StatusFe', user.email)) {
       return res.redirect('/admin/2fa/setup?msg=invalid&type=error');
     }
-    db.prepare('UPDATE users SET totp_enabled=1 WHERE id=?').run(req.user.id);
-    auditLog.create({ user_id: req.user.id, action: '2fa_enabled', details: '2FA enabled', ip: req.ip, user_agent: req.get('User-Agent') || '' });
+    await run('UPDATE users SET totp_enabled=1 WHERE id=$1', [req.user.id]);
+    await auditLog.create({ user_id: req.user.id, action: '2fa_enabled', details: '2FA enabled', ip: req.ip, user_agent: req.get('User-Agent') || '' });
   } else if (action === 'disable') {
     if (!verify(code, user.totp_secret, 'StatusFe', user.email)) {
       return res.redirect('/admin/2fa/setup?msg=invalid&type=error');
     }
-    db.prepare('UPDATE users SET totp_enabled=0, totp_secret=NULL WHERE id=?').run(req.user.id);
-    auditLog.create({ user_id: req.user.id, action: '2fa_disabled', details: '2FA disabled', ip: req.ip, user_agent: req.get('User-Agent') || '' });
+    await run('UPDATE users SET totp_enabled=0, totp_secret=NULL WHERE id=$1', [req.user.id]);
+    await auditLog.create({ user_id: req.user.id, action: '2fa_disabled', details: '2FA disabled', ip: req.ip, user_agent: req.get('User-Agent') || '' });
   }
   res.redirect('/admin/2fa/setup');
 });
 
 // GET /admin/audit/download — download audit log as CSV
-router.get('/audit/download', (req, res) => {
+router.get('/audit/download', async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin required' });
-  const logs = auditLog.list(10000);
+  const logs = await auditLog.list(10000);
   const csv = 'Date,User,Action,Target,Details,IP\n' + logs.map(l =>
     `"${l.created_at}","${(l.user_id||'').substring(0,8)}","${l.action}","${(l.target||'').replace(/"/g,'""')}","${(l.details||'').replace(/"/g,'""')}","${(l.ip||'').substring(0,15)}"`
   ).join('\n');
@@ -940,13 +933,13 @@ router.get('/audit/download', (req, res) => {
 });
 
 // GET /admin/audit/count
-router.get('/audit/count', (req, res) => {
-  const total = db.prepare('SELECT COUNT(*) as c FROM audit_log').get().c;
+router.get('/audit/count', async (req, res) => {
+  const total = (await queryOne('SELECT COUNT(*) as c FROM audit_log', [])).c;
   res.json({ total });
 });
 
 // GET /admin/changelog
-router.get('/changelog', (req, res) => {
+router.get('/changelog', async (req, res) => {
   if (req.user.role !== 'admin') return res.redirect('/admin?msg=admin&type=error');
   res.render('admin/changelog', {
     title: 'Changelog',
