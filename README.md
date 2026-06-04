@@ -35,7 +35,7 @@
 git clone https://github.com/plorentec/statusfe.git
 cd statusfe
 cp .env.example .env
-docker compose up -d
+docker compose up -d --build
 ```
 
 Access / Accede en: `http://localhost:3000`
