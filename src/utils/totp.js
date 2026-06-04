@@ -36,6 +36,14 @@ function base32Decode(str) {
   return Buffer.from(bytes);
 }
 
+function decodeSecret(secret) {
+  const clean = secret.replace(/=+$/, '').toUpperCase();
+  if (/^[A-Z2-7=]+$/.test(clean)) {
+    return base32Decode(secret);
+  }
+  return Buffer.from(secret, 'base64');
+}
+
 function verify(token, secret, issuer, account) {
   if (!token || !secret) return false;
   const totpPeriod = 30;
@@ -49,7 +57,7 @@ function verify(token, secret, issuer, account) {
 }
 
 function simpleHOTP(secret, counter, token) {
-  const secretBuf = base32Decode(secret);
+  const secretBuf = decodeSecret(secret);
   const counterBuf = Buffer.alloc(8);
   counterBuf.writeBigUInt64BE(BigInt(counter));
   const hmac = crypto.createHmac('sha1', secretBuf).update(counterBuf).digest();
@@ -66,4 +74,4 @@ function getURI(secret, email, issuer) {
   return `otpauth://totp/${issuer}:${email}?secret=${secret}&issuer=${issuer}&algorithm=SHA1&digits=6&period=30`;
 }
 
-module.exports = { generateSecret, verify, getURI, simpleHOTP };
+module.exports = { generateSecret, verify, getURI, simpleHOTP, base32Encode, base32Decode, decodeSecret };
