@@ -1,17 +1,15 @@
-<div class="admin-header"><h1><%= title %></h1></div>
-
 <!-- API Key Selector (admin only) -->
 <% if (user.role === 'admin' && keys && keys.length > 0) { %>
 <div class="doc-key-selector">
-<label>🔑 API Key (selecciona una para los ejemplos):</label>
+<label>API Key (selecciona una para los ejemplos):</label>
 <select id="apiKeySelect" onchange="onKeyChange()">
-<option value="__custom__">— Custom key —</option>
+<option value="__custom__">-- Custom key --</option>
 <% keys.forEach(function(k) { %>
 <option data-key="<%= k.key %>"><%= k.name %> (<%= k.key_prefix %>...)</option>
 <% }); %>
 </select>
-<input type="text" id="customApiKey" placeholder="Pega tu API key aquí..." style="display:none;" oninput="onCustomKeyChange()">
-<div class="doc-key-hint">El curl copiado incluirá esta key automáticamente.</div>
+<input type="text" id="customApiKey" placeholder="Pega tu API key aqu\u00ed..." style="display:none;" oninput="onCustomKeyChange()">
+<div class="doc-key-hint">El curl copiado incluir\u00e1 esta key autom\u00e1ticamente.</div>
 </div>
 <% } %>
 
@@ -33,7 +31,7 @@
 <p class="doc-desc">Include your API key in the <code data-curl="Authorization">Authorization</code> header. Admin permissions imply all others.</p>
 <div class="doc-code-block">
 <button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
-<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + "/api/v1"/info">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1"/info</code>
+<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/info&quot;">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/info"</code>
 </div>
 <p class="doc-desc">Alternative auth methods:</p>
 <p class="doc-desc">Header: <code data-curl="x-api-key: &lt;key&gt;">x-api-key: &lt;key&gt;</code></p>
@@ -49,7 +47,7 @@
 <p class="doc-desc">Permissions: <code data-curl="read">read</code>, <code data-curl="write">write</code>, <code data-curl="admin">admin</code> (admin implies all)</p>
 <div class="doc-code-block">
 <button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
-<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + "/api/v1"/info">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1"/info</code>
+<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/info&quot;">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/info"</code>
 </div>
 </div>
 
@@ -61,45 +59,37 @@
 <p class="doc-desc">List all pages (including private)</p>
 <div class="doc-code-block">
 <button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
-<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + "/api/v1"/pages">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1"/pages</code>
+<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/pages&quot;">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/pages"</code>
 </div>
 
 <h3 class="doc-h2">GET /api/v1/pages/:id</h3>
 <p class="doc-desc">Get page by ID or slug</p>
 <div class="doc-code-block">
 <button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
-<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + "/api/v1"/pages/admin">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1"/pages/admin</code>
+<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/pages/admin&quot;">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/pages/admin"</code>
 </div>
 
 <h3 class="doc-h2">POST /api/v1/pages <span class="doc-perm-badge perm-write">[write]</span></h3>
 <p class="doc-desc">Create a new page</p>
 <p class="doc-params-label">Body parameters:</p>
-<p class="doc-desc"><code data-curl="name">name</code> (required) — <code data-curl="slug">slug</code> (required, lowercase + hyphens only) — <code data-curl="description">description</code> — <code data-curl="status">status</code> — <code data-curl="template">template</code> (default/ grid/dark) — <code data-curl="timezone">timezone</code> — <code data-curl="logo_url">logo_url</code> — <code data-curl="custom_css">custom_css</code> — <code data-curl="custom_html">custom_html</code> — <code data-curl="is_public">is_public</code> (boolean)</p>
+<p class="doc-desc"><code data-curl="name">name</code> (required) \u2014 <code data-curl="slug">slug</code> (required, lowercase + hyphens only) \u2014 <code data-curl="description">description</code> \u2014 <code data-curl="status">status</code> \u2014 <code data-curl="template">template</code> (default/grid/dark) \u2014 <code data-curl="timezone">timezone</code> \u2014 <code data-curl="logo_url">logo_url</code> \u2014 <code data-curl="custom_css">custom_css</code> \u2014 <code data-curl="custom_html">custom_html</code> \u2014 <code data-curl="is_public">is_public</code> (boolean)</p>
 <div class="doc-code-block">
 <button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
-<code data-curl="$ curl -X POST -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;name&quot;:&quot;My Service&quot;,&quot;slug&quot;:&quot;my-service&quot;,&quot;status&quot;:&quot;operational&quot;,&quot;template&quot;:&quot;grid&quot;,&quot;is_public&quot;:1}&#39; \
-  BASE_URL + "/api/v1"/pages">$ curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
-  -d '{"name":"My Service","slug":"my-service","status":"operational","template":"grid","is_public":1}' \
-  BASE_URL + "/api/v1"/pages</code>
+<code data-curl="$ curl -X POST -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d &#39;{&quot;name&quot;:&quot;My Service&quot;,&quot;slug&quot;:&quot;my-service&quot;,&quot;status&quot;:&quot;operational&quot;,&quot;template&quot;:&quot;grid&quot;,&quot;is_public&quot;:1}&#39; BASE_URL + &quot;/api/v1/pages&quot;">$ curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" -d '{"name":"My Service","slug":"my-service","status":"operational","template":"grid","is_public":1}' BASE_URL + "/api/v1/pages"</code>
 </div>
 
 <h3 class="doc-h2">PUT /api/v1/pages/:id <span class="doc-perm-badge perm-write">[write]</span></h3>
-<p class="doc-desc">Update a page — any combination of the body parameters above</p>
+<p class="doc-desc">Update a page \u2014 any combination of the body parameters above</p>
 <div class="doc-code-block">
 <button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
-<code data-curl="$ curl -X PUT -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;status&quot;:&quot;degraded_performance&quot;}&#39; \
-  BASE_URL + "/api/v1"/pages/admin">$ curl -X PUT -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
-  -d '{"status":"degraded_performance"}' \
-  BASE_URL + "/api/v1"/pages/admin</code>
+<code data-curl="$ curl -X PUT -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d &#39;{&quot;status&quot;:&quot;degraded_performance&quot;}&#39; BASE_URL + &quot;/api/v1/pages/admin&quot;">$ curl -X PUT -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" -d '{"status":"degraded_performance"}' BASE_URL + "/api/v1/pages/admin"</code>
 </div>
 
 <h3 class="doc-h2">DELETE /api/v1/pages/:id <span class="doc-perm-badge perm-admin">[admin]</span></h3>
 <p class="doc-desc">Delete a page</p>
 <div class="doc-code-block">
 <button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
-<code data-curl="$ curl -X DELETE -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + "/api/v1"/pages/admin">$ curl -X DELETE -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1"/pages/admin</code>
+<code data-curl="$ curl -X DELETE -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/pages/admin&quot;">$ curl -X DELETE -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/pages/admin"</code>
 </div>
 </div>
 
@@ -111,67 +101,55 @@
 <p class="doc-desc">List components. Query filters: <code data-curl="?status=">?status=</code> <code data-curl="?group=">?group=</code></p>
 <div class="doc-code-block">
 <button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
-<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + "/api/v1"/components">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1"/components</code>
+<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/components&quot;">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/components"</code>
 </div>
 
 <h3 class="doc-h2">GET /api/v1/components/:id</h3>
 <p class="doc-desc">Get component with pages assigned</p>
 <div class="doc-code-block">
 <button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
-<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + "/api/v1"/components/UUID">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1"/components/UUID</code>
+<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/components/UUID&quot;">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/components/UUID"</code>
 </div>
 
 <h3 class="doc-h2">POST /api/v1/components <span class="doc-perm-badge perm-write">[write]</span></h3>
 <p class="doc-desc">Create component</p>
 <p class="doc-params-label">Body parameters:</p>
-<p class="doc-desc"><code data-curl="name">name</code> (required) — <code data-curl="description">description</code> — <code data-curl="status">status</code> — <code data-curl="group_name">group_name</code> — <code data-curl="position">position</code></p>
+<p class="doc-desc"><code data-curl="name">name</code> (required) \u2014 <code data-curl="description">description</code> \u2014 <code data-curl="status">status</code> \u2014 <code data-curl="group_name">group_name</code> \u2014 <code data-curl="position">position</code></p>
 <div class="doc-code-block">
 <button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
-<code data-curl="$ curl -X POST -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;name&quot;:&quot;CDN&quot;,&quot;group_name&quot;:&quot;Infrastructure&quot;,&quot;status&quot;:&quot;operational&quot;}&#39; \
-  BASE_URL + "/api/v1"/components">$ curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
-  -d '{"name":"CDN","group_name":"Infrastructure","status":"operational"}' \
-  BASE_URL + "/api/v1"/components</code>
+<code data-curl="$ curl -X POST -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d &#39;{&quot;name&quot;:&quot;CDN&quot;,&quot;group_name&quot;:&quot;Infrastructure&quot;,&quot;status&quot;:&quot;operational&quot;}&#39; BASE_URL + &quot;/api/v1/components&quot;">$ curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" -d '{"name":"CDN","group_name":"Infrastructure","status":"operational"}' BASE_URL + "/api/v1/components"</code>
 </div>
 
 <h3 class="doc-h2">PUT /api/v1/components/:id <span class="doc-perm-badge perm-write">[write]</span></h3>
-<p class="doc-desc">Update component — any combination of the body parameters above</p>
+<p class="doc-desc">Update component \u2014 any combination of the body parameters above</p>
 <div class="doc-code-block">
 <button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
-<code data-curl="$ curl -X PUT -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;status&quot;:&quot;partial_outage&quot;}&#39; \
-  BASE_URL + "/api/v1"/components/UUID">$ curl -X PUT -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
-  -d '{"status":"partial_outage"}' \
-  BASE_URL + "/api/v1"/components/UUID</code>
+<code data-curl="$ curl -X PUT -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d &#39;{&quot;status&quot;:&quot;partial_outage&quot;}&#39; BASE_URL + &quot;/api/v1/components/UUID&quot;">$ curl -X PUT -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" -d '{"status":"partial_outage"}' BASE_URL + "/api/v1/components/UUID"</code>
 </div>
 
 <h3 class="doc-h2">DELETE /api/v1/components/:id <span class="doc-perm-badge perm-admin">[admin]</span></h3>
 <div class="doc-code-block">
 <button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
-<code data-curl="$ curl -X DELETE -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + "/api/v1"/components/UUID">$ curl -X DELETE -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1"/components/UUID</code>
+<code data-curl="$ curl -X DELETE -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/components/UUID&quot;">$ curl -X DELETE -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/components/UUID"</code>
 </div>
 
 <h3 class="doc-h2">PUT /api/v1/components/:id/status <span class="doc-perm-badge perm-write">[write]</span></h3>
 <p class="doc-desc">Update component status</p>
 <p class="doc-params-label">Body parameters:</p>
-<p class="doc-desc"><code data-curl="status">status</code> (required) — <code data-curl="page_id">page_id</code> (optional, can be UUID or slug)</p>
+<p class="doc-desc"><code data-curl="status">status</code> (required) \u2014 <code data-curl="page_id">page_id</code> (optional, can be UUID or slug)</p>
 <p class="doc-desc">Valid statuses: <code data-curl="operational">operational</code>, <code data-curl="degraded_performance">degraded_performance</code>, <code data-curl="partial_outage">partial_outage</code>, <code data-curl="major_outage">major_outage</code>, <code data-curl="under_maintenance">under_maintenance</code></p>
 <div class="doc-code-block">
 <button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
-<code data-curl="$ curl -X PUT -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;status&quot;:&quot;major_outage&quot;,&quot;page_id&quot;:&quot;UUID&quot;}&#39; \
-  BASE_URL + "/api/v1"/components/UUID/status">$ curl -X PUT -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
-  -d '{"status":"major_outage","page_id":"UUID"}' \
-  BASE_URL + "/api/v1"/components/UUID/status</code>
+<code data-curl="$ curl -X PUT -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d &#39;{&quot;status&quot;:&quot;major_outage&quot;,&quot;page_id&quot;:&quot;UUID&quot;}&#39; BASE_URL + &quot;/api/v1/components/UUID/status&quot;">$ curl -X PUT -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" -d '{"status":"major_outage","page_id":"UUID"}' BASE_URL + "/api/v1/components/UUID/status"</code>
 </div>
 
 <h3 class="doc-h2">GET /api/v1/components/:id/history</h3>
 <p class="doc-desc">Status history for a component</p>
 <p class="doc-params-label">Query filters:</p>
-<p class="doc-desc"><code data-curl="?page_id=UUID">?page_id=UUID</code> — <code data-curl="?limit=50">?limit=50</code></p>
+<p class="doc-desc"><code data-curl="?page_id=UUID">?page_id=UUID</code> \u2014 <code data-curl="?limit=50">?limit=50</code></p>
 <div class="doc-code-block">
 <button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
-<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + "/api/v1"/components/UUID/history">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1"/components/UUID/history</code>
+<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/components/UUID/history&quot;">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/components/UUID/history"</code>
 </div>
 
 <h3 class="doc-h2">POST /api/v1/pages/:pageId/components/:componentId <span class="doc-perm-badge perm-write">[write]</span></h3>
@@ -180,17 +158,13 @@
 <p class="doc-desc"><code data-curl="position">position</code> (integer)</p>
 <div class="doc-code-block">
 <button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
-<code data-curl="$ curl -X POST -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;position&quot;:1}&#39; \
-  BASE_URL + "/api/v1"/pages/UUID/components/UUID">$ curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
-  -d '{"position":1}' \
-  BASE_URL + "/api/v1"/pages/UUID/components/UUID</code>
+<code data-curl="$ curl -X POST -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d &#39;{&quot;position&quot;:1}&#39; BASE_URL + &quot;/api/v1/pages/UUID/components/UUID&quot;">$ curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" -d '{"position":1}' BASE_URL + "/api/v1/pages/UUID/components/UUID"</code>
 </div>
 
 <h3 class="doc-h2">DELETE /api/v1/pages/:pageId/components/:componentId <span class="doc-perm-badge perm-write">[write]</span></h3>
 <div class="doc-code-block">
 <button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
-<code data-curl="$ curl -X DELETE -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + "/api/v1"/pages/UUID/components/UUID">$ curl -X DELETE -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1"/pages/UUID/components/UUID</code>
+<code data-curl="$ curl -X DELETE -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/pages/UUID/components/UUID&quot;">$ curl -X DELETE -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/pages/UUID/components/UUID"</code>
 </div>
 </div>
 
@@ -201,48 +175,40 @@
 <h3 class="doc-h2">GET /api/v1/incidents</h3>
 <p class="doc-desc">List visible incidents</p>
 <p class="doc-params-label">Query filters:</p>
-<p class="doc-desc"><code data-curl="?page_id=UUID">?page_id=UUID</code> — <code data-curl="?status=">?status=</code> — <code data-curl="?limit=5">?limit=5</code></p>
+<p class="doc-desc"><code data-curl="?page_id=UUID">?page_id=UUID</code> \u2014 <code data-curl="?status=">?status=</code> \u2014 <code data-curl="?limit=5">?limit=5</code></p>
 <div class="doc-code-block">
 <button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
-<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + "/api/v1"/incidents">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1"/incidents</code>
+<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/incidents&quot;">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/incidents"</code>
 </div>
 
 <h3 class="doc-h2">GET /api/v1/incidents/:id</h3>
 <p class="doc-desc">Get incident by ID</p>
 <div class="doc-code-block">
 <button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
-<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + "/api/v1"/incidents/UUID">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1"/incidents/UUID</code>
+<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/incidents/UUID&quot;">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/incidents/UUID"</code>
 </div>
 
 <h3 class="doc-h2">POST /api/v1/incidents <span class="doc-perm-badge perm-write">[write]</span></h3>
 <p class="doc-desc">Create incident</p>
 <p class="doc-params-label">Body parameters:</p>
-<p class="doc-desc"><code data-curl="page_id">page_id</code> (required) — <code data-curl="name">name</code> (required) — <code data-curl="message">message</code> (required) — <code data-curl="status">status</code> — <code data-curl="impact">impact</code> — <code data-curl="starts_at">starts_at</code> — <code data-curl="resolved_at">resolved_at</code> — <code data-curl="visible">visible</code></p>
+<p class="doc-desc"><code data-curl="page_id">page_id</code> (required) \u2014 <code data-curl="name">name</code> (required) \u2014 <code data-curl="message">message</code> (required) \u2014 <code data-curl="status">status</code> \u2014 <code data-curl="impact">impact</code> \u2014 <code data-curl="starts_at">starts_at</code> \u2014 <code data-curl="resolved_at">resolved_at</code> \u2014 <code data-curl="visible">visible</code></p>
 <p class="doc-desc">Incident statuses: <code data-curl="investigating">investigating</code>, <code data-curl="identified">identified</code>, <code data-curl="monitoring">monitoring</code>, <code data-curl="resolved">resolved</code></p>
 <div class="doc-code-block">
 <button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
-<code data-curl="$ curl -X POST -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;page_id&quot;:&quot;UUID&quot;,&quot;name&quot;:&quot;API Outage&quot;,&quot;status&quot;:&quot;investigating&quot;,&quot;impact&quot;:&quot;critical&quot;,&quot;message&quot;:&quot;Investigating API issues&quot;}&#39; \
-  BASE_URL + "/api/v1"/incidents">$ curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
-  -d '{"page_id":"UUID","name":"API Outage","status":"investigating","impact":"critical","message":"Investigating API issues"}' \
-  BASE_URL + "/api/v1"/incidents</code>
+<code data-curl="$ curl -X POST -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d &#39;{&quot;page_id&quot;:&quot;UUID&quot;,&quot;name&quot;:&quot;API Outage&quot;,&quot;status&quot;:&quot;investigating&quot;,&quot;impact&quot;:&quot;critical&quot;,&quot;message&quot;:&quot;Investigating API issues&quot;}&#39; BASE_URL + &quot;/api/v1/incidents&quot;">$ curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" -d '{"page_id":"UUID","name":"API Outage","status":"investigating","impact":"critical","message":"Investigating API issues"}' BASE_URL + "/api/v1/incidents"</code>
 </div>
 
 <h3 class="doc-h2">PUT /api/v1/incidents/:id <span class="doc-perm-badge perm-write">[write]</span></h3>
-<p class="doc-desc">Update incident — any combination of the body parameters above</p>
+<p class="doc-desc">Update incident \u2014 any combination of the body parameters above</p>
 <div class="doc-code-block">
 <button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
-<code data-curl="$ curl -X PUT -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;status&quot;:&quot;monitoring&quot;}&#39; \
-  BASE_URL + "/api/v1"/incidents/UUID">$ curl -X PUT -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
-  -d '{"status":"monitoring"}' \
-  BASE_URL + "/api/v1"/incidents/UUID</code>
+<code data-curl="$ curl -X PUT -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d &#39;{&quot;status&quot;:&quot;monitoring&quot;}&#39; BASE_URL + &quot;/api/v1/incidents/UUID&quot;">$ curl -X PUT -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" -d '{"status":"monitoring"}' BASE_URL + "/api/v1/incidents/UUID"</code>
 </div>
 
 <h3 class="doc-h2">DELETE /api/v1/incidents/:id <span class="doc-perm-badge perm-admin">[admin]</span></h3>
 <div class="doc-code-block">
 <button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
-<code data-curl="$ curl -X DELETE -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + "/api/v1"/incidents/UUID">$ curl -X DELETE -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1"/incidents/UUID</code>
+<code data-curl="$ curl -X DELETE -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/incidents/UUID&quot;">$ curl -X DELETE -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/incidents/UUID"</code>
 </div>
 </div>
 
@@ -253,26 +219,22 @@
 <h3 class="doc-h2">GET /api/v1/api-keys <span class="doc-perm-badge perm-admin">[admin]</span></h3>
 <div class="doc-code-block">
 <button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
-<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + "/api/v1"/api-keys">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1"/api-keys</code>
+<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/api-keys&quot;">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/api-keys"</code>
 </div>
 
 <h3 class="doc-h2">POST /api/v1/api-keys <span class="doc-perm-badge perm-admin">[admin]</span></h3>
 <p class="doc-desc">Create API key</p>
 <p class="doc-params-label">Body parameters:</p>
-<p class="doc-desc"><code data-curl="name">name</code> (required) — <code data-curl="permissions">permissions</code> — <code data-curl="page_id">page_id</code> — <code data-curl="rate_limit">rate_limit</code> — <code data-curl="expires_at">expires_at</code></p>
+<p class="doc-desc"><code data-curl="name">name</code> (required) \u2014 <code data-curl="permissions">permissions</code> \u2014 <code data-curl="page_id">page_id</code> \u2014 <code data-curl="rate_limit">rate_limit</code> \u2014 <code data-curl="expires_at">expires_at</code></p>
 <div class="doc-code-block">
 <button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
-<code data-curl="$ curl -X POST -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;name&quot;:&quot;Bot&quot;,&quot;permissions&quot;:[&quot;read&quot;,&quot;write&quot;]}&#39; \
-  BASE_URL + "/api/v1"/api-keys">$ curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
-  -d '{"name":"Bot","permissions":["read","write"]}' \
-  BASE_URL + "/api/v1"/api-keys</code>
+<code data-curl="$ curl -X POST -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d &#39;{&quot;name&quot;:&quot;Bot&quot;,&quot;permissions&quot;:[&quot;read&quot;,&quot;write&quot;]}&#39; BASE_URL + &quot;/api/v1/api-keys&quot;">$ curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" -d '{"name":"Bot","permissions":["read","write"]}' BASE_URL + "/api/v1/api-keys"</code>
 </div>
 
 <h3 class="doc-h2">DELETE /api/v1/api-keys/:id <span class="doc-perm-badge perm-admin">[admin]</span></h3>
 <div class="doc-code-block">
 <button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
-<code data-curl="$ curl -X DELETE -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + "/api/v1"/api-keys/UUID">$ curl -X DELETE -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1"/api-keys/UUID</code>
+<code data-curl="$ curl -X DELETE -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/api-keys/UUID&quot;">$ curl -X DELETE -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/api-keys/UUID"</code>
 </div>
 </div>
 
@@ -284,40 +246,32 @@
 <p class="doc-desc">List webhooks for a page</p>
 <div class="doc-code-block">
 <button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
-<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + "/api/v1"/pages/UUID/webhooks">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1"/pages/UUID/webhooks</code>
+<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/pages/UUID/webhooks&quot;">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/pages/UUID/webhooks"</code>
 </div>
 
 <h3 class="doc-h2">POST /api/v1/pages/:pageId/webhooks <span class="doc-perm-badge perm-write">[write]</span></h3>
 <p class="doc-desc">Create webhook</p>
 <p class="doc-params-label">Body parameters:</p>
-<p class="doc-desc"><code data-curl="url">url</code> (required) — <code data-curl="events">events</code> — <code data-curl="secret">secret</code></p>
+<p class="doc-desc"><code data-curl="url">url</code> (required) \u2014 <code data-curl="events">events</code> \u2014 <code data-curl="secret">secret</code></p>
 <p class="doc-desc">Events: <code data-curl="status.updated">status.updated</code>, <code data-curl="incident.created">incident.created</code>, <code data-curl="incident.updated">incident.updated</code>, <code data-curl="incident.deleted">incident.deleted</code>, <code data-curl="component.assigned">component.assigned</code></p>
 <div class="doc-code-block">
 <button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
-<code data-curl="$ curl -X POST -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;url&quot;:&quot;https://hooks.example.com/status&quot;,&quot;events&quot;:[&quot;status.updated&quot;,&quot;incident.created&quot;],&quot;secret&quot;:&quot;mysecret&quot;}&#39; \
-  BASE_URL + "/api/v1"/pages/UUID/webhooks">$ curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
-  -d '{"url":"https://hooks.example.com/status","events":["status.updated","incident.created"],"secret":"mysecret"}' \
-  BASE_URL + "/api/v1"/pages/UUID/webhooks</code>
+<code data-curl="$ curl -X POST -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d &#39;{&quot;url&quot;:&quot;https://hooks.example.com/status&quot;,&quot;events&quot;:[&quot;status.updated&quot;,&quot;incident.created&quot;],&quot;secret&quot;:&quot;mysecret&quot;}&#39; BASE_URL + &quot;/api/v1/pages/UUID/webhooks&quot;">$ curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" -d '{"url":"https://hooks.example.com/status","events":["status.updated","incident.created"],"secret":"mysecret"}' BASE_URL + "/api/v1/pages/UUID/webhooks"</code>
 </div>
 
 <h3 class="doc-h2">PUT /api/v1/webhooks/:id <span class="doc-perm-badge perm-write">[write]</span></h3>
 <p class="doc-desc">Update webhook</p>
 <p class="doc-params-label">Body parameters:</p>
-<p class="doc-desc"><code data-curl="url">url</code> — <code data-curl="events">events</code> — <code data-curl="is_active">is_active</code> — <code data-curl="secret">secret</code></p>
+<p class="doc-desc"><code data-curl="url">url</code> \u2014 <code data-curl="events">events</code> \u2014 <code data-curl="is_active">is_active</code> \u2014 <code data-curl="secret">secret</code></p>
 <div class="doc-code-block">
 <button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
-<code data-curl="$ curl -X PUT -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; \
-  -d &#39;{&quot;is_active&quot;:0}&#39; \
-  BASE_URL + "/api/v1"/webhooks/UUID">$ curl -X PUT -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
-  -d '{"is_active":0}' \
-  BASE_URL + "/api/v1"/webhooks/UUID</code>
+<code data-curl="$ curl -X PUT -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d &#39;{&quot;is_active&quot;:0}&#39; BASE_URL + &quot;/api/v1/webhooks/UUID&quot;">$ curl -X PUT -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" -d '{"is_active":0}' BASE_URL + "/api/v1/webhooks/UUID"</code>
 </div>
 
 <h3 class="doc-h2">DELETE /api/v1/webhooks/:id <span class="doc-perm-badge perm-admin">[admin]</span></h3>
 <div class="doc-code-block">
 <button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
-<code data-curl="$ curl -X DELETE -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + "/api/v1"/webhooks/UUID">$ curl -X DELETE -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1"/webhooks/UUID</code>
+<code data-curl="$ curl -X DELETE -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/webhooks/UUID&quot;">$ curl -X DELETE -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/webhooks/UUID"</code>
 </div>
 </div>
 
@@ -328,13 +282,10 @@
 <h3 class="doc-h2">GET /api/v1/settings <span class="doc-perm-badge perm-admin">[admin]</span></h3>
 <div class="doc-code-block">
 <button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
-<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + "/api/v1"/settings">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1"/settings</code>
+<code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/settings&quot;">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/settings"</code>
 </div>
 </div>
 
-</main>
-</div>
-<script src="/js/admin.js"></script>
 <script>
 const BASE_URL = window.location.origin;
 let currentKey = '';
@@ -354,7 +305,7 @@ function onKeyChange() {
     customInput.focus();
   } else {
     customInput.style.display = 'none';
-    currentKey = sel.options[sel.selectedIndex].getAttribute("data-key") || "";
+    currentKey = sel.options[sel.selectedIndex].getAttribute('data-key') || '';
     refreshDisplay();
   }
 }
@@ -364,7 +315,7 @@ function initApiKey() {
   var customInput = document.getElementById('customApiKey');
   <% if (keys && keys.length > 0) { %>
   sel.selectedIndex = 1;
-  currentKey = sel.options[sel.selectedIndex].getAttribute("data-key") || "";
+  currentKey = sel.options[sel.selectedIndex].getAttribute('data-key') || '';
   refreshDisplay();
   <% } else { %>
   customInput.style.display = 'block';
@@ -376,6 +327,11 @@ function onCustomKeyChange() {
   refreshDisplay();
 }
 
+function maskKey(key) {
+  if (!key || key.length <= 4) return '••••';
+  return '••••' + key.slice(-4);
+}
+
 function refreshDisplay() {
   document.querySelectorAll('.doc-code-block code').forEach(function(el) {
     var original = el.getAttribute('data-curl') || '';
@@ -383,9 +339,9 @@ function refreshDisplay() {
     ta.innerHTML = original;
     var decoded = ta.value;
     if (currentKey) {
-      el.textContent = decoded.replace(/\$API_KEY/g, currentKey);
+      el.textContent = decoded.replace(/\$API_KEY/g, maskKey(currentKey));
     } else {
-      el.textContent = decoded;
+      el.textContent = decoded.replace(/\$API_KEY/g, 'YOUR_API_KEY');
     }
   });
 }
