@@ -7,7 +7,7 @@
 <select id="apiKeySelect" onchange="onKeyChange()">
 <option value="__custom__">— Custom key —</option>
 <% keys.forEach(function(k) { %>
-<option value="<%= k.key %>"><%= k.name %> (<%= k.key_prefix %>...)</option>
+<option data-key="<%= k.key %>"><%= k.name %> (<%= k.key_prefix %>...)</option>
 <% }); %>
 </select>
 <input type="text" id="customApiKey" placeholder="Pega tu API key aquí..." style="display:none;" oninput="onCustomKeyChange()">
@@ -354,7 +354,7 @@ function onKeyChange() {
     customInput.focus();
   } else {
     customInput.style.display = 'none';
-    currentKey = sel.value;
+    currentKey = sel.options[sel.selectedIndex].getAttribute("data-key") || "";
     refreshDisplay();
   }
 }
@@ -364,7 +364,7 @@ function initApiKey() {
   var customInput = document.getElementById('customApiKey');
   <% if (keys && keys.length > 0) { %>
   sel.selectedIndex = 1;
-  currentKey = sel.value;
+  currentKey = sel.options[sel.selectedIndex].getAttribute("data-key") || "";
   refreshDisplay();
   <% } else { %>
   customInput.style.display = 'block';
@@ -423,7 +423,6 @@ function fallbackCopy(text) {
     showToast('Copied to clipboard!', 'success');
   } catch (e) {
     showToast('Failed to copy', 'error');
-<script>
   }
   document.body.removeChild(textarea);
 }
