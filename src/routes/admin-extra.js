@@ -25,19 +25,19 @@ router.get('/notifications', async (req, res) => {
 
 // POST /admin/notifications/:id/read
 router.post('/notifications/:id/read', async (req, res) => {
-  notifications.markRead(req.params.id);
+  await notifications.markRead(req.params.id);
   res.redirect('/admin/notifications');
 });
 
 // POST /admin/notifications/read-all
 router.post('/notifications/read-all', async (req, res) => {
-  notifications.markAllRead(req.user.id);
+  await notifications.markAllRead(req.user.id);
   res.redirect('/admin/notifications');
 });
 
 // DELETE /admin/notifications/:id
 router.delete('/notifications/:id', async (req, res) => {
-  notifications.delete(req.params.id);
+  await notifications.delete(req.params.id);
   res.redirect('/admin/notifications');
 });
 
@@ -125,7 +125,7 @@ router.post('/analytics/retention', async (req, res) => {
 
 // POST /admin/analytics/cleanup
 router.post('/analytics/cleanup', async (req, res) => {
-  const deleted = analytics.cleanOldData();
+  const deleted = await analytics.cleanOldData();
   res.json({ ok: true, deleted });
 });
 
@@ -290,12 +290,12 @@ router.post('/dependencies', async (req, res) => {
   if (existing) {
     return res.redirect('/admin/dependencies?msg=exists&type=error');
   }
-  dependencies.create({ component_id, depends_on, cascade_status });
+  const dep = await dependencies.create({ component_id, depends_on, cascade_status });
   res.redirect('/admin/dependencies?msg=success&type=success');
 });
 
 router.delete('/dependencies/:id', async (req, res) => {
-  dependencies.delete(req.params.id);
+  await dependencies.delete(req.params.id);
   res.redirect('/admin/dependencies?msg=deleted&type=success');
 });
 
@@ -355,17 +355,17 @@ router.post('/config/component-statuses', async (req, res) => {
   if (!value || !label) {
     return res.redirect('/admin/config/component-statuses?msg=error&type=error');
   }
-  const existing = componentStatuses.get(value);
+  const existing = await componentStatuses.get(value);
   if (existing) {
-    componentStatuses.update(value, { label, color, position: parseInt(position) || 0 });
+    await componentStatuses.update(value, { label, color, position: parseInt(position) || 0 });
   } else {
-    componentStatuses.create({ value, label, color, position: parseInt(position) || 0 });
+    await componentStatuses.create({ value, label, color, position: parseInt(position) || 0 });
   }
   res.redirect('/admin/config/component-statuses?msg=success&type=success');
 });
 
 router.delete('/config/component-statuses/:value', async (req, res) => {
-  const ok = componentStatuses.delete(req.params.value);
+  const ok = await componentStatuses.delete(req.params.value);
   if (!ok) return res.redirect('/admin/config/component-statuses?msg=system&type=error');
   res.redirect('/admin/config/component-statuses?msg=deleted&type=success');
 });
@@ -388,17 +388,17 @@ router.post('/config/incident-statuses', async (req, res) => {
   if (!value || !label) {
     return res.redirect('/admin/config/incident-statuses?msg=error&type=error');
   }
-  const existing = incidentStatuses.get(value);
+  const existing = await incidentStatuses.get(value);
   if (existing) {
-    incidentStatuses.update(value, { label, color, position: parseInt(position) || 0 });
+    await incidentStatuses.update(value, { label, color, position: parseInt(position) || 0 });
   } else {
-    incidentStatuses.create({ value, label, color, position: parseInt(position) || 0 });
+    await incidentStatuses.create({ value, label, color, position: parseInt(position) || 0 });
   }
   res.redirect('/admin/config/incident-statuses?msg=success&type=success');
 });
 
 router.delete('/config/incident-statuses/:value', async (req, res) => {
-  const ok = incidentStatuses.delete(req.params.value);
+  const ok = await incidentStatuses.delete(req.params.value);
   if (!ok) return res.redirect('/admin/config/incident-statuses?msg=system&type=error');
   res.redirect('/admin/config/incident-statuses?msg=deleted&type=success');
 });
@@ -424,17 +424,17 @@ router.post('/config/mappings', async (req, res) => {
   if (!incident_status || !component_status) {
     return res.redirect('/admin/config/mappings?msg=error&type=error');
   }
-  const existing = statusMappings.get(incident_status, component_status);
+  const existing = await statusMappings.get(incident_status, component_status);
   if (existing) {
-    statusMappings.update(incident_status, component_status, { component_status });
+    await statusMappings.update(incident_status, component_status, { component_status });
   } else {
-    statusMappings.create({ incident_status, component_status });
+    await statusMappings.create({ incident_status, component_status });
   }
   res.redirect('/admin/config/mappings?msg=success&type=success');
 });
 
 router.delete('/config/mappings/:incidentStatus/:componentStatus', async (req, res) => {
-  statusMappings.delete(req.params.incidentStatus, req.params.componentStatus);
+  await statusMappings.delete(req.params.incidentStatus, req.params.componentStatus);
   res.redirect('/admin/config/mappings?msg=deleted&type=success');
 });
 

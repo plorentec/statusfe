@@ -58,7 +58,7 @@ async function sendEmail(to, subject, html) {
 
 async function notifyComponentStatusChange(componentName, oldStatus, newStatus, pageTitle) {
   const { users } = require('../db/models');
-  const admins = users.listAdmins();
+  const admins = await users.listAdmins();
   const statusLabels = {
     operational: 'Operational',
     degraded_performance: 'Degraded Performance',
@@ -91,7 +91,7 @@ async function notifyComponentStatusChange(componentName, oldStatus, newStatus, 
 
 async function notifyIncident(created, incidentName, status, description, pageTitle) {
   const { users } = require('../db/models');
-  const admins = users.listAdmins();
+  const admins = await users.listAdmins();
 
   const subject = `[StatusFe] ${pageTitle}: ${created ? 'New incident' : 'Incident updated'} - ${incidentName}`;
   const html = `

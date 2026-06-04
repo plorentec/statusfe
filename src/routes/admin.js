@@ -305,7 +305,7 @@ router.put('/components/:id', async (req, res) => {
     return res.redirect('/admin/components/' + req.params.id + '/edit?msg=error&type=error');
   }
   const oldData = { name: comp.name, description: comp.description, status: comp.status, group_name: comp.group_name, position: comp.position };
-  const updated = await components.update(req.params.id, { name, description, status, group_name, position });
+  const updated = await components.update(req.params.id, { name, description, status, group_name, group_id, position });
   const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
   for (const a of admins) {
     await notifications.create({
