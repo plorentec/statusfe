@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const { pages, components, componentGroups, apiKeys, incidents, maintenance, notifications, settings, auditLog } = require('../db/models');
 const { requireAuth } = require('../middleware/session');
+const { layout } = require('../middleware/layout');
 
 router.use(requireAuth);
 
@@ -72,7 +73,7 @@ router.get('/', async (req, res) => {
     }
   } catch(e) {}
 
-  res.render('admin/dashboard', {
+  res.send(layout('dashboard', {
     title: 'Dashboard',
     user,
     message: res.locals.message,
@@ -82,7 +83,7 @@ router.get('/', async (req, res) => {
     pageStatuses,
     unread,
     diskInfo
-  });
+  }));
 });
 
 // ===== PAGES CRUD =====
@@ -621,13 +622,13 @@ router.get('/docs', async (req, res) => {
     return full ? {...k, key: full.key} : k;
   })));
   console.log('RENDERING docs.ejs from:', res.app.get('views'));
-  res.render('admin/docs', {
+  res.send(layout('docs', {
     title: 'API Docs',
     user: req.user,
     message: res.locals.message,
     messageType: res.locals.messageType,
     keys: keysWithFull
-  });
+  }));
 });
 
 // ===== MAINTENANCE WINDOWS =====
@@ -839,14 +840,14 @@ router.get('/audit', async (req, res) => {
     return res.redirect('/admin?msg=admin&type=error');
   }
   const logs = await auditLog.list(100);
-  res.render('admin/audit', {
+  res.send(layout('audit', {
     title: 'Audit Log',
     user: req.user,
     userId: req.user.id,
     message: res.locals.message,
     messageType: res.locals.messageType,
     logs
-  });
+  }));
 });
 
 router.post('/admin/audit/cleanup', async (req, res) => {
@@ -888,13 +889,24 @@ router.get('/2fa/setup', async (req, res) => {
   }
   const { getURI } = require('../utils/totp');
   const uri = getURI(user.totp_secret, user.email, 'StatusFe');
-  require('qrcode').toDataURL(uri, (err, qrUrl) => {
-    if (err) {
-      console.error('QR Code generation error:', err);
-      return res.status(500).send('Failed to generate QR code');
-    }
-    res.render('admin/2fa-setup', { title: '2FA Setup', user, qr: qrUrl, totpEnabled: !!user.totp_enabled });
-  });
+  try {
+    const qrUrl = await new Promise((resolve, reject) => {
+      require('qrcode').toDataURL(uri, (err, qrUrl) => {
+        if (err) reject(err);
+        else resolve(qrUrl);
+      });
+    });
+    res.send(layout('2fa-setup', {
+      title: '2FA Setup',
+      user,
+      qr: qrUrl,
+      totpEnabled: !!user.totp_enabled,
+      csrfToken: res.locals.csrfToken
+    }));
+  } catch(err) {
+    console.error('QR Code generation error:', err);
+    return res.status(500).send('Failed to generate QR code');
+  }
 });
 
 // POST /admin/2fa/setup — enable/disable 2FA
@@ -941,12 +953,12 @@ router.get('/audit/count', async (req, res) => {
 // GET /admin/changelog
 router.get('/changelog', async (req, res) => {
   if (req.user.role !== 'admin') return res.redirect('/admin?msg=admin&type=error');
-  res.render('admin/changelog', {
+  res.send(layout('changelog', {
     title: 'Changelog',
     user: req.user,
     message: res.locals.message,
     messageType: res.locals.messageType
-  });
+  }));
 });
 
 // Check for updates
