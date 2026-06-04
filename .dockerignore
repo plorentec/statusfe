@@ -3,6 +3,7 @@
 
 # Environment
 .env
+data/session_secret.txt
 
 # Data / Database
 data/*.db
@@ -21,3 +22,7 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Debug / local artifacts
+error.txt
+opencode.json

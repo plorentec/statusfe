@@ -9,8 +9,8 @@ function csrfProtection(req, res, next) {
   const safe = ['GET', 'HEAD', 'OPTIONS'];
   if (safe.includes(req.method)) return next();
 
-  // Check for CSRF token in header, body, or query
-  const token = req.headers['x-csrf-token'] || req.body._csrf || req.query._csrf;
+  // Check for CSRF token in header or body only (not query params to prevent leakage)
+  const token = req.headers['x-csrf-token'] || req.body._csrf;
 
   if (!token) {
     return res.status(403).json({ error: 'CSRF token missing' });

@@ -89,11 +89,12 @@ router.get('/pages/admin', async (req, res) => {
   const list = await pages.list();
   res.json({ pages: list, total: list.length });
 });
-router.get('/pages/:id', (req, res) => { const p = pages.getById(req.params.id) || pages.getBySlug(req.params.id); if (!p) return res.status(404).json({ error: 'Not found' }); res.json({ page: p }); });
+router.get('/pages/:id', async (req, res) => { const p = await pages.getById(req.params.id) || await pages.getBySlug(req.params.id); if (!p) return res.status(404).json({ error: 'Not found' }); res.json({ page: p }); });
 router.post('/pages', requirePerm('write'), async (req, res) => {
   const { name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public } = req.body;
   if (!name || !slug) return res.status(400).json({ error: 'name and slug required' });
-  if (pages.getBySlug(slug)) return res.status(409).json({ error: 'Slug exists' });
+  const existing = await pages.getBySlug(slug);
+  if (existing) return res.status(409).json({ error: 'Slug exists' });
   const page = await pages.create({ name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public });
   res.status(201).json({ page });
 });
@@ -108,8 +109,8 @@ router.get('/components/admin', async (req, res) => {
   const list = await components.list(f);
   res.json({ components: list, total: list.length });
 });
-router.get('/components/:id', (req, res) => {
-  const c = components.getWithPages(req.params.id);
+router.get('/components/:id', async (req, res) => {
+  const c = await components.getWithPages(req.params.id);
   if (!c) return res.status(404).json({ error: 'Not found' });
   res.json({ component: c });
 });
@@ -130,7 +131,7 @@ router.post('/components', requirePerm('write'), async (req, res) => {
   res.status(201).json({ component: c });
 });
 router.put('/components/:id', requirePerm('write'), async (req, res) => {
-  const oldComp = components.get(req.params.id);
+  const oldComp = await components.get(req.params.id);
   const c = await components.update(req.params.id, req.body);
   if (c && oldComp) {
     const admins = await queryAll("SELECT id FROM users WHERE role=$1", ['admin']);
@@ -147,7 +148,7 @@ router.put('/components/:id', requirePerm('write'), async (req, res) => {
   res.json({ component: c });
 });
 router.delete('/components/:id', requirePerm('admin'), async (req, res) => {
-  const comp = components.get(req.params.id);
+  const comp = await components.get(req.params.id);
   if (comp) {
     const admins = await queryAll("SELECT id FROM users WHERE role=$1", ['admin']);
     admins.forEach(a => {
@@ -225,7 +226,7 @@ router.get('/incidents/admin', async (req, res) => {
   const list = await incidents.list(f);
   res.json({ incidents: list, total: list.length });
 });
-router.get('/incidents/:id', (req, res) => { const i = incidents.get(req.params.id); if (!i) return res.status(404).json({ error: 'Not found' }); res.json({ incident: i }); });
+router.get('/incidents/:id', async (req, res) => { const i = await incidents.get(req.params.id); if (!i) return res.status(404).json({ error: 'Not found' }); res.json({ incident: i }); });
 router.post('/incidents', requirePerm('write'), async (req, res) => {
   const { component_id, page_id, name, status, impact, starts_at, resolved_at, message, visible } = req.body;
   if (!name || !message) return res.status(400).json({ error: 'name and message required' });
@@ -247,7 +248,7 @@ router.post('/incidents', requirePerm('write'), async (req, res) => {
   res.status(201).json({ incident });
 });
 router.put('/incidents/:id', requirePerm('write'), async (req, res) => {
-  const incident = incidents.get(req.params.id);
+  const incident = await incidents.get(req.params.id);
   if (!incident) return res.status(404).json({ error: 'Not found' });
   const oldStatus = incident.status;
   const updated = await incidents.update(req.params.id, req.body);
@@ -267,7 +268,7 @@ router.put('/incidents/:id', requirePerm('write'), async (req, res) => {
   res.json({ incident: updated });
 });
 router.delete('/incidents/:id', requirePerm('admin'), async (req, res) => {
-  const incident = incidents.get(req.params.id);
+  const incident = await incidents.get(req.params.id);
   if (!incident) return res.status(404).json({ error: 'Not found' });
   await incidents.delete(req.params.id);
   await triggerWebhook(incident.page_id, 'incident.deleted', { incident_id: req.params.id });
@@ -299,7 +300,7 @@ router.post('/pages/:pageId/webhooks', requirePerm('write'), async (req, res) =>
   if (!url) return res.status(400).json({ error: 'url required' });
   const { validateWebhookUrl } = require('../utils/webhooks');
   if (!validateWebhookUrl(url)) return res.status(400).json({ error: 'Invalid webhook URL. Only http/https URLs to public hosts are allowed.' });
-  const page = pages.getById(req.params.pageId) || pages.getBySlug(req.params.pageId);
+  const page = await pages.getById(req.params.pageId) || await pages.getBySlug(req.params.pageId);
   if (!page) return res.status(404).json({ error: 'Not found' });
   res.status(201).json({ webhook: await webhooks.create({ page_id: page.id, url, events, secret }) });
 });
@@ -343,8 +344,8 @@ router.get('/maintenance', requirePerm('read'), async (req, res) => {
   const list = await maintenance.list(f);
   res.json({ maintenance: list, total: list.length });
 });
-router.get('/maintenance/:id', requirePerm('read'), (req, res) => {
-  const m = maintenance.get(req.params.id);
+router.get('/maintenance/:id', requirePerm('read'), async (req, res) => {
+  const m = await maintenance.get(req.params.id);
   if (!m) return res.status(404).json({ error: 'Not found' });
   res.json({ maintenance: m });
 });
@@ -395,7 +396,7 @@ router.get('/analytics', requirePerm('read'), async (req, res) => {
 
 // Dependencies
 router.get('/dependencies', requirePerm('read'), async (req, res) => {
-  const allComponents = components.list();
+  const allComponents = await components.list();
   const allDeps = await queryAll(`
     SELECT cd.*, 
       c1.name as componentName, c2.name as dependsOnName
@@ -461,15 +462,15 @@ router.get('/analytics-detail', requirePerm('read'), async (req, res) => {
   }
   
   if (type === 'page') {
-    const page = pages.getById(id) || pages.getBySlug(id);
+    const page = await pages.getById(id) || await pages.getBySlug(id);
     if (!page) return res.status(404).json({ error: 'Page not found' });
     
     // Get page views
-    const views = await queryAll(`
+    const views = (await queryAll(`
       SELECT DATE(created_at) as date, COUNT(*) as cnt
       FROM page_views WHERE page_id=$1 AND created_at >= NOW() - INTERVAL '30 days'
       GROUP BY DATE(created_at) ORDER BY date
-    `, [id]).map(v => ({ date: v.date, cnt: v.cnt }));
+    `, [id])).map(v => ({ date: v.date, cnt: v.cnt }));
     
     const viewData = new Array(30).fill(0);
     views.forEach(v => {
@@ -528,7 +529,7 @@ router.get('/analytics-detail', requirePerm('read'), async (req, res) => {
     res.json({ name: page.name, type: 'page', labels, datasets });
     
   } else if (type === 'component') {
-    const comp = components.get(id);
+    const comp = await components.get(id);
     if (!comp) return res.status(404).json({ error: 'Component not found' });
     
     // Get status history for chart
