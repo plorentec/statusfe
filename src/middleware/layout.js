@@ -2,25 +2,21 @@ const path = require('path');
 const ejs = require('ejs');
 const fs = require('fs');
 
-function escapeEJS(str) {
-  return str
-    .replace(/<%/g, '\u200B<%')
-    .replace(/%>/g, '%>\u200B');
-}
-
 function layout(view, locals) {
   const layoutPath = path.join(__dirname, '..', '..', 'views', 'admin.ejs');
   const viewPath = path.join(__dirname, '..', '..', 'views', 'admin', view + '.ejs');
   
-  let viewContent = fs.readFileSync(viewPath, 'utf8');
-  viewContent = escapeEJS(viewContent);
-  
+  const viewContent = fs.readFileSync(viewPath, 'utf8');
   const layoutContent = fs.readFileSync(layoutPath, 'utf8');
   
-  const merged = { ...locals };
-  merged.body = viewContent;
+  // First: render the partial with EJS to process all <%= %> and <% %> tags
+  const renderedBody = ejs.render(viewContent, locals, {
+    filename: viewPath,
+    root: path.join(__dirname, '..', '..', 'views')
+  });
   
-  return ejs.render(layoutContent, merged, {
+  // Now render the layout with the already-rendered body
+  return ejs.render(layoutContent, { ...locals, body: renderedBody }, {
     filename: layoutPath,
     root: path.join(__dirname, '..', '..', 'views')
   });
