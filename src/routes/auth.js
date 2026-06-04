@@ -99,11 +99,10 @@ router.get('/me', (req, res) => {
 });
 
 // GET /auth/set-password/:token
-router.get('/set-password/:token', (req, res) => {
-  passwordResets.get(req.params.token).then(reset => {
-    if (!reset) return res.redirect('/login?msg=invalid_reset&type=error');
-    res.render('auth/set-password', { title: 'Set Password', token: req.params.token, error: null });
-  });
+router.get('/set-password/:token', async (req, res) => {
+  const reset = await passwordResets.get(req.params.token);
+  if (!reset) return res.redirect('/login?msg=invalid_reset&type=error');
+  res.render('auth/set-password', { title: 'Set Password', token: req.params.token, error: null });
 });
 
 // POST /auth/set-password
@@ -125,23 +124,27 @@ router.post('/set-password', async (req, res) => {
 // ===== 2FA SETUP =====
 
 // GET /admin/2fa/setup — show QR code
-router.get('/2fa/setup', (req, res) => {
+router.get('/2fa/setup', async (req, res) => {
   if (!req.user) return res.redirect('/login');
-  queryOne('SELECT * FROM users WHERE id=$1', [req.user.id]).then(user => {
-    if (!user.totp_secret) {
-      const secret = generateSecret();
-      run('UPDATE users SET totp_secret=$1 WHERE id=$2', [secret, req.user.id]);
-      user.totp_secret = secret;
-    }
-    const uri = getURI(user.totp_secret, user.email, 'StatusFe');
-    require('qrcode').toDataURL(uri, (err, qrUrl) => {
-      if (err) {
-        console.error('QR Code generation error:', err);
-        return res.status(500).send('Failed to generate QR code');
-      }
-      res.render('admin/2fa-setup', { title: '2FA Setup', user, qr: qrUrl, totpEnabled: !!user.totp_enabled });
+  let user = await queryOne('SELECT * FROM users WHERE id=$1', [req.user.id]);
+  if (!user.totp_secret) {
+    const secret = generateSecret();
+    await run('UPDATE users SET totp_secret=$1 WHERE id=$2', [secret, req.user.id]);
+    user.totp_secret = secret;
+  }
+  const uri = getURI(user.totp_secret, user.email, 'StatusFe');
+  try {
+    const qrUrl = await new Promise((resolve, reject) => {
+      require('qrcode').toDataURL(uri, (err, qrUrl) => {
+        if (err) reject(err);
+        else resolve(qrUrl);
+      });
     });
-  });
+    res.render('admin/2fa-setup', { title: '2FA Setup', user, qr: qrUrl, totpEnabled: !!user.totp_enabled });
+  } catch(err) {
+    console.error('QR Code generation error:', err);
+    return res.status(500).send('Failed to generate QR code');
+  }
 });
 
 // POST /admin/2fa/setup — enable/disable 2FA

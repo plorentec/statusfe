@@ -2,6 +2,7 @@ node_modules/
 data/*.db
 data/*.db-wal
 data/*.db-shm
+data/session_secret.txt
 .env
 *.log
 .DS_Store

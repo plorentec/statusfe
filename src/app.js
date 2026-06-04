@@ -192,18 +192,18 @@ app.get('/status/:slug', async (req, res) => {
       FROM components c JOIN page_components pc ON c.id=pc.component_id WHERE pc.page_id=$2 ORDER BY pc.position,c.name
     `, [page.id, page.id]);
     
-    const resolvedComps = pageComps.map(c => {
-      const deps = dependencies.listDependsOnComponent(c.id);
+    const resolvedComps = await Promise.all(pageComps.map(async c => {
+      const deps = await dependencies.listDependsOnComponent(c.id);
       if (deps.length > 0) {
         for (const dep of deps) {
-          const depComp = components.get(dep.depends_on);
+          const depComp = await components.get(dep.depends_on);
           if (depComp && depComp.status !== 'operational' && dep.cascade_status) {
             return { ...c, current_status: depComp.status };
           }
         }
       }
       return c;
-    });
+    }));
     
     const incs = await incidents.list({ page_id: page.id, visible: 1 });
     

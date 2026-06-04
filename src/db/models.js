@@ -54,11 +54,11 @@ module.exports.pages = {
   async getById(id) { return await queryOne('SELECT * FROM pages WHERE id=$1', [id]); },
   async getBySlug(slug) { return await queryOne('SELECT * FROM pages WHERE slug=$1', [slug]); },
 
-  async create({ name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public }) {
+  async create({ name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public, template }) {
     const id = uuidv4();
     await run(
-      'INSERT INTO pages (id,name,slug,description,status,timezone,logo_url,custom_css,custom_html,is_public) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
-      [id, name, slug, description||'', status||'operational', timezone||'UTC', logo_url||null, custom_css||null, custom_html||null, is_public ? 1 : 0]
+      'INSERT INTO pages (id,name,slug,description,status,template,timezone,logo_url,custom_css,custom_html,is_public) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+      [id, name, slug, description||'', status||'operational', template||'default', timezone||'UTC', logo_url||null, custom_css||null, custom_html||null, is_public ? 1 : 0]
     );
     return this.getById(id);
   },
@@ -144,12 +144,14 @@ module.exports.components = {
     if (!page) throw new Error('Page not found');
     const comp = await this.get(componentId);
     if (!comp) throw new Error('Component not found');
-    await run('INSERT INTO page_components (page_id,component_id,position) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [pageId, componentId, position||0]);
+    await run('INSERT INTO page_components (page_id,component_id,position) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [page.id, componentId, position||0]);
     return true;
   },
 
   async removeFromPage(pageId, componentId) {
-    await run('DELETE FROM page_components WHERE page_id=$1 AND component_id=$2', [pageId, componentId]);
+    const page = await module.exports.pages.getById(pageId) || await module.exports.pages.getBySlug(pageId);
+    const effectivePageId = page ? page.id : pageId;
+    await run('DELETE FROM page_components WHERE page_id=$1 AND component_id=$2', [effectivePageId, componentId]);
     return true;
   },
 
@@ -200,7 +202,7 @@ module.exports.components = {
     if (pageId) { q += ' AND page_id=$' + (p.length + 1); p.push(pageId); }
     q += ' ORDER BY created_at DESC LIMIT $' + (p.length + 1);
     p.push(limit);
-    return queryAll(q, p);
+    return await queryAll(q, p);
   },
 
   async getWithPages(componentId) {
@@ -349,6 +351,7 @@ module.exports.incidents = {
             if (data.status === 'investigating') newStatus = 'major_outage';
             else if (data.status === 'identified') newStatus = 'partial_outage';
             else if (data.status === 'monitoring') newStatus = 'degraded_performance';
+            else if (data.status === 'resolved') newStatus = 'operational';
           }
         }
         const comp = await module.exports.components.get(inc.component_id);
@@ -399,12 +402,12 @@ module.exports.apiKeys = {
     if (pageId) { q += ' AND page_id=$' + (p.length + 1); p.push(pageId); }
     q += ' ORDER BY created_at DESC';
     const rows = await queryAll(q, p);
-    return rows.map(r => ({...r, permissions: JSON.parse(r.permissions)}));
+    return rows.map(r => ({...r, permissions: r.permissions ? JSON.parse(r.permissions) : []}));
   },
 
   async getFull(id) {
     const r = await queryOne('SELECT id,key,name,permissions,page_id,is_active,last_used_at,created_at,expires_at FROM api_keys WHERE id=$1', [id]);
-    return r ? {...r, permissions: JSON.parse(r.permissions)} : null;
+    return r ? {...r, permissions: r.permissions ? JSON.parse(r.permissions) : []} : null;
   },
 
   async create({ name, permissions, page_id, rate_limit, expires_at }) {
@@ -469,7 +472,7 @@ module.exports.maintenance = {
     if (filters.page_id) { q += ' AND page_id=$' + (p.length + 1); p.push(filters.page_id); }
     if (filters.status) { q += ' AND status=$' + (p.length + 1); p.push(filters.status); }
     q += ' ORDER BY starts_at ASC';
-    return queryAll(q, p);
+    return await queryAll(q, p);
   },
 
   async get(id) { return await queryOne('SELECT * FROM maintenance_windows WHERE id=$1', [id]); },
@@ -517,7 +520,7 @@ module.exports.notifications = {
 
   async listUnread(userId) {
     const result = await queryOne('SELECT COUNT(*) as count FROM notifications WHERE user_id=$1 AND is_read=0', [userId]);
-    return result.count;
+    return result.count ? parseInt(result.count) : 0;
   },
 
   async create({ user_id, page_id, component_id, type, title, message }) {
@@ -554,7 +557,7 @@ module.exports.analytics = {
 
   async getTotalViews(pageId) {
     const result = await queryOne('SELECT COUNT(*) as count FROM page_views WHERE page_id=$1', [pageId]);
-    return result.count;
+    return result.count ? parseInt(result.count) : 0;
   },
 
   async getRecentViews(pageId, limit=20) {
@@ -699,9 +702,9 @@ module.exports.analytics = {
     if (!retention) return 0;
     const days = parseInt(retention);
     let deleted = 0;
-    const viewsDeleted = await run("DELETE FROM page_views WHERE created_at < NOW() - INTERVAL '" + days + " days'");
+    const viewsDeleted = await run("DELETE FROM page_views WHERE created_at < NOW() - ($1 || ' days')::interval", [days]);
     deleted += viewsDeleted.changes;
-    const histDeleted = await run("DELETE FROM status_history WHERE created_at < NOW() - INTERVAL '" + days + " days'");
+    const histDeleted = await run("DELETE FROM status_history WHERE created_at < NOW() - ($1 || ' days')::interval", [days]);
     deleted += histDeleted.changes;
     return deleted;
   }
@@ -901,7 +904,7 @@ module.exports.componentGroups = {
     const p = [];
     if (pageId) { q += ' AND id IN (SELECT group_id FROM group_pages WHERE page_id=$' + (p.length + 1) + ')'; p.push(pageId); }
     q += ' ORDER BY position, name';
-    return queryAll(q, p);
+    return await queryAll(q, p);
   },
 
   async get(id) { return await queryOne('SELECT * FROM component_groups WHERE id=$1', [id]); },
@@ -989,7 +992,7 @@ module.exports.users = {
   async update(id, data) {
     const fields = [];
     const params = [];
-    const allowed = ['email', 'password_hash', 'name', 'role', 'email_notifications'];
+    const allowed = ['email', 'name', 'role', 'email_notifications'];
     for (const k of allowed) {
       if (data[k] !== undefined) { fields.push(k + '=$' + (params.length + 1)); params.push(data[k]); }
     }
@@ -1021,6 +1024,6 @@ module.exports.auditLog = {
   },
 
   async cleanOld(days) {
-    await run("DELETE FROM audit_log WHERE created_at < NOW() - INTERVAL '" + days + " days'");
+    await run("DELETE FROM audit_log WHERE created_at < NOW() - ($1 || ' days')::interval", [days]);
   }
 };
