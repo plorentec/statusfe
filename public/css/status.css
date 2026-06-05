@@ -1,9 +1,9 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 :root {
-  --operational: #006b39; --maintenance: #f0ad4e; --degraded: #f0ad4e;
-  --partial: #f0ad85; --major: #d9534f;
   --bg: #0a0a0f; --white: #12121a; --text: #e2e8f0; --light: #64748b; --border: #1e1e2e;
   --radius: 12px;
+  --operational: #10b981; --maintenance: #f59e0b; --degraded: #f59e0b;
+  --partial: #f97316; --major: #ef4444;
 }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
 .container { max-width: 960px; margin: 0 auto; padding: 0 20px; }
@@ -39,6 +39,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
   margin-bottom: 24px;
   font-weight: 600;
   font-size: 15px;
+  border: 1px solid;
 }
 .overall-status .overall-label { font-size: 12px; font-weight: 500; opacity: 0.7; display: block; }
 .overall-status .overall-value { font-size: 16px; font-weight: 700; }
@@ -50,15 +51,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
 }
-.overall-status.operational { background: #dcfce7; color: var(--operational); }
-.overall-status.operational .pulse-dot { background: var(--operational); }
-.overall-status.under_maintenance { background: #fef9c3; color: #854d0e; }
-.overall-status.under_maintenance .pulse-dot { background: #eab308; }
-.overall-status.degraded_performance { background: #fef3c7; color: #92400e; }
+.overall-status.operational { background: rgba(16,185,129,0.1); color: #10b981; border-color: rgba(16,185,129,0.3); }
+.overall-status.operational .pulse-dot { background: #10b981; }
+.overall-status.under_maintenance { background: rgba(245,158,11,0.1); color: #f59e0b; border-color: rgba(245,158,11,0.3); }
+.overall-status.under_maintenance .pulse-dot { background: #f59e0b; }
+.overall-status.degraded_performance { background: rgba(245,158,11,0.1); color: #f59e0b; border-color: rgba(245,158,11,0.3); }
 .overall-status.degraded_performance .pulse-dot { background: #f59e0b; }
-.overall-status.partial_outage { background: #ffedd5; color: #9a3412; }
+.overall-status.partial_outage { background: rgba(249,115,22,0.1); color: #f97316; border-color: rgba(249,115,22,0.3); }
 .overall-status.partial_outage .pulse-dot { background: #f97316; }
-.overall-status.major_outage { background: #fee2e2; color: #991b1b; }
+.overall-status.major_outage { background: rgba(239,68,68,0.1); color: #ef4444; border-color: rgba(239,68,68,0.3); }
 .overall-status.major_outage .pulse-dot { background: #ef4444; }
 
 /* Incidents Panel */
@@ -67,45 +68,35 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
   padding: 0;
   margin-bottom: 28px;
   overflow: hidden;
-  border: 1px solid;
+  border: 1px solid var(--border);
+  background: var(--white);
 }
-.incidents-panel.impact-critical { border-color: #fecaca; background: #fef2f2; }
-.incidents-panel.impact-major { border-color: #fed7aa; background: #fff7ed; }
-.incidents-panel.impact-minor { border-color: #fef08a; background: #fefce8; }
-.incidents-panel.impact-none { border-color: #e2e8f0; background: #f8fafc; }
 .incidents-panel-header {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 14px 20px;
-  border-bottom: 1px solid;
+  border-bottom: 1px solid var(--border);
   font-size: 14px;
   font-weight: 700;
+  color: var(--text);
 }
-.incidents-panel.impact-critical .incidents-panel-header { border-color: #fecaca; color: #991b1b; }
-.incidents-panel.impact-major .incidents-panel-header { border-color: #fed7aa; color: #9a3412; }
-.incidents-panel.impact-minor .incidents-panel-header { border-color: #fef08a; color: #854d0e; }
-.incidents-panel.impact-none .incidents-panel-header { border-color: #e2e8f0; color: #475569; }
 .alert-icon {
   width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
 }
 .incidents-panel.impact-critical .alert-icon { background: #ef4444; }
 .incidents-panel.impact-major .alert-icon { background: #f97316; }
-.incidents-panel.impact-minor .alert-icon { background: #eab308; }
-.incidents-panel.impact-none .alert-icon { background: #94a3b8; }
+.incidents-panel.impact-minor .alert-icon { background: #f59e0b; }
+.incidents-panel.impact-none .alert-icon { background: var(--light); }
 .incident-row {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   padding: 14px 20px;
-  border-bottom: 1px solid;
+  border-bottom: 1px solid var(--border);
   gap: 12px;
 }
 .incident-row:last-child { border-bottom: none; }
-.incidents-panel.impact-critical .incident-row { border-color: #fecaca; }
-.incidents-panel.impact-major .incident-row { border-color: #fed7aa; }
-.incidents-panel.impact-minor .incident-row { border-color: #fef08a; }
-.incidents-panel.impact-none .incident-row { border-color: #e2e8f0; }
 .incident-row-left {
   display: flex;
   align-items: flex-start;
@@ -118,23 +109,25 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 }
 .incident-dot.impact-critical { background: #ef4444; }
 .incident-dot.impact-major { background: #f97316; }
-.incident-dot.impact-minor { background: #eab308; }
-.incident-dot.impact-none { background: #94a3b8; }
+.incident-dot.impact-minor { background: #f59e0b; }
+.incident-dot.impact-none { background: var(--light); }
 .incident-row-name { font-size: 14px; font-weight: 600; color: var(--text); }
 .incident-row-msg { font-size: 13px; color: var(--light); margin-top: 3px; line-height: 1.4; }
 .incident-row-badge {
   font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px;
   white-space: nowrap; flex-shrink: 0;
 }
-.badge-operational { background: #dcfce7; color: var(--operational); }
-.badge-under_maintenance { background: #fef9c3; color: #854d0e; }
-.badge-degraded_performance { background: #fef3c7; color: #92400e; }
-.badge-partial_outage { background: #ffedd5; color: #9a3412; }
-.badge-major_outage { background: #fee2e2; color: #991b1b; }
-.badge-investigating { background: #fee2e2; color: #991b1b; }
-.badge-identified { background: #ffedd5; color: #9a3412; }
-.badge-monitoring { background: #fef3c7; color: #92400e; }
-.badge-resolved { background: #dcfce7; color: var(--operational); }
+
+/* Badges */
+.badge-operational { background: rgba(16,185,129,0.15); color: #10b981; }
+.badge-under_maintenance { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.badge-degraded_performance { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.badge-partial_outage { background: rgba(249,115,22,0.15); color: #f97316; }
+.badge-major_outage { background: rgba(239,68,68,0.15); color: #ef4444; }
+.badge-investigating { background: rgba(239,68,68,0.15); color: #ef4444; }
+.badge-identified { background: rgba(249,115,22,0.15); color: #f97316; }
+.badge-monitoring { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.badge-resolved { background: rgba(16,185,129,0.15); color: #10b981; }
 
 /* Component Groups */
 .component-group {
@@ -142,7 +135,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
   border-radius: var(--radius);
   padding: 20px 24px;
   margin-bottom: 16px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
   border: 1px solid var(--border);
 }
 .component-group h2 {
@@ -174,15 +166,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .component-dot {
   width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
 }
-.component-dot.operational { background: var(--operational); }
-.component-dot.under_maintenance { background: #eab308; }
+.component-dot.operational { background: #10b981; }
+.component-dot.under_maintenance { background: #f59e0b; }
 .component-dot.degraded_performance { background: #f59e0b; }
 .component-dot.partial_outage { background: #f97316; }
 .component-dot.major_outage { background: #ef4444; }
 .component-dot.investigating { background: #ef4444; }
 .component-dot.identified { background: #f97316; }
-.component-dot.monitoring { background: #eab308; }
-.component-dot.resolved { background: var(--operational); }
+.component-dot.monitoring { background: #f59e0b; }
+.component-dot.resolved { background: #10b981; }
 .component-name { font-size: 15px; font-weight: 600; color: var(--text); }
 .component-desc { font-size: 13px; color: var(--light); margin-top: 1px; }
 .component-badge {
@@ -193,14 +185,106 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 /* Footer */
 footer { text-align: center; padding: 32px 0; color: var(--light); font-size: 13px; }
 
-/* Dark mode */
-body.status-dark {
-  --bg: #0a0a0f; --white: #12121a; --text: #e2e8f0; --light: #64748b; --border: #1e1e2e;
+/* ===== GRID TEMPLATE ===== */
+.grid-container { margin-bottom: 24px; }
+.grid-group { margin-bottom: 24px; }
+.grid-group h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--light);
+  margin-bottom: 14px;
+  font-weight: 600;
 }
-body.status-dark .page-header { background: var(--white); }
-body.status-dark .component-group { background: var(--white); }
-body.status-dark .overall-status.operational { background: rgba(34,197,94,0.15); }
-body.status-dark .overall-status.major_outage { background: rgba(239,68,68,0.15); }
-body.status-dark .overall-status.degraded_performance { background: rgba(234,179,8,0.15); }
-body.status-dark .overall-status.partial_outage { background: rgba(249,115,22,0.15); }
-body.status-dark .overall-status.under_maintenance { background: rgba(168,85,247,0.15); }
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+.status-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  transition: border-color 0.2s;
+}
+.status-card:hover { border-color: rgba(16,185,129,0.3); }
+.card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  gap: 8px;
+}
+.card-name { font-size: 15px; font-weight: 600; color: var(--text); }
+.card-status {
+  font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px;
+  white-space: nowrap;
+}
+.card-desc { font-size: 13px; color: var(--light); line-height: 1.4; }
+
+/* ===== DARK TEMPLATE ===== */
+.dark-container { margin-bottom: 24px; }
+.dark-group { margin-bottom: 24px; }
+.dark-group h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--light);
+  margin-bottom: 14px;
+  font-weight: 600;
+}
+.dark-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+  background: var(--white);
+}
+.dark-item:last-child { margin-bottom: 0; }
+.dark-item-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+.dark-item-name { font-size: 15px; font-weight: 600; color: var(--text); }
+.dark-item-desc { font-size: 13px; color: var(--light); margin-top: 2px; }
+.dark-item-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.dark-badge {
+  font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: 20px;
+  white-space: nowrap;
+}
+
+/* Header for grid/dark templates */
+header {
+  background: var(--white);
+  border-bottom: 1px solid var(--border);
+  padding: 24px 0;
+}
+.header-content {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.header-content h1 { font-size: 22px; font-weight: 700; color: var(--text); }
+.header-content .subtitle { font-size: 14px; color: var(--light); margin-top: 2px; }
+
+/* Responsive */
+@media (max-width: 640px) {
+  .card-grid { grid-template-columns: 1fr; }
+  .incident-row { flex-direction: column; gap: 8px; }
+  .dark-item { flex-direction: column; align-items: flex-start; gap: 10px; }
+}
