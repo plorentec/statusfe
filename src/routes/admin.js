@@ -906,7 +906,9 @@ router.get('/2fa/setup', async (req, res) => {
       user,
       qr: qrUrl,
       totpEnabled: !!user.totp_enabled,
-      csrfToken: res.locals.csrfToken
+      csrfToken: res.locals.csrfToken,
+      message: res.locals.message,
+      messageType: res.locals.messageType
     }));
   } catch(err) {
     console.error('QR Code generation error:', err.message, err.stack);
