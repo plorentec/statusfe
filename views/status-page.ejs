@@ -39,7 +39,7 @@
 <% } %>
 <% if (page.custom_css) { %><style><%= (page.custom_css || '').replace(/<\/style>/gi, '').replace(/<!--/g, '').replace(/-->/g, '') %></style><% } %>
 </head>
-<body class="<%= page.custom_layout ? 'custom-layout' : (page.template === 'default' ? '' : 'template-' + page.template) %>">
+<body class="<%= page.custom_layout ? 'custom-layout' : 'template-' + page.template %>">
 
 <%
   const componentsData = (components || []).map(c => ({
