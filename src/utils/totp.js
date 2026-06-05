@@ -70,8 +70,17 @@ function simpleHOTP(secret, counter, token) {
   return String(hotp).padStart(6, '0') === token;
 }
 
-function getURI(secret, email, issuer) {
-  return `otpauth://totp/${issuer}:${email}?secret=${secret}&issuer=${issuer}&algorithm=SHA1&digits=6&period=30`;
+function normalizeSecret(secret) {
+  const clean = secret.replace(/=+$/, '').toUpperCase();
+  if (/^[A-Z2-7]+$/.test(clean)) {
+    return secret;
+  }
+  return base32Encode(decodeSecret(secret));
 }
 
-module.exports = { generateSecret, verify, getURI, simpleHOTP, base32Encode, base32Decode, decodeSecret };
+function getURI(secret, email, issuer) {
+  const normalized = normalizeSecret(secret);
+  return `otpauth://totp/${issuer}:${email}?secret=${normalized}&issuer=${issuer}&algorithm=SHA1&digits=6&period=30`;
+}
+
+module.exports = { generateSecret, verify, getURI, simpleHOTP, base32Encode, base32Decode, decodeSecret, normalizeSecret };

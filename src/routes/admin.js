@@ -881,13 +881,18 @@ router.post('/2fa/verify', async (req, res) => {
 router.get('/2fa/setup', async (req, res) => {
   if (!req.user) return res.redirect('/login');
   const user = await queryOne('SELECT * FROM users WHERE id=$1', [req.user.id]);
+  const { generateSecret, getURI, normalizeSecret } = require('../utils/totp');
   if (!user.totp_secret) {
-    const { generateSecret } = require('../utils/totp');
     const secret = generateSecret();
     await run('UPDATE users SET totp_secret=$1 WHERE id=$2', [secret, req.user.id]);
     user.totp_secret = secret;
+  } else {
+    const normalized = normalizeSecret(user.totp_secret);
+    if (normalized !== user.totp_secret) {
+      await run('UPDATE users SET totp_secret=$1 WHERE id=$2', [normalized, req.user.id]);
+      user.totp_secret = normalized;
+    }
   }
-  const { getURI } = require('../utils/totp');
   const uri = getURI(user.totp_secret, user.email, 'StatusFe');
   try {
     const qrUrl = await new Promise((resolve, reject) => {
@@ -904,8 +909,8 @@ router.get('/2fa/setup', async (req, res) => {
       csrfToken: res.locals.csrfToken
     }));
   } catch(err) {
-    console.error('QR Code generation error:', err);
-    return res.status(500).send('Failed to generate QR code');
+    console.error('QR Code generation error:', err.message, err.stack);
+    return res.status(500).send('Failed to generate QR code: ' + err.message);
   }
 });
 
