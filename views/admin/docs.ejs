@@ -349,11 +349,20 @@ function refreshDisplay() {
 function copyCurl(btn) {
   var block = btn.parentElement;
   var codeEl = block.querySelector('code');
-  var text = codeEl ? codeEl.textContent.trim() : '';
+  var original = codeEl ? codeEl.getAttribute('data-curl') || '' : '';
+  var ta = document.createElement('textarea');
+  ta.innerHTML = original;
+  var text = ta.value;
 
   if (!text) {
     showToast('Nothing to copy', 'error');
     return;
+  }
+
+  if (currentKey) {
+    text = text.replace(/\$API_KEY/g, currentKey);
+  } else {
+    text = text.replace(/\$API_KEY/g, 'YOUR_API_KEY');
   }
 
   if (navigator.clipboard && navigator.clipboard.writeText) {
