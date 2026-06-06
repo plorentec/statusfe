@@ -182,6 +182,7 @@ app.get('/status/:slug', async (req, res) => {
   try {
     const page = await pages.getBySlug(req.params.slug);
     if (!page) return res.status(404).send('Not found');
+    if (page.is_public !== 1) return res.status(404).send('Not found');
     
     analytics.recordView(page.id, req.ip, req.get('User-Agent') || '', req.get('Referrer') || '').catch(() => {});
     
@@ -248,6 +249,7 @@ app.get('/embed/:slug', async (req, res) => {
   try {
     const page = await pages.getBySlug(req.params.slug);
     if (!page) return res.status(404).send('Not found');
+    if (page.is_public !== 1) return res.status(404).send('Not found');
     const { queryAll } = require('./db/database');
     const comps = await queryAll(`
       SELECT c.name, c.status,
