@@ -8,10 +8,10 @@
 npm start          # production, port from env or default 3000
 npm run dev        # node --watch src/app.js
 ```
-`PORT` from env, default `3000`. `SESSION_SECRET` from env, fallback `'statusfe-session-secret-change-in-production'`.
+`PORT` from env, default `3000`. `SESSION_SECRET` from env, auto-generated on first run (saved to `data/session_secret.txt`).
 
 ## Database
-PostgreSQL via `pg` (node-postgres). Connection from env: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_SSL`. Defaults: `localhost:5432`, db `statusfe`, user `postgres`.
+PostgreSQL via `pg` (node-postgres). Env: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_SSL`. Defaults: `localhost:5432`, db `statusfe`, user `postgres`.
 
 ## Seed data (on first run)
 - Admin user: `admin@status.local` / `admin123`
@@ -22,18 +22,19 @@ PostgreSQL via `pg` (node-postgres). Connection from env: `DB_HOST`, `DB_PORT`, 
 ## Architecture
 ```
 src/app.js            ← Express entry. Mounts routes, serves public/, renders views, tracks page views, exports `app`. Daily cron (setInterval 24h) cleans old analytics and rotates audit logs.
-src/db/database.js    ← pg Pool singleton. Exports: prepare(), query(), queryOne(), queryAll(), run(), pragma(). All return Promises.
+src/db/database.js    ← pg Pool singleton. Exports: prepare(), query(), queryOne(), queryAll(), run(), getPool(). All return Promises.
 src/db/init.js        ← Schema creation (CREATE TABLE IF NOT EXISTS), seed data. No migrations — schema is static.
 src/db/models.js      ← CRUD helpers exported as named modules. All methods are async.
 src/routes/api.js     ← REST API under /api/v1 (public read + authenticated write).
 src/routes/admin.js   ← Admin UI CRUD (pages, components, users, incidents, maintenance, api-keys, email-settings, groups, audit, changelog). All guarded by `requireAuth`.
 src/routes/admin-extra.js ← Admin UI for notifications, analytics, dependencies, config (statuses, mappings). Mounted after admin.js — route conflicts caught first by admin.js.
-src/routes/auth.js    ← Login/register/logout.
+src/routes/auth.js    ← Login/register/logout, 2FA flow, password reset.
 src/middleware/session.js ← PostgreSQL-persisted sessions (shared pool), signed cookies (HMAC-SHA256), flash messages via URL query params (`?msg=`, `?type=`). `requireAuth` guard.
 src/middleware/auth.js  ← API key auth for REST API only (Bearer / x-api-key / ?api_key=). `requirePerm` guard.
 src/middleware/csrf.js  ← Cookie-based CSRF tokens. `csrfMiddleware` generates/reuses token in `_csrf` cookie + `res.locals.csrfToken`. `csrfProtection` validates on POST/PUT/DELETE. Auto-inject JS in admin.ejs adds token to forms missing it.
 src/middleware/rate-limit.js ← Rate limiter exports: `globalLimiter`, `authLimiter`, `apiLimiter`. Admin limiter defined inline in `app.js` (60 req/min).
 src/middleware/require-2fa.js ← Enforces 2FA for admin/write roles. Skips for `role=user`. Checks `_2fa_verified` cookie (8-hour validity).
+src/middleware/layout.js ← EJS layout renderer. `layout(viewName, locals)` renders a partial wrapped in admin.ejs.
 src/utils/email.js    ← Nodemailer-based. Graceful degradation if SMTP unconfigured.
 src/utils/webhooks.js ← Fire-and-forget POST with HMAC signature, 5s timeout, SSRF URL validation.
 src/utils/totp.js     ← Custom TOTP implementation (HMAC-SHA1, no base32 dependency).
@@ -75,109 +76,43 @@ data/audit_logs/      ← Daily rotated audit log CSV files.
 - `.env` is gitignored — copy `.env.example` before first run.
 - `apiKeys.authenticate()` uses bcrypt cost factor 10 (must match creation hash).
 
-## API auth
-Include API key as `Authorization: Bearer <key>`, `x-api-key: <key>`, or `?api_key=<key>`.
+## Route protection map
 
-## DB
-PostgreSQL via `pg` Pool. Schema created on every startup (`CREATE TABLE IF NOT EXISTS`). No ALTER TABLE migrations — schema is static.
+### Public (no auth)
+- `/status/:slug` — Public status page view (renders `status-page.ejs`). No `is_public` check — any page slug is accessible.
+- `/embed/:slug` — Embeddable widget (compact/detailed/minimal). No `is_public` check.
+- `/api/v1/health` — Health check.
+- `/api/v1/pages` — Lists only pages with `is_public=1`.
+- `/api/v1/pages/:slug` — Public page data by slug.
+- `/api/v1/components` — Lists all components (no public/private filter).
+- `/api/v1/incidents` — Lists all incidents with `visible=1`.
+- `/api/v1/status/:slug` — JSON endpoint for public status page data.
+- `/login`, `/register` — Auth pages.
+- `/auth/*` — Login, logout, 2FA, password reset routes.
+- `GET /auth/me` — Returns `401` if not authenticated, otherwise current user.
 
-### SQL patterns
-- Placeholders: `$1, $2, $3...` (not `?`)
-- Current timestamp: `NOW()` (not `datetime('now')`)
-- Interval: `NOW() - INTERVAL '30 days'` (not `datetime('now', '-30 days')`)
-- Upsert: `INSERT INTO ... ON CONFLICT (key) DO UPDATE SET value=$N` (not `INSERT OR REPLACE`)
-- Date functions: `DATE(created_at)`, `TO_CHAR(created_at, 'YYYY-MM-DD-HH')`
-- All DB methods (`queryOne`, `queryAll`, `run`) return Promises
+### Authenticated (session-based, `requireAuth` from `src/middleware/session.js`)
+- `/admin/*` — All admin UI routes. Guarded by `router.use(requireAuth)` in `admin.js`.
+- `/auth/2fa/setup` — 2FA setup (also in `auth.js` with its own `req.user` check).
 
-## Templates
-Each page has a `template` field: `default` (clean list), `grid` (card boxes), `dark` (terminal style). Admin form auto-generates slugs from names (lowercase, spaces to hyphens, strips accents).
+### API key auth (REST only, `auth` from `src/middleware/auth.js`)
+- All `/api/v1` routes after `router.use(auth)` — requires valid API key.
+- Sub-routes may add `requirePerm('write')` or `requirePerm('admin')`.
 
-## Notifications
-Created automatically when component status changes (via API `PUT /components/:id/status`). Stored in `notifications` table. Admins get a notification badge on the sidebar. Mark read, mark all read, delete.
+### 2FA enforcement
+- `require2FA` middleware applies to `/admin` (applied in `app.js`). Skips for `role=user`. Checks `_2fa_verified` cookie.
 
-## Analytics
-Page views tracked on every `/status/:slug` request (stored in `page_views`). Analytics dashboard shows 30-day view charts, uptime percentage, total views. Uptime calculated from `status_history`. Retention configurable via `settings.analytics_retention_days` (30–3650 days).
+## Accessing non-public pages
 
-## Component Dependencies
-`component_dependencies` table links components. If `cascade_status=1`, the dependent inherits the upstream's non-operational status on the public page. Managed via `/admin/dependencies`.
+A page with `is_public=0` is **not** accessible via the public status page view or the `/api/v1/pages` list endpoint. However, it **can** still be reached through these paths:
 
-## Embed Widget
-Customizable via query params: `/embed/:slug?style=compact|detailed|minimal&color=#hex`.
+1. **Direct URL**: `/status/:slug` — the route handler (`app.js:181`) fetches the page by slug and renders it regardless of `is_public`. No auth check is performed.
+2. **Embed widget**: `/embed/:slug` — same as above, no `is_public` check.
+3. **API JSON endpoint**: `/api/v1/status/:slug` — returns page data regardless of `is_public`.
+4. **API key admin routes**: `/api/v1/pages/admin` and `/api/v1/pages/:id` — accessible with any valid API key (even `read` permission).
+5. **Admin UI**: `/admin/pages` — requires session auth with any user role.
 
-## Dark/Light Mode
-Toggle button in bottom-right of every admin and public page. Preference stored in `localStorage` (`statusfe-theme` for admin, `statusfe-status-theme` for public pages). CSS uses `body.dark` class with CSS custom property overrides.
-
-## Docker
-- `Dockerfile` uses `node:20-slim`, runs `npm install --production` in build.
-- `docker-compose.yml` runs `statusfe` + `postgres:16-alpine` with healthcheck.
-- `.env.example` has `PORT`, `SESSION_SECRET`, and `DB_*` config.
-- `systemd/statusfe.service` for manual install on Linux.
-- Docker volumes: `statusfe-data` (app data), `postgres-data` (PostgreSQL data).
-
-## Security Features
-
-### 2FA (Two-Factor Authentication)
-- TOTP-based via Google Authenticator / Authy / any TOTP app
-- **Mandatory** for users with `admin` or `write` role
-- Optional for `role=user` (can enable manually)
-- Setup flow: `/admin/2fa/setup` → scan QR code → enter 6-digit code → enable
-- Session cookie `_2fa_verified` valid for 8 hours after successful verification
-- Disable flow: `/admin/2fa/disable` → enter TOTP code to confirm
-- `require2FA` middleware in `src/middleware/require-2fa.js` — skips for `role=user`, checks `_2fa_verified` cookie
-
-### Audit Log
-- `audit_log` table: `id, user_id, action, target, details, ip, user_agent, created_at`
-- All admin CRUD operations logged
-- CSV download: `GET /admin/audit/download` with optional `?from=` and `?to=` date filters
-- Daily rotation: archives to `data/audit_logs/audit-log-YYYY-MM-DD.csv` (via daily cron in app.js)
-- Configurable retention: admin UI POST to `/admin/audit/cleanup` (default 365 days)
-
-### CSRF Protection
-- Cookie-based tokens stored in `_csrf` cookie (plain, not signed)
-- Token exposed via `res.locals.csrfToken` to all views
-- Auto-inject JS in `admin.ejs` adds `_csrf` hidden input to any form missing it
-- Validation checks `x-csrf-token` header, `req.body._csrf`, or `req.query._csrf`
-- Timing-safe comparison with `timingSafeEqual`
-
-### Rate Limiting
-- Global: 200 requests/minute
-- Auth (login/register): 10 requests/15 minutes
-- API: 60 requests/minute
-- Admin: 60 requests/minute (defined inline in app.js)
-
-### XSS Prevention
-- `</style>` and HTML comments stripped in `custom_css`
-- `</textarea>` escaped in `custom_html`
-- Logo URL attribute escaped in templates
-- JS string interpolation sanitization in custom layout rendering
-
-### SSRF Protection
-- Webhook URLs validated before delivery
-- Blocks: `localhost`, `127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`
-- Blocks non-http/https protocols, IP addresses in hostname
-
-### HTTPS
-- Self-signed SSL: `HTTPS=true` in `.env` generates self-signed cert via openssl
-- Graceful fallback to HTTP if openssl unavailable
-
-### CORS
-- Restricted to `/status/`, `/embed/`, `/api/` paths only
-
-### API Key Security
-- Keys hashed with bcrypt cost factor 10
-- Full key only returned on creation (not in list)
-- Expiration enforcement: `expires_at` checked on every authentication
-- Permissions: `read`, `write`, `admin` (admin implies all others)
-
-## Component Groups
-- Groups can be **global** (no pages selected, visible on all pages) or **page-specific** (assigned to one or more pages)
-- Many-to-many relationship via `group_pages` table
-- Form uses checkboxes to select multiple pages
-
-## Changelog
-- `/admin/changelog` — Version history and release notes
-- Version: `2.0.0` (in `package.json`)
-- Update checker: `GET /admin/check-update` queries GitHub API for latest release
+The `is_public` flag only controls visibility in the public API (`GET /api/v1/pages` lists only public pages) and is not enforced on the rendering endpoints. To restrict access, add a `is_public` check in `app.js` for `/status/:slug` and `/embed/:slug`, or gate them behind a route-level auth middleware.
 
 ## Gotchas
 - All DB methods are async — always `await` them or return Promises. Route handlers must be `async`.

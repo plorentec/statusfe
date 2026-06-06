@@ -61,6 +61,7 @@ router.get('/incidents', async (req, res) => {
 router.get('/status/:slug', async (req, res) => {
   const page = await pages.getBySlug(req.params.slug);
   if (!page) return res.status(404).json({ error: 'Not found' });
+  if (page.is_public !== 1) return res.status(404).json({ error: 'Not found' });
   const comps = await queryAll(`
     SELECT c.*,
       (SELECT new_status FROM status_history WHERE component_id=c.id AND page_id=$1 ORDER BY created_at DESC LIMIT 1) as current_status
