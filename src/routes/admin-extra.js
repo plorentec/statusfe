@@ -262,7 +262,7 @@ router.get('/dependencies', async (req, res) => {
   const allComponents = await components.list();
   const allDeps = await queryAll(`
     SELECT cd.*, 
-      c1.name as componentName, c2.name as dependsOnName
+      c1.name as "componentName", c2.name as "dependsOnName"
     FROM component_dependencies cd
     JOIN components c1 ON cd.component_id = c1.id
     JOIN components c2 ON cd.depends_on = c2.id

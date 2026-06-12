@@ -2,16 +2,16 @@ const nodemailer = require('nodemailer');
 
 let transporter = null;
 
-function getTransporter() {
+async function getTransporter() {
   if (transporter) return transporter;
 
   const settings = require('../db/models').settings;
-  const smtp = settings.get('smtp_host');
-  const port = settings.get('smtp_port');
-  const user = settings.get('smtp_user');
-  const pass = settings.get('smtp_pass');
-  const secure = settings.get('smtp_secure') === 'true';
-  const from = settings.get('smtp_from');
+  const smtp = await settings.get('smtp_host');
+  const port = await settings.get('smtp_port');
+  const user = await settings.get('smtp_user');
+  const pass = await settings.get('smtp_pass');
+  const secure = await settings.get('smtp_secure') === 'true';
+  const from = await settings.get('smtp_from');
 
   if (!smtp || !from) {
     return null;
@@ -29,14 +29,14 @@ function getTransporter() {
 
 async function sendEmail(to, subject, html) {
   const settings = require('../db/models').settings;
-  const from = settings.get('smtp_from');
-  const name = settings.get('smtp_from_name') || 'StatusFe';
+  const from = await settings.get('smtp_from');
+  const name = (await settings.get('smtp_from_name')) || 'StatusFe';
 
   if (!from) {
     return { ok: false, error: 'No SMTP from address configured' };
   }
 
-  const transporter = getTransporter();
+  const transporter = await getTransporter();
   if (!transporter) {
     return { ok: false, error: 'SMTP not configured (missing host or from address)' };
   }
@@ -116,14 +116,14 @@ async function notifyIncident(created, incidentName, status, description, pageTi
 
 async function sendWelcomeEmail(email, name, resetUrl) {
   const settings = require('../db/models').settings;
-  const from = settings.get('smtp_from');
-  const nameFrom = settings.get('smtp_from_name') || 'StatusFe';
+  const from = await settings.get('smtp_from');
+  const nameFrom = (await settings.get('smtp_from_name')) || 'StatusFe';
 
   if (!from) {
     return { ok: false, error: 'No SMTP from address configured' };
   }
 
-  const transporter = getTransporter();
+  const transporter = await getTransporter();
   if (!transporter) {
     return { ok: false, error: 'SMTP not configured' };
   }
