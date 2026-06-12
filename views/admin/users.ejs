@@ -102,5 +102,22 @@
 <script src="/js/admin.js"></script>
 
 <%- include("../partials/_csrf"); %>
+<script>
+(function() {
+  var token = document.getElementById('csrfToken');
+  if (token) {
+    var inputs = document.querySelectorAll('form input[name="_csrf"]');
+    if (inputs.length === 0) {
+      document.querySelectorAll('form').forEach(function(f) {
+        var hidden = document.createElement('input');
+        hidden.type = 'hidden';
+        hidden.name = '_csrf';
+        hidden.value = token.value;
+        f.appendChild(hidden);
+      });
+    }
+  }
+})();
+</script>
 </body>
 </html>

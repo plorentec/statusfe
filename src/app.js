@@ -88,18 +88,31 @@ const HTTPS_ENABLED = process.env.HTTPS === 'true';
 // Security headers
 app.use(helmet({ contentSecurityPolicy: false }));
 
-// Rate limiting
-app.use(globalLimiter);
-app.use('/auth/login', authLimiter);
-app.use('/auth/register', authLimiter);
-app.use('/api/v1', apiLimiter);
-app.use('/admin', rateLimit({
+// Rate limiting wrapper — catches validation errors from express-rate-limit v7
+function safeLimiter(limiter) {
+  return (req, res, next) => {
+    limiter(req, res, (err) => {
+      if (err && err.code && err.code.startsWith('ERR_ERL_')) {
+        return next();
+      }
+      next(err);
+    });
+  };
+}
+
+app.use(safeLimiter(globalLimiter));
+app.use('/auth/login', safeLimiter(authLimiter));
+app.use('/auth/register', safeLimiter(authLimiter));
+app.use('/api/v1', safeLimiter(apiLimiter));
+
+const adminLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 60,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many admin requests, please try again later.' }
-}));
+});
+app.use('/admin', safeLimiter(adminLimiter));
 
 app.use(compression());
 app.use((req, res, next) => {
@@ -114,11 +127,12 @@ app.use((req, res, next) => {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Handle _method for PUT/DELETE from forms
+// Handle _method for PUT/DELETE from forms (body or query param)
 app.use((req, res, next) => {
-  if (req.body && req.body._method) {
-    req.method = req.body._method.toUpperCase();
-    delete req.body._method;
+  const method = req.body && req.body._method ? req.body._method : (req.query && req.query._method);
+  if (method) {
+    req.method = method.toUpperCase();
+    if (req.body && req.body._method) delete req.body._method;
   }
   next();
 });
@@ -130,17 +144,37 @@ app.use(session);
 // API routes BEFORE CSRF — they use API key auth, not CSRF
 app.use('/api/v1', apiRoutes);
 
+// CSRF protection for all routes except /api/v1 and auth routes
+app.use((req, res, next) => {
+  if (req.path.startsWith('/auth/') || req.path === '/login' || req.path === '/register') return next();
+  csrfMiddleware(req, res, next);
+});
+app.use((req, res, next) => {
+  if (req.path.startsWith('/auth/') || req.path === '/login' || req.path === '/register') return next();
+  csrfProtection(req, res, next);
+});
+
 // 2FA requirement for admin and write roles
 const { require2FA } = require('./middleware/require-2fa');
 app.use('/admin', require2FA);
 
 const { pages, components, incidents, analytics, dependencies, notifications } = require('./db/models');
 
-// Make unread notification count available to all admin views
+// Make unread notification count and csrfToken available to all admin views
 app.use((req, res, next) => {
   if (req.user && req.path.startsWith('/admin')) {
     notifications.listUnread(req.user.id).then(count => {
       res.locals.unread = count;
+      if (!res.locals.csrfToken) res.locals.csrfToken = '';
+      // Make all res.locals available as template variables
+      var origRender = res.render;
+      res.render = function(view, locals, fn) {
+        if (typeof locals === 'function') {
+          fn = locals;
+          locals = {};
+        }
+        return origRender.call(this, view, Object.assign({}, res.locals, locals || {}), fn);
+      };
       next();
     }).catch(next);
   } else {
@@ -193,8 +227,16 @@ app.get('/status/:slug', async (req, res) => {
         (SELECT new_status FROM status_history WHERE component_id=c.id AND (page_id=$1 OR page_id IS NULL) ORDER BY created_at DESC LIMIT 1) as current_status
       FROM components c JOIN page_components pc ON c.id=pc.component_id WHERE pc.page_id=$2 ORDER BY pc.position,c.name
     `, [page.id, page.id]);
+
+    const allGroups = await queryAll('SELECT id, name FROM component_groups ORDER BY position, name');
     
     const resolvedComps = await Promise.all(pageComps.map(async c => {
+      const group = allGroups.find(g => g.id === c.group_id);
+      c.group_name = group ? group.name : (c.group_name || 'Other');
+      // If override_status is set, use it and skip cascade
+      if (c.override_status) {
+        return { ...c, current_status: c.override_status };
+      }
       const deps = await dependencies.listDependsOnComponent(c.id);
       if (deps.length > 0) {
         for (const dep of deps) {
@@ -238,7 +280,7 @@ app.get('/status/:slug', async (req, res) => {
     
     const formatStatus = s => ({operational:'Operational',under_maintenance:'Under Maintenance',degraded_performance:'Degraded Performance',partial_outage:'Partial Outage',major_outage:'Major Outage',investigating:'Investigating',identified:'Identified',monitoring:'Monitoring',resolved:'Resolved'}[s] || s);
     const refreshInterval = page.refresh_interval || 0;
-    res.render('status-page', { page, components: resolvedComps, incidents: incs, incidentsByComponent, formatStatus, refreshInterval: refreshInterval ? parseInt(refreshInterval) : 0 });
+    res.render('status-page', { page, components: resolvedComps, incidents: incs, incidentsByComponent, formatStatus, refreshInterval: refreshInterval ? parseInt(refreshInterval) : 0, groups: allGroups });
   } catch(e) {
     console.error('Status page error:', e);
     res.status(500).send('Internal error');
@@ -297,31 +339,37 @@ app.use((err, req, res, next) => {
 module.exports = app;
 
 // Start server with optional HTTPS
-if (HTTPS_ENABLED) {
-  const { generateSelfSignedCert } = require('./utils/ssl');
-  const https = require('https');
-  const fs = require('fs');
-  const { certPath, keyPath } = generateSelfSignedCert();
-  if (certPath && keyPath) {
-    const sslApp = https.createServer({
-      key: fs.readFileSync(keyPath),
-      cert: fs.readFileSync(certPath)
-    }, app);
-    sslApp.listen(PORT, () => {
-      console.log(`StatusFe HTTPS: https://0.0.0.0:${PORT} (self-signed certificate)`);
-    });
+// Initialize DB and session table before starting
+(async () => {
+  try {
+    await init();
+    await require('./middleware/session').initSessionTable();
+  } catch(e) {
+    console.error('Startup failed:', e.message);
+    process.exit(1);
+  }
+  
+  if (HTTPS_ENABLED) {
+    const https = require('https');
+    const { generateSelfSignedCert } = require('./utils/ssl');
+    const { certPath, keyPath } = generateSelfSignedCert();
+    if (certPath && keyPath) {
+      const sslApp = https.createServer({
+        key: fs.readFileSync(keyPath),
+        cert: fs.readFileSync(certPath)
+      }, app);
+      sslApp.listen(PORT, () => {
+        console.log(`StatusFe HTTPS: https://0.0.0.0:${PORT} (self-signed certificate)`);
+      });
+    } else {
+      console.warn('HTTPS enabled but SSL cert generation failed. Falling back to HTTP.');
+      app.listen(PORT, () => {
+        console.log(`\n  StatusFe: http://0.0.0.0:${PORT}`);
+      });
+    }
   } else {
-    console.warn('HTTPS enabled but SSL cert generation failed. Falling back to HTTP.');
     app.listen(PORT, () => {
       console.log(`\n  StatusFe: http://0.0.0.0:${PORT}`);
     });
   }
-} else {
-  app.listen(PORT, () => {
-    console.log(`\n  StatusFe: http://0.0.0.0:${PORT}`);
-  });
-}
-
-// Initialize DB and session table
-init();
-require('./middleware/session').initSessionTable().catch(e => console.error('Session table init failed:', e));
+})();

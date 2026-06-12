@@ -54,11 +54,11 @@ module.exports.pages = {
   async getById(id) { return await queryOne('SELECT * FROM pages WHERE id=$1', [id]); },
   async getBySlug(slug) { return await queryOne('SELECT * FROM pages WHERE slug=$1', [slug]); },
 
-  async create({ name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public, template }) {
+  async create({ name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public, template, refresh_interval, custom_layout, custom_layout_css, custom_layout_html }) {
     const id = uuidv4();
     await run(
-      'INSERT INTO pages (id,name,slug,description,status,template,timezone,logo_url,custom_css,custom_html,is_public) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
-      [id, name, slug, description||'', status||'operational', template||'default', timezone||'UTC', logo_url||null, custom_css||null, custom_html||null, is_public ? 1 : 0]
+      'INSERT INTO pages (id,name,slug,description,status,template,timezone,logo_url,custom_css,custom_html,is_public,refresh_interval,custom_layout,custom_layout_css,custom_layout_html) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)',
+      [id, name, slug, description||'', status||'operational', template||'default', timezone||'UTC', logo_url||null, custom_css||null, custom_html||null, is_public ? 1 : 0, refresh_interval||0, custom_layout ? 1 : 0, custom_layout_css||null, custom_layout_html||null]
     );
     return this.getById(id);
   },
@@ -155,14 +155,18 @@ module.exports.components = {
     return true;
   },
 
-  async updateStatus(componentId, newStatus, pageIdOrSlug) {
+  async updateStatus(componentId, newStatus, pageIdOrSlug, override) {
     const comp = await this.get(componentId);
     if (!comp) throw new Error('Component not found');
 
     const oldStatus = comp.status;
     if (oldStatus === newStatus) return { component: comp, history: null };
 
-    await run('UPDATE components SET status=$1, updated_at=NOW() WHERE id=$2', [newStatus, componentId]);
+    if (override) {
+      await run('UPDATE components SET status=$1, override_status=$1, updated_at=NOW() WHERE id=$2', [newStatus, componentId]);
+    } else {
+      await run('UPDATE components SET status=$1, updated_at=NOW() WHERE id=$2', [newStatus, componentId]);
+    }
 
     let pageId = pageIdOrSlug;
     if (pageId && !isUUID(pageId)) {
@@ -804,7 +808,7 @@ module.exports.componentStatuses = {
     }
     if (fields.length) {
       params.push(value);
-      await run('UPDATE component_statuses SET ' + fields.join(',') + ', updated_at=NOW() WHERE value=$' + (params.length), ...params);
+      await run('UPDATE component_statuses SET ' + fields.join(',') + ' WHERE value=$' + (params.length), ...params);
     }
     return await this.get(value);
   },
@@ -837,7 +841,7 @@ module.exports.incidentStatuses = {
     }
     if (fields.length) {
       params.push(value);
-      await run('UPDATE incident_statuses SET ' + fields.join(',') + ', updated_at=NOW() WHERE value=$' + (params.length), ...params);
+      await run('UPDATE incident_statuses SET ' + fields.join(',') + ' WHERE value=$' + (params.length), ...params);
     }
     return await this.get(value);
   },
@@ -881,7 +885,7 @@ module.exports.statusMappings = {
     }
     if (fields.length) {
       params.push(incidentStatus, componentStatus);
-      await run('UPDATE status_mappings SET ' + fields.join(',') + ', updated_at=NOW() WHERE incident_status=$1 AND component_status=$2', ...params);
+      await run('UPDATE status_mappings SET ' + fields.join(',') + ' WHERE incident_status=$1 AND component_status=$2', ...params);
     }
     return await this.get(incidentStatus, componentStatus);
   },

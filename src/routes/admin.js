@@ -7,9 +7,13 @@ const fs = require('fs');
 const path = require('path');
 const { pages, components, componentGroups, apiKeys, incidents, maintenance, notifications, settings, auditLog } = require('../db/models');
 const { requireAuth } = require('../middleware/session');
-const { layout } = require('../middleware/layout');
+const { layout, exposeLocals } = require('../middleware/layout');
 
 router.use(requireAuth);
+router.use((req, res, next) => {
+  exposeLocals(res);
+  next();
+});
 
 // GET /admin - Dashboard
 router.get('/', async (req, res) => {
@@ -242,7 +246,8 @@ router.get('/components', async (req, res) => {
     messageType: res.locals.messageType,
     components: allComponents,
     componentMode: 'list',
-    groups: await componentGroups.list()
+    groups: await componentGroups.list(),
+    csrfToken: res.locals.csrfToken
   });
 });
 
@@ -255,7 +260,8 @@ router.get('/components/new', async (req, res) => {
     components: await components.list(),
     componentMode: 'create',
     component: {},
-    groups: await componentGroups.list()
+    groups: await componentGroups.list(),
+    csrfToken: res.locals.csrfToken
   });
 });
 
@@ -292,7 +298,8 @@ router.get('/components/:id/edit', async (req, res) => {
     componentMode: 'edit',
     component: comp,
     groups: await componentGroups.list(),
-    pages: await pages.list()
+    pages: await pages.list(),
+    csrfToken: res.locals.csrfToken
   });
 });
 
@@ -337,7 +344,7 @@ router.post('/components/:id/status', async (req, res) => {
   if (comp.status === status) {
     return res.redirect('/admin/components?msg=success&type=success');
   }
-  const result = await components.updateStatus(req.params.id, status);
+  const result = await components.updateStatus(req.params.id, status, null, true);
   if (result.history) {
     const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
     for (const a of admins) {
@@ -395,7 +402,8 @@ router.get('/incidents/new', async (req, res) => {
     messageType: res.locals.messageType,
     pageMode: 'create',
     incident: {},
-    components: allComponents
+    components: allComponents,
+    csrfToken: res.locals.csrfToken
   });
 });
 
@@ -971,6 +979,7 @@ router.get('/changelog', async (req, res) => {
 // Check for updates
 router.get('/check-update', requireAuth, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin required' });
+  const currentVersion = '2.0.0';
   try {
     const https = require('https');
     https.get('https://api.github.com/repos/plorentec/statusfe/releases/latest', {
@@ -981,7 +990,6 @@ router.get('/check-update', requireAuth, async (req, res) => {
       ghRes.on('end', () => {
         try {
           const release = JSON.parse(data);
-          const currentVersion = '2.0.0';
           const latestTag = release.tag_name || release.name || currentVersion;
           const hasUpdate = latestTag !== currentVersion;
           res.json({ currentVersion, latestVersion: latestTag, hasUpdate, url: release.html_url, publishedAt: release.published_at });
