@@ -3,7 +3,7 @@ const router = express.Router();
 const { queryOne, queryAll, run } = require('../db/database');
 const { pages, components, incidents, apiKeys, webhooks, maintenance, notifications, analytics, dependencies, settings } = require('../db/models');
 const { auth, requirePerm } = require('../middleware/auth');
-const triggerWebhook = require('../utils/webhooks');
+const { deliver: triggerWebhook } = require('../utils/webhooks');
 
 // ===== PUBLIC (no auth) =====
 

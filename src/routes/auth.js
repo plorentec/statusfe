@@ -28,7 +28,7 @@ router.post('/login', async (req, res) => {
     const tempId = require('uuid').v4();
     await run(
       'INSERT INTO sessions (id, data, created_at) VALUES ($1, $2, NOW())',
-      ['_2fa_' + tempId, JSON.stringify({ userId: user.id, email: user.email, name: user.name, role: user.role }), new Date().toISOString().replace('T', ' ').substring(0, 19)]
+      ['_2fa_' + tempId, JSON.stringify({ userId: user.id, email: user.email, name: user.name, role: user.role })]
     );
     res.cookie('_2fa_token', tempId, { httpOnly: true, maxAge: 5 * 60 * 1000, sameSite: 'lax' });
     return res.redirect('/auth/2fa');

@@ -59,6 +59,7 @@
 </select>
 </form>
 <form action="/admin/components/<%= c.id %>?_method=DELETE" method="post" class="delete-form" onsubmit="return confirm('Delete this component?')">
+<input type="hidden" name="_csrf" value="<%= csrfToken %>">
 <button type="submit" class="btn btn-sm btn-danger">Delete</button>
 </form>
 </td>
@@ -130,5 +131,22 @@
 <script src="/js/admin.js"></script>
 
 <%- include("../partials/_csrf"); %>
+<script>
+(function() {
+  var token = document.getElementById('csrfToken');
+  if (token) {
+    var forms = document.querySelectorAll('form[method="post"]');
+    for (var i = 0; i < forms.length; i++) {
+      if (!forms[i].querySelector('input[name="_csrf"]')) {
+        var input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = '_csrf';
+        input.value = token.value;
+        forms[i].appendChild(input);
+      }
+    }
+  }
+})();
+</script>
 </body>
 </html>

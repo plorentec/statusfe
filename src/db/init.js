@@ -32,6 +32,7 @@ async function createTables() {
       name TEXT NOT NULL,
       description TEXT DEFAULT '',
       status TEXT DEFAULT 'operational',
+      override_status TEXT,
       group_name TEXT,
       group_id TEXT,
       dependency_id TEXT,
@@ -112,6 +113,7 @@ async function createTables() {
       is_active INTEGER DEFAULT 1,
       secret TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       last_triggered_at TIMESTAMP,
       FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE CASCADE
     )
@@ -143,6 +145,7 @@ async function createTables() {
       ends_at TIMESTAMP NOT NULL,
       status TEXT DEFAULT 'upcoming',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE CASCADE,
       FOREIGN KEY (component_id) REFERENCES components(id) ON DELETE CASCADE
     )

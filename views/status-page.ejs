@@ -47,7 +47,7 @@
     name: c.name,
     status: c.current_status || c.status,
     description: c.description || '',
-    group_name: c.group_name || 'Other'
+    group_name: c.group_name
   }));
   const incidentsData = (incidents || []).map(i => ({
     id: i.id,
