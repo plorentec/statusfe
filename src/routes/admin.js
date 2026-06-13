@@ -871,7 +871,7 @@ router.get('/2fa/verify', async (req, res) => {
   res.render('admin/2fa-verify', { title: 'Verify 2FA', user: req.user, msg: req.query.msg, type: req.query.type, csrfToken: res.locals.csrfToken });
 });
 
-// POST /admin/2fa/verify — verify 2FA code and set cookie
+// POST /admin/2fa/verify — verify 2FA code and set session flag
 router.post('/2fa/verify', async (req, res) => {
   if (!req.user) return res.redirect('/login');
   const code = req.body.code;
@@ -881,7 +881,23 @@ router.post('/2fa/verify', async (req, res) => {
   if (!verify(code, user.totp_secret, 'StatusFe', req.user.email)) {
     return res.redirect('/admin/2fa/verify?msg=invalid&type=error');
   }
-  res.cookie('_2fa_verified', '1', { httpOnly: true, maxAge: 8 * 60 * 60 * 1000, sameSite: 'lax' });
+  // Mark 2FA verified in session data (persists across requests and survives browser close)
+  if (req.session && req.session.id) {
+    try {
+      const { queryOne, run } = require('../db/database');
+      const row = await queryOne('SELECT data FROM sessions WHERE id=$1', [req.session.id]);
+      if (row) {
+        const store = JSON.parse(row.data);
+        store._2fa_verified = true;
+        store.updatedAt = Date.now();
+        await run('UPDATE sessions SET data=$1, created_at=NOW() WHERE id=$2', [JSON.stringify(store), req.session.id]);
+      }
+    } catch(e) {}
+  }
+  if (!req.session) req.session = {};
+  req.session._2fa_verified = true;
+  // Also set cookie as fallback
+  res.cookie('_2fa_verified', '1', { httpOnly: true, maxAge: 8 * 60 * 60 * 1000, sameSite: 'lax', signed: true });
   res.redirect('/admin');
 });
 

@@ -31,12 +31,17 @@ async function createSession(user) {
     name: user.name,
     email: user.email,
     role: user.role,
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    _2fa_verified: false
   };
   const sessionValue = JSON.stringify(sessionData);
   const signedValue = signCookie(sessionValue);
   await run('INSERT INTO sessions (id, data, created_at) VALUES ($1, $2, NOW())', [sessionId, sessionValue]);
   return signedValue;
+}
+
+async function updateSession(sessionId, data) {
+  await run('UPDATE sessions SET data=$1, created_at=NOW() WHERE id=$2', [JSON.stringify(data), sessionId]);
 }
 
 async function getSession(cookie) {
@@ -123,6 +128,7 @@ async function session(req, res, next) {
       req.session = store;
       req.user = { id: store.userId, name: store.name, email: store.email, role: store.role };
       res.locals.user = req.user;
+      res.locals._2fa_verified = !!store._2fa_verified;
     }
   }
 
