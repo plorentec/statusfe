@@ -10,7 +10,7 @@ npm run dev        # node --watch src/app.js
 ## Database
 PostgreSQL via `pg` (node-postgres). Env: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_SSL`. Defaults: `localhost:5432`, db `statusfe`, user `postgres`.
 
-**Note:** README.md and `data/` still reference SQLite — that is stale. The app uses PostgreSQL exclusively (no SQLite code in `src/`).
+**Note:** README.md still references SQLite — that is stale. The app uses PostgreSQL exclusively (no SQLite code in `src/`).
 
 ## Seed data (on first run)
 - Admin user: `admin@status.local` / `admin123`
@@ -44,11 +44,11 @@ data/audit_logs/      ← Daily rotated audit log CSV files.
 ```
 
 ## Key quirks
-- `_method` body/query param overrides HTTP method (PUT/DELETE from forms). Handled in `app.js`.
+- `_method` body/query param overrides HTTP method (PUT/DELETE from forms). Handled in `app.js:131-138`.
 - All DB calls are async. Route handlers are `async`.
 - Session store uses the **same PostgreSQL pool** — not a separate connection.
 - API key permissions: `read`, `write`, `admin` (admin implies all others). `apiKeys.authenticate()` uses bcrypt cost factor 10.
-- `components.updateStatus()` accepts either a component UUID or a page slug as `pageIdOrSlug` — auto-resolves slugs.
+- `components.updateStatus(componentId, newStatus, pageIdOrSlug)` — the 3rd param auto-resolves page slugs to IDs via `pages.getBySlug()`.
 - Component statuses: `operational`, `degraded_performance`, `partial_outage`, `major_outage`, `under_maintenance`.
 - Incident statuses: `investigating`, `identified`, `monitoring`, `resolved`.
 - Page slugs must match `^[a-z-9]+$`.
@@ -69,14 +69,14 @@ data/audit_logs/      ← Daily rotated audit log CSV files.
 ## Route protection map
 
 ### Public (no auth)
-- `/status/:slug` — Public status page. No `is_public` check.
-- `/embed/:slug` — Embed widget. No `is_public` check.
+- `/status/:slug` — Public status page. Checks `is_public=1` internally (404 if not).
+- `/embed/:slug` — Embed widget. Checks `is_public=1` internally.
 - `/api/v1/health` — Health check.
 - `/api/v1/pages` — Lists only `is_public=1` pages.
 - `/api/v1/pages/:slug` — Public page by slug.
 - `/api/v1/components` — Lists all components.
 - `/api/v1/incidents` — Lists all incidents with `visible=1`.
-- `/api/v1/status/:slug` — JSON endpoint for public status page data.
+- `/api/v1/status/:slug` — JSON endpoint for public status page data. Checks `is_public=1`.
 - `/login`, `/register`, `/auth/*` — Auth pages.
 - `GET /auth/me` — Returns `401` if not authenticated.
 
