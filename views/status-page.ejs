@@ -131,6 +131,22 @@
 <span class="overall-value"><%= formatStatus(page.status) %></span>
 </div>
 </div>
+<% if (upcomingMaintenance && upcomingMaintenance.length > 0) { %>
+<div class="sp-status-banner status-under_maintenance">
+<span class="pulse-dot dot-under_maintenance"></span>
+<div>
+<span class="overall-label">Scheduled Maintenance</span>
+<% upcomingMaintenance.forEach(m => { %>
+<div style="margin-top:8px;text-align:left">
+<strong><%= m.title %></strong> — <%= m.description || '' %>
+<div style="font-size:13px;font-weight:400;margin-top:4px">
+<%= m.starts_at ? new Date(m.starts_at).toLocaleString() : '' %> to <%= m.ends_at ? new Date(m.ends_at).toLocaleString() : '' %>
+</div>
+</div>
+<% }) %>
+</div>
+</div>
+<% } %>
 <% if (incidents && incidents.length > 0) { %>
 <% const activeIncs = incidents.filter(i => i.status !== 'resolved'); %>
 <% if (activeIncs.length > 0) { %>
@@ -207,6 +223,22 @@
 <span class="overall-value"><%= formatStatus(page.status) %></span>
 </div>
 </div>
+<% if (upcomingMaintenance && upcomingMaintenance.length > 0) { %>
+<div class="sp-status-banner status-under_maintenance">
+<span class="pulse-dot dot-under_maintenance"></span>
+<div>
+<span class="overall-label">Scheduled Maintenance</span>
+<% upcomingMaintenance.forEach(m => { %>
+<div style="margin-top:8px;text-align:left">
+<strong><%= m.title %></strong> — <%= m.description || '' %>
+<div style="font-size:13px;font-weight:400;margin-top:4px">
+<%= m.starts_at ? new Date(m.starts_at).toLocaleString() : '' %> to <%= m.ends_at ? new Date(m.ends_at).toLocaleString() : '' %>
+</div>
+</div>
+<% }) %>
+</div>
+</div>
+<% } %>
 <% if (incidents && incidents.length > 0) { %>
 <% const activeIncs = incidents.filter(i => i.status !== 'resolved'); %>
 <% if (activeIncs.length > 0) { %>
@@ -282,6 +314,22 @@
 <span class="overall-value"><%= formatStatus(page.status) %></span>
 </div>
 </div>
+<% if (upcomingMaintenance && upcomingMaintenance.length > 0) { %>
+<div class="sp-status-banner status-under_maintenance">
+<span class="pulse-dot dot-under_maintenance"></span>
+<div>
+<span class="overall-label">Scheduled Maintenance</span>
+<% upcomingMaintenance.forEach(m => { %>
+<div style="margin-top:8px;text-align:left">
+<strong><%= m.title %></strong> — <%= m.description || '' %>
+<div style="font-size:13px;font-weight:400;margin-top:4px">
+<%= m.starts_at ? new Date(m.starts_at).toLocaleString() : '' %> to <%= m.ends_at ? new Date(m.ends_at).toLocaleString() : '' %>
+</div>
+</div>
+<% }) %>
+</div>
+</div>
+<% } %>
 <% if (incidents && incidents.length > 0) { %>
 <% const activeIncs = incidents.filter(i => i.status !== 'resolved'); %>
 <% if (activeIncs.length > 0) { %>

@@ -231,7 +231,9 @@ router.get('/incidents/:id', async (req, res) => { const i = await incidents.get
 router.post('/incidents', requirePerm('write'), async (req, res) => {
   const { component_id, page_id, name, status, impact, starts_at, resolved_at, message, visible } = req.body;
   if (!name || !message) return res.status(400).json({ error: 'name and message required' });
-  const incident = await incidents.create({ component_id, page_id, name, status, impact, starts_at, resolved_at, message, visible });
+  const cleanStartsAt = starts_at && starts_at.trim() !== '' ? starts_at : null;
+  const cleanResolvedAt = resolved_at && resolved_at.trim() !== '' ? resolved_at : null;
+  const incident = await incidents.create({ component_id, page_id, name, status, impact, starts_at: cleanStartsAt, resolved_at: cleanResolvedAt, message, visible });
   const pid = incident.page_id || page_id;
   if (pid) await triggerWebhook(pid, 'incident.created', { incident_id: incident.id, name: incident.name, status: incident.status });
   if (incident) {
@@ -252,7 +254,10 @@ router.put('/incidents/:id', requirePerm('write'), async (req, res) => {
   const incident = await incidents.get(req.params.id);
   if (!incident) return res.status(404).json({ error: 'Not found' });
   const oldStatus = incident.status;
-  const updated = await incidents.update(req.params.id, req.body);
+  const body = { ...req.body };
+  if (body.starts_at && body.starts_at.trim() === '') body.starts_at = null;
+  if (body.resolved_at && body.resolved_at.trim() === '') body.resolved_at = null;
+  const updated = await incidents.update(req.params.id, body);
   if (updated && oldStatus !== updated.status) {
     const admins = await queryAll("SELECT id FROM users WHERE role=$1", ['admin']);
     admins.forEach(a => {
