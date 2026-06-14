@@ -35,15 +35,18 @@
 .sp-status-banner.status-partial_outage { background:#ffe5cc; color:#9c4f00; }
 .sp-status-banner.status-major_outage { background:#ffcccc; color:#cc0000; }
 .sp-status-banner.status-under_maintenance { background:#fff3cd; color:#856404; }
-.maintenance-banner { background:linear-gradient(135deg,#fffbeb 0%,#fef3c7 100%); border:1px solid #f59e0b; border-radius:12px; padding:16px 20px; margin-bottom:24px; display:flex; gap:14px; align-items:flex-start; }
-.maintenance-banner-icon { color:#d97706; flex-shrink:0; margin-top:2px; }
-.maintenance-banner-content { flex:1; }
-.maintenance-item { border-bottom:1px solid #fde68a; padding:10px 0; }
-.maintenance-item:last-child { border-bottom:none; padding-bottom:0; }
-.maintenance-item:first-child { padding-top:0; }
-.maintenance-item-title { font-weight:600; font-size:15px; color:#92400e; margin-bottom:4px; }
-.maintenance-item-desc { font-size:13px; color:#78350f; margin-bottom:6px; line-height:1.4; }
-.maintenance-item-time { font-size:12px; color:#a16207; display:flex; align-items:center; gap:4px; }
+.maintenance-banner { background:#fffbeb; border:1px solid #fbbf24; border-left:4px solid #f59e0b; border-radius:8px; padding:14px 18px; margin-bottom:20px; }
+.maintenance-banner .maint-header { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.maintenance-banner .maint-header svg { color:#f59e0b; flex-shrink:0; }
+.maintenance-banner .maint-header h3 { margin:0; font-size:15px; font-weight:600; color:#92400e; }
+.maintenance-banner .maint-entry { padding:6px 0 6px 24px; position:relative; }
+.maintenance-banner .maint-entry::before { content:''; position:absolute; left:4px; top:12px; bottom:12px; width:1px; background:#fde68a; }
+.maintenance-banner .maint-entry:first-child { padding-top:0; }
+.maintenance-banner .maint-entry:last-child { padding-bottom:0; }
+.maintenance-banner .maint-title { font-weight:600; color:#78350f; font-size:14px; }
+.maintenance-banner .maint-desc { color:#92400e; font-size:13px; margin-top:2px; }
+.maintenance-banner .maint-time { color:#a16207; font-size:12px; margin-top:4px; display:flex; align-items:center; gap:4px; }
+.maintenance-banner .maint-time svg { width:12px; height:12px; }
 </style>
 <% } %>
 <% if (page.custom_css) { %><style><%= (page.custom_css || '').replace(/<\/style>/gi, '').replace(/<!--/g, '').replace(/-->/g, '') %></style><% } %>
@@ -248,16 +251,14 @@
 </div>
 <% if (upcomingMaintenance && upcomingMaintenance.length > 0) { %>
 <div class="maintenance-banner">
-<div class="maintenance-banner-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
-<div class="maintenance-banner-content">
+<div class="maint-header"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><h3>Scheduled Maintenance</h3></div>
 <% upcomingMaintenance.forEach(m => { %>
-<div class="maintenance-item">
-<div class="maintenance-item-title"><%= m.title %></div>
-<% if (m.description) { %><div class="maintenance-item-desc"><%= m.description.replace(/\n/g, '<br>') %></div><% } %>
-<div class="maintenance-item-time"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><%= formatMaintenanceDate(m.starts_at) %> – <%= formatMaintenanceDate(m.ends_at) %></div>
+<div class="maint-entry">
+<div class="maint-title"><%= m.title %></div>
+<% if (m.description) { %><div class="maint-desc"><%= m.description.replace(/\n/g, '<br>') %></div><% } %>
+<div class="maint-time"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><%= formatMaintenanceDate(m.starts_at) %> – <%= formatMaintenanceDate(m.ends_at) %></div>
 </div>
 <% }) %>
-</div>
 </div>
 <% } %>
 <% if (incidents && incidents.length > 0) { %>
@@ -336,17 +337,15 @@
 </div>
 </div>
 <% if (upcomingMaintenance && upcomingMaintenance.length > 0) { %>
-<div class="maintenance-banner" style="background:linear-gradient(135deg,#451a03 0%,#78350f 100%);border-color:#92400e;">
-<div class="maintenance-banner-icon" style="color:#fbbf24;"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
-<div class="maintenance-banner-content">
+<div class="maintenance-banner" style="background:#451a03;border-color:#92400e;border-left-color:#f59e0b;">
+<div class="maint-header"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><h3 style="color:#fde68a;">Scheduled Maintenance</h3></div>
 <% upcomingMaintenance.forEach(m => { %>
-<div class="maintenance-item" style="border-color:#92400e;">
-<div class="maintenance-item-title" style="color:#fde68a;"><%= m.title %></div>
-<% if (m.description) { %><div class="maintenance-item-desc" style="color:#fcd34d;"><%= m.description.replace(/\n/g, '<br>') %></div><% } %>
-<div class="maintenance-item-time" style="color:#fbbf24;"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><%= formatMaintenanceDate(m.starts_at) %> – <%= formatMaintenanceDate(m.ends_at) %></div>
+<div class="maint-entry" style="border-color:#92400e;">
+<div class="maint-title" style="color:#fde68a;"><%= m.title %></div>
+<% if (m.description) { %><div class="maint-desc" style="color:#fcd34d;"><%= m.description.replace(/\n/g, '<br>') %></div><% } %>
+<div class="maint-time" style="color:#fbbf24;"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><%= formatMaintenanceDate(m.starts_at) %> – <%= formatMaintenanceDate(m.ends_at) %></div>
 </div>
 <% }) %>
-</div>
 </div>
 <% } %>
 <% if (incidents && incidents.length > 0) { %>
