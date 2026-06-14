@@ -252,7 +252,7 @@ app.get('/status/:slug', async (req, res) => {
     
     const incs = await incidents.list({ page_id: page.id, visible: 1 });
     
-    const upcomingMaintenance = await maintenance.getUpcomingForPage(page.id, 0);
+    const upcomingMaintenance = await maintenance.getUpcomingForPage(page.id);
     
     const compIds = resolvedComps.map(c => c.id);
     if (compIds.length > 0) {
