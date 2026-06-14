@@ -537,7 +537,7 @@ module.exports.maintenance = {
     let q = `SELECT m.* FROM maintenance_windows m
       INNER JOIN maintenance_notice_pages mnp ON mnp.maintenance_id = m.id
       WHERE mnp.page_id = $1 AND m.status IN ('upcoming','ongoing')
-        AND (m.starts_at <= $2 OR m.starts_at - (m.advance_notice_minutes || 0) * INTERVAL '1 minute' <= $2)
+        AND (m.starts_at <= $2 OR m.starts_at - CAST((m.advance_notice_minutes || 0) AS INTEGER) * INTERVAL '1 minute' <= $2)
       ORDER BY m.starts_at ASC`;
     return await queryAll(q, [pageId, now]);
   }
