@@ -412,7 +412,9 @@ router.post('/incidents', async (req, res) => {
   if (!component_id || !name || !message) {
     return res.redirect('/admin/incidents/new?msg=error&type=error');
   }
-  const inc = await incidents.create({ component_id, name, status, impact, starts_at, resolved_at, message, visible: visible ? 1 : 0 });
+  const cleanStartsAt = starts_at && starts_at.trim() !== '' ? starts_at : null;
+  const cleanResolvedAt = resolved_at && resolved_at.trim() !== '' ? resolved_at : null;
+  const inc = await incidents.create({ component_id, name, status, impact, starts_at: cleanStartsAt, resolved_at: cleanResolvedAt, message, visible: visible ? 1 : 0 });
   if (inc) {
     const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
     for (const a of admins) {
@@ -551,7 +553,9 @@ router.put('/incidents/:id', async (req, res) => {
   }
   const { component_id, name, status, impact, starts_at, resolved_at, message, visible, cascade_status } = req.body;
   const oldStatus = inc.status;
-  const updated = await incidents.update(req.params.id, { component_id, name, status, impact, starts_at, resolved_at, message, visible: visible ? 1 : 0, cascade_status });
+  const cleanStartsAt = starts_at && starts_at.trim() !== '' ? starts_at : null;
+  const cleanResolvedAt = resolved_at && resolved_at.trim() !== '' ? resolved_at : null;
+  const updated = await incidents.update(req.params.id, { component_id, name, status, impact, starts_at: cleanStartsAt, resolved_at: cleanResolvedAt, message, visible: visible ? 1 : 0, cascade_status });
   if (updated && oldStatus !== status) {
     const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
     for (const a of admins) {
@@ -671,7 +675,7 @@ router.get('/maintenance/new', async (req, res) => {
 });
 
 router.post('/maintenance', async (req, res) => {
-  const { page_id, component_id, title, description, starts_at, ends_at } = req.body;
+  const { page_id, component_id, title, description, starts_at, ends_at, advance_notice_minutes, notice_page_ids } = req.body;
   if (!page_id || !title || !starts_at || !ends_at) {
     return res.redirect('/admin/maintenance/new?msg=error&type=error');
   }
@@ -679,7 +683,9 @@ router.post('/maintenance', async (req, res) => {
   if (!page) {
     return res.redirect('/admin/maintenance/new?msg=error&type=error');
   }
-  const win = await maintenance.create({ page_id: page.id, component_id: component_id || null, title, description, starts_at, ends_at });
+  const parsedNotice = parseInt(advance_notice_minutes) || 0;
+  const noticeIds = notice_page_ids ? (Array.isArray(notice_page_ids) ? notice_page_ids : [notice_page_ids]) : [page_id];
+  const win = await maintenance.create({ page_id: page.id, component_id: component_id || null, title, description, starts_at, ends_at, advance_notice_minutes: parsedNotice, notice_page_ids: noticeIds });
   const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
   for (const a of admins) {
     await notifications.create({
@@ -716,8 +722,10 @@ router.put('/maintenance/:id', async (req, res) => {
   if (!win) {
     return res.redirect('/admin/maintenance?msg=error&type=error');
   }
-  const { page_id, component_id, title, description, starts_at, ends_at } = req.body;
-  await maintenance.update(req.params.id, { page_id, component_id, title, description, starts_at, ends_at });
+  const { page_id, component_id, title, description, starts_at, ends_at, advance_notice_minutes, notice_page_ids } = req.body;
+  const parsedNotice = parseInt(advance_notice_minutes) || 0;
+  const noticeIds = notice_page_ids ? (Array.isArray(notice_page_ids) ? notice_page_ids : [notice_page_ids]) : [page_id];
+  await maintenance.update(req.params.id, { page_id, component_id, title, description, starts_at, ends_at, advance_notice_minutes: parsedNotice, notice_page_ids: noticeIds });
   const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
   for (const a of admins) {
     await notifications.create({

@@ -69,11 +69,11 @@
 <div class="form-row">
 <div class="form-group">
 <label for="starts_at">Starts At</label>
-<input type="datetime-local" id="starts_at" name="starts_at" value="<%= incident.starts_at ? incident.starts_at.replace(' ', 'T').substring(0,16) : new Date().toISOString().slice(0,16) %>">
+<input type="datetime-local" id="starts_at" name="starts_at" value="<%= incident.starts_at ? new Date(incident.starts_at).toISOString().slice(0,16) : new Date().toISOString().slice(0,16) %>">
 </div>
 <div class="form-group">
 <label for="resolved_at">Resolved At</label>
-<input type="datetime-local" id="resolved_at" name="resolved_at" value="<%= incident.resolved_at ? incident.resolved_at.replace(' ', 'T').substring(0,16) : '' %>">
+<input type="datetime-local" id="resolved_at" name="resolved_at" value="<%= incident.resolved_at ? new Date(incident.resolved_at).toISOString().slice(0,16) : '' %>">
 </div>
 </div>
 <div class="form-group checkbox-group">

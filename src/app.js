@@ -159,7 +159,7 @@ app.use((req, res, next) => {
 const { require2FA } = require('./middleware/require-2fa');
 app.use('/admin', require2FA);
 
-const { pages, components, incidents, analytics, dependencies, notifications } = require('./db/models');
+const { pages, components, incidents, analytics, dependencies, notifications, maintenance } = require('./db/models');
 
 // Make unread notification count and csrfToken available to all admin views
 app.use((req, res, next) => {
@@ -252,6 +252,8 @@ app.get('/status/:slug', async (req, res) => {
     
     const incs = await incidents.list({ page_id: page.id, visible: 1 });
     
+    const upcomingMaintenance = await maintenance.getUpcomingForPage(page.id, 0);
+    
     const compIds = resolvedComps.map(c => c.id);
     if (compIds.length > 0) {
       const compIncs = await queryAll(`
@@ -281,7 +283,7 @@ app.get('/status/:slug', async (req, res) => {
     
     const formatStatus = s => ({operational:'Operational',under_maintenance:'Under Maintenance',degraded_performance:'Degraded Performance',partial_outage:'Partial Outage',major_outage:'Major Outage',investigating:'Investigating',identified:'Identified',monitoring:'Monitoring',resolved:'Resolved'}[s] || s);
     const refreshInterval = page.refresh_interval || 0;
-    res.render('status-page', { page, components: resolvedComps, incidents: incs, incidentsByComponent, formatStatus, refreshInterval: refreshInterval ? parseInt(refreshInterval) : 0, groups: allGroups });
+    res.render('status-page', { page, components: resolvedComps, incidents: incs, incidentsByComponent, formatStatus, refreshInterval: refreshInterval ? parseInt(refreshInterval) : 0, groups: allGroups, upcomingMaintenance });
   } catch(e) {
     console.error('Status page error:', e);
     res.status(500).send('Internal error');
