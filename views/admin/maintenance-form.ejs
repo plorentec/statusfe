@@ -50,12 +50,27 @@
 <div class="form-row">
 <div class="form-group">
 <label for="starts_at">Starts At</label>
-<input type="datetime-local" id="starts_at" name="starts_at" value="<%= window.starts_at ? window.starts_at.replace(' ', 'T').substring(0,16) : '' %>">
+<input type="datetime-local" id="starts_at" name="starts_at" value="<%= window.starts_at ? new Date(window.starts_at).toISOString().slice(0,16) : '' %>">
 </div>
 <div class="form-group">
 <label for="ends_at">Ends At</label>
-<input type="datetime-local" id="ends_at" name="ends_at" value="<%= window.ends_at ? window.ends_at.replace(' ', 'T').substring(0,16) : '' %>">
+<input type="datetime-local" id="ends_at" name="ends_at" value="<%= window.ends_at ? new Date(window.ends_at).toISOString().slice(0,16) : '' %>">
 </div>
+</div>
+<div class="form-group">
+<label for="advance_notice_minutes">Advance Notice (minutes before maintenance)</label>
+<input type="number" id="advance_notice_minutes" name="advance_notice_minutes" value="<%= window.advance_notice_minutes || 0 %>" min="0" step="1" placeholder="0 = only show when maintenance starts">
+<small style="color:#888;margin-top:4px;display:block">The notice will appear on selected pages this many minutes before the maintenance starts.</small>
+</div>
+<div class="form-group">
+<label>Notice Pages (where to show the advance notice)</label>
+<% pages.forEach(p => { %>
+<label style="display:block;margin:4px 0;cursor:pointer">
+<input type="checkbox" name="notice_page_ids" value="<%= p.id %>" <%= (window.notice_pages && window.notice_pages.includes(p.id)) || (pageMode === 'create' && p.id === window.page_id) ? 'checked' : '' %>>
+<%= p.name %>
+</label>
+<% }) %>
+<small style="color:#888;margin-top:4px;display:block">Select which pages should show the advance notice. At least one page is required.</small>
 </div>
 <div class="form-actions">
 <button type="submit" class="btn btn-primary"><%= pageMode === 'create' ? 'Schedule' : 'Save Changes' %></button>

@@ -332,7 +332,7 @@ module.exports.incidents = {
     for (const k of allowed) {
       if (data[k] !== undefined) { fields.push(k+'=$'+(params.length+1)); params.push(data[k]); }
     }
-    if (data.status === 'resolved' && !data.resolved_at) {
+    if (data.status === 'resolved' && !('resolved_at' in data)) {
       fields.push('resolved_at=$'+(params.length+1));
       const serverTZ = await module.exports.settings.get('server_timezone') || 'UTC';
       params.push(nowInTZ(serverTZ));
@@ -479,29 +479,46 @@ module.exports.maintenance = {
     return await queryAll(q, p);
   },
 
-  async get(id) { return await queryOne('SELECT * FROM maintenance_windows WHERE id=$1', [id]); },
+  async get(id) {
+    const win = await queryOne('SELECT * FROM maintenance_windows WHERE id=$1', [id]);
+    if (!win) return null;
+    const pages = await queryAll('SELECT page_id FROM maintenance_notice_pages WHERE maintenance_id=$1', [id]);
+    win.notice_pages = pages.map(r => r.page_id);
+    return win;
+  },
 
-  async create({ page_id, component_id, title, description, starts_at, ends_at }) {
+  async create({ page_id, component_id, title, description, starts_at, ends_at, advance_notice_minutes, notice_page_ids }) {
     const id = uuidv4();
     const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
     const status = new Date(starts_at) > new Date() ? 'upcoming' : (new Date(ends_at) > new Date() ? 'ongoing' : 'completed');
     await run(
-      'INSERT INTO maintenance_windows (id,page_id,component_id,title,description,starts_at,ends_at,status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
-      [id, page_id, component_id||null, title, description||'', starts_at, ends_at, status]
+      'INSERT INTO maintenance_windows (id,page_id,component_id,title,description,starts_at,ends_at,status,advance_notice_minutes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
+      [id, page_id, component_id||null, title, description||'', starts_at, ends_at, status, advance_notice_minutes||0]
     );
+    if (notice_page_ids && notice_page_ids.length) {
+      for (const pid of notice_page_ids) {
+        await run('INSERT INTO maintenance_notice_pages (id,maintenance_id,page_id) VALUES ($1,$2,$3)', [uuidv4(), id, pid]);
+      }
+    }
     return this.get(id);
   },
 
   async update(id, data) {
     const fields = [];
     const params = [];
-    const allowed = ['page_id','component_id','title','description','starts_at','ends_at','status'];
+    const allowed = ['page_id','component_id','title','description','starts_at','ends_at','status','advance_notice_minutes'];
     for (const k of allowed) {
       if (data[k] !== undefined) { fields.push(k+'=$'+(params.length+1)); params.push(data[k]); }
     }
     if (fields.length) {
       params.push(id);
       await run('UPDATE maintenance_windows SET ' + fields.join(',') + ', updated_at=NOW() WHERE id=$' + (params.length), ...params);
+    }
+    if (data.notice_page_ids !== undefined) {
+      await run('DELETE FROM maintenance_notice_pages WHERE maintenance_id=$1', [id]);
+      for (const pid of data.notice_page_ids) {
+        await run('INSERT INTO maintenance_notice_pages (id,maintenance_id,page_id) VALUES ($1,$2,$3)', [uuidv4(), id, pid]);
+      }
     }
     return this.get(id);
   },
@@ -513,6 +530,17 @@ module.exports.maintenance = {
     await run("UPDATE maintenance_windows SET status='ongoing' WHERE status='upcoming' AND starts_at<=$1", [now]);
     await run("UPDATE maintenance_windows SET status='completed' WHERE status='ongoing' AND ends_at<=$1", [now]);
     return true;
+  },
+
+  async getUpcomingForPage(pageId, limitMinutes) {
+    const noticeLimit = limitMinutes || 0;
+    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    const earliest = new Date(Date.now() - noticeLimit * 60000).toISOString().slice(0, 19).replace('T', ' ');
+    let q = `SELECT m.* FROM maintenance_windows m
+      INNER JOIN maintenance_notice_pages mnp ON mnp.maintenance_id = m.id
+      WHERE mnp.page_id = $1 AND m.status IN ('upcoming','ongoing') AND m.starts_at >= $2
+      ORDER BY m.starts_at ASC`;
+    return await queryAll(q, [pageId, earliest]);
   }
 };
 

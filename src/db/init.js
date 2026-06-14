@@ -144,10 +144,21 @@ async function createTables() {
       starts_at TIMESTAMP NOT NULL,
       ends_at TIMESTAMP NOT NULL,
       status TEXT DEFAULT 'upcoming',
+      advance_notice_minutes INTEGER DEFAULT 0,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE CASCADE,
       FOREIGN KEY (component_id) REFERENCES components(id) ON DELETE CASCADE
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS maintenance_notice_pages (
+      id TEXT PRIMARY KEY,
+      maintenance_id TEXT NOT NULL,
+      page_id TEXT NOT NULL,
+      FOREIGN KEY (maintenance_id) REFERENCES maintenance_windows(id) ON DELETE CASCADE,
+      FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE CASCADE
     )
   `);
 
@@ -287,6 +298,8 @@ async function createTables() {
     'idx_users_email ON users(email)',
     'idx_maintenance_page ON maintenance_windows(page_id)',
     'idx_maintenance_status ON maintenance_windows(status)',
+    'idx_maintenance_notice_maint ON maintenance_notice_pages(maintenance_id)',
+    'idx_maintenance_notice_page ON maintenance_notice_pages(page_id)',
     'idx_notifications_user ON notifications(user_id)',
     'idx_notifications_read ON notifications(is_read)',
     'idx_page_views_page ON page_views(page_id)',
