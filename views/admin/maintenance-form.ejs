@@ -6,6 +6,9 @@
 <title><%= title %> - StatusFe Admin</title>
 <link rel="stylesheet" href="/css/admin.css">
 <script>document.body.classList.add('dark');</script>
+<style>
+.notice-btn.active { background:#6366f1 !important; color:#fff !important; }
+</style>
 </head>
 <body>
 <div class="admin-layout">
@@ -58,17 +61,17 @@
 </div>
 </div>
 <div class="form-group">
-<label for="advance_notice_minutes">Advance Notice (minutes before maintenance)</label>
+<label>Advance Notice (minutes before maintenance)</label>
 <input type="hidden" id="advance_notice_minutes" name="advance_notice_minutes" value="<%= window.advance_notice_minutes || 0 %>">
 <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">
-<button type="button" class="btn btn-sm notice-btn" data-value="0" <%= (!window.advance_notice_minutes || window.advance_notice_minutes === 0) ? 'style="background:#6366f1;color:#fff"' : '' ?>>None</button>
-<button type="button" class="btn btn-sm notice-btn" data-value="10" <%= window.advance_notice_minutes === 10 ? 'style="background:#6366f1;color:#fff"' : '' ?>>10 min</button>
-<button type="button" class="btn btn-sm notice-btn" data-value="30" <%= window.advance_notice_minutes === 30 ? 'style="background:#6366f1;color:#fff"' : '' ?>>30 min</button>
-<button type="button" class="btn btn-sm notice-btn" data-value="60" <%= window.advance_notice_minutes === 60 ? 'style="background:#6366f1;color:#fff"' : '' ?>>1 hour</button>
-<button type="button" class="btn btn-sm notice-btn" data-value="120" <%= window.advance_notice_minutes === 120 ? 'style="background:#6366f1;color:#fff"' : '' ?>>2 hours</button>
-<button type="button" class="btn btn-sm notice-btn" data-value="240" <%= window.advance_notice_minutes === 240 ? 'style="background:#6366f1;color:#fff"' : '' ?>>4 hours</button>
-<button type="button" class="btn btn-sm notice-btn" data-value="360" <%= window.advance_notice_minutes === 360 ? 'style="background:#6366f1;color:#fff"' : '' ?>>6 hours</button>
-<button type="button" class="btn btn-sm notice-btn" data-value="480" <%= window.advance_notice_minutes === 480 ? 'style="background:#6366f1;color:#fff"' : '' ?>>8 hours</button>
+<button type="button" class="btn btn-sm notice-btn" data-value="0" <%= (!window.advance_notice_minutes || window.advance_notice_minutes === 0) ? 'class="btn btn-sm notice-btn active"' : '' %>>None</button>
+<button type="button" class="btn btn-sm notice-btn" data-value="10" <%= window.advance_notice_minutes === 10 ? 'class="btn btn-sm notice-btn active"' : '' %>>10 min</button>
+<button type="button" class="btn btn-sm notice-btn" data-value="30" <%= window.advance_notice_minutes === 30 ? 'class="btn btn-sm notice-btn active"' : '' %>>30 min</button>
+<button type="button" class="btn btn-sm notice-btn" data-value="60" <%= window.advance_notice_minutes === 60 ? 'class="btn btn-sm notice-btn active"' : '' %>>1 hour</button>
+<button type="button" class="btn btn-sm notice-btn" data-value="120" <%= window.advance_notice_minutes === 120 ? 'class="btn btn-sm notice-btn active"' : '' %>>2 hours</button>
+<button type="button" class="btn btn-sm notice-btn" data-value="240" <%= window.advance_notice_minutes === 240 ? 'class="btn btn-sm notice-btn active"' : '' %>>4 hours</button>
+<button type="button" class="btn btn-sm notice-btn" data-value="360" <%= window.advance_notice_minutes === 360 ? 'class="btn btn-sm notice-btn active"' : '' %>>6 hours</button>
+<button type="button" class="btn btn-sm notice-btn" data-value="480" <%= window.advance_notice_minutes === 480 ? 'class="btn btn-sm notice-btn active"' : '' %>>8 hours</button>
 </div>
 </div>
 <div class="form-group">
@@ -111,9 +114,8 @@
   // Advance notice buttons
   document.querySelectorAll('.notice-btn').forEach(function(btn) {
     btn.addEventListener('click', function() {
-      document.querySelectorAll('.notice-btn').forEach(function(b) { b.style.background = ''; b.style.color = ''; });
-      this.style.background = '#6366f1';
-      this.style.color = '#fff';
+      document.querySelectorAll('.notice-btn').forEach(function(b) { b.classList.remove('active'); });
+      this.classList.add('active');
       document.getElementById('advance_notice_minutes').value = this.getAttribute('data-value');
     });
   });
