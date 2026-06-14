@@ -952,6 +952,20 @@ router.post('/2fa/setup', async (req, res) => {
     }
     await run('UPDATE users SET totp_enabled=1 WHERE id=$1', [req.user.id]);
     await auditLog.create({ user_id: req.user.id, action: '2fa_enabled', details: '2FA enabled', ip: req.ip, user_agent: req.get('User-Agent') || '' });
+    // Mark as verified so user doesn't get redirected to /admin/2fa/verify immediately
+    if (req.session && req.session.id) {
+      try {
+        const row = await queryOne('SELECT data FROM sessions WHERE id=$1', [req.session.id]);
+        if (row) {
+          const store = JSON.parse(row.data);
+          store._2fa_verified = true;
+          await run('UPDATE sessions SET data=$1, created_at=NOW() WHERE id=$2', [JSON.stringify(store), req.session.id]);
+        }
+      } catch(e) {}
+    }
+    if (!req.session) req.session = {};
+    req.session._2fa_verified = true;
+    res.cookie('_2fa_verified', '1', { httpOnly: true, maxAge: 8 * 60 * 60 * 1000, sameSite: 'lax', signed: true });
   } else if (action === 'disable') {
     if (!verify(code, user.totp_secret, 'StatusFe', user.email)) {
       return res.redirect('/admin/2fa/setup?msg=invalid&type=error');
