@@ -14,8 +14,8 @@
 <h1>StatusFe</h1>
 <p>Two-factor authentication</p>
 </div>
-<% if (req.query.msg) { %>
-<div class="flash flash-error"><%= req.query.msg === 'error' ? 'Invalid 2FA code. Please try again.' : req.query.msg %></div>
+<% if (message) { %>
+<div class="flash flash-error"><%= message %></div>
 <% } %>
 <form action="/auth/2fa" method="post" class="auth-form">
 <div class="form-group">

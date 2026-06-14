@@ -32,7 +32,7 @@ src/middleware/session.js ← PostgreSQL-persisted sessions (shared pg pool), si
 src/middleware/auth.js  ← API key auth for REST API only (Bearer / x-api-key / ?api_key=). `requirePerm` guard.
 src/middleware/csrf.js  ← Cookie-based CSRF. `csrfProtection` validates on POST/PUT/DELETE. Auto-injects token into admin.ejs forms.
 src/middleware/rate-limit.js ← Exports: `globalLimiter`, `authLimiter`, `apiLimiter`. Admin limiter defined inline in `app.js` (60 req/min).
-src/middleware/require-2fa.js ← Enforces 2FA for admin/write roles. Skips `role=user`. Checks `_2fa_verified` cookie (8h).
+src/middleware/require-2fa.js ← Enforces 2FA for admin/write roles. Skips `role=user`. Checks `_2fa_verified` on `req.session`.
 src/middleware/layout.js ← EJS layout renderer. `layout(viewName, locals)` wraps partials in admin.ejs.
 src/utils/email.js    ← Nodemailer. Graceful degradation if SMTP unconfigured.
 src/utils/webhooks.js ← Fire-and-forget POST, HMAC signature, 5s timeout, SSRF URL validation.
@@ -63,7 +63,7 @@ data/audit_logs/      ← Daily rotated audit log CSV files.
 - Custom CSS/HTML: `</style>` / `</textarea>` / HTML comments stripped in `custom_css`. `</textarea>` escaped in `custom_html`.
 - `.env` is gitignored — copy `.env.example` before first run.
 - Docker Compose runs a `postgres:16-alpine` sidecar (port 5433 externally). Default password: `statusfe-secret`.
-- Systemd service file at `systemd/statusfe.service` — runs as `www-data`, expects `.env` at same path.
+- Systemd service file at `systemd/statusfe.service` — runs as `www-data`, `WorkingDirectory=/var/www/cachet`, expects `.env` at same path.
 - No linter, formatter, typechecker, or test framework.
 
 ## Route protection map
@@ -89,7 +89,7 @@ data/audit_logs/      ← Daily rotated audit log CSV files.
 - Sub-routes may add `requirePerm('write')` or `requirePerm('admin')`.
 
 ### 2FA
-- `require2FA` on `/admin` (in `app.js`). Skips `role=user`. Checks `_2fa_verified` cookie.
+- `require2FA` on `/admin` (in `app.js`). Skips `role=user`. Checks `_2fa_verified` on `req.session`.
 
 ## Gotchas
 - PostgreSQL placeholders: `$1, $2, $3...` — not `?`.
