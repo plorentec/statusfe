@@ -25,14 +25,16 @@ router.post('/login', async (req, res) => {
   }
 
   if (user.totp_enabled && user.totp_secret) {
+    console.log('[2FA] User', user.email, 'has totp_enabled=', user.totp_enabled, 'has_secret=', !!user.totp_secret);
     const tempId = require('uuid').v4();
     await run(
       'INSERT INTO sessions (id, data, created_at) VALUES ($1, $2, NOW())',
       ['_2fa_' + tempId, JSON.stringify({ userId: user.id, email: user.email, name: user.name, role: user.role })]
     );
-    res.cookie('_2fa_token', tempId, { httpOnly: true, maxAge: 5 * 60 * 1000, sameSite: 'lax' });
+    res.cookie('_2fa_token', tempId, { httpOnly: true, maxAge: 5 * 60 * 60 * 1000, sameSite: 'lax' });
     return res.redirect('/auth/2fa');
   }
+  console.log('[2FA] Skipping for user', user.email, 'totp_enabled=', user.totp_enabled, 'has_secret=', !!user.totp_secret);
 
   await auditLog.create({ user_id: user.id, action: 'login', details: 'Login successful', ip: req.ip, user_agent: req.get('User-Agent') || '' });
   const signedValue = await createSession(user);
@@ -44,7 +46,10 @@ router.post('/login', async (req, res) => {
 router.get('/2fa', (req, res) => {
   const token = req.cookies._2fa_token;
   if (!token) return res.redirect('/login?msg=error&type=error');
-  res.render('auth/2fa', { title: '2FA Verification' });
+  let msg = null;
+  if (req.query.msg === 'invalid') msg = 'Invalid 2FA code. Please try again.';
+  else if (req.query.msg === 'error') msg = 'Please try again.';
+  res.render('auth/2fa', { title: '2FA Verification', message: msg });
 });
 
 // POST /auth/2fa — verify TOTP code
@@ -71,6 +76,21 @@ router.post('/2fa', async (req, res) => {
   await auditLog.create({ user_id: user.id, action: 'login', details: 'Login with 2FA', ip: req.ip, user_agent: req.get('User-Agent') || '' });
   const signedValue = await createSession(user);
   res.setHeader('Set-Cookie', `session_id=${signedValue}; HttpOnly; Max-Age=${24*60*60}; SameSite=Lax; Path=/`);
+  // Parse the new session ID from the signed cookie to update it in the DB
+  const cookieVal = signedValue;
+  const dotIdx = cookieVal.lastIndexOf('.');
+  const sessionDataStr = dotIdx > 0 ? cookieVal.substring(0, dotIdx) : cookieVal;
+  let newSession;
+  try { newSession = JSON.parse(sessionDataStr); } catch(e) { newSession = null; }
+  if (newSession && newSession.id) {
+    try {
+      const store = { userId: user.id, name: user.name, email: user.email, role: user.role, createdAt: Date.now(), _2fa_verified: true };
+      await run('UPDATE sessions SET data=$1, created_at=NOW() WHERE id=$2', [JSON.stringify(store), newSession.id]);
+    } catch(e) {}
+  }
+  if (!req.session) req.session = {};
+  req.session._2fa_verified = true;
+  res.cookie('_2fa_verified', '1', { httpOnly: true, maxAge: 8 * 60 * 60 * 1000, sameSite: 'lax', signed: true });
   res.redirect('/admin?msg=success');
 });
 

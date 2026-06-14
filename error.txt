@@ -1,7 +1,1 @@
-Failed to generate QR code: /app/views/admin.ejs:127 125|
-126|
-<%= title %>
->> 127| <% if (message) { %> 128|
-<%= message %>
-129| <% } %> 130|
-message is not defined
+{"error":"/app/views/auth/2fa.ejs:17\n    15| <p>Two-factor authentication</p>\n    16| </div>\n >> 17| <% if (req.query.msg) { %>\n    18| <div class=\"flash flash-error\"><%= req.query.msg === 'error' ? 'Invalid 2FA code. Please try again.' : req.query.msg %></div>\n    19| <% } %>\n    20| <form action=\"/auth/2fa\" method=\"post\" class=\"auth-form\">\n\nreq is not defined"}
