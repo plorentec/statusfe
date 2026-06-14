@@ -532,15 +532,14 @@ module.exports.maintenance = {
     return true;
   },
 
-  async getUpcomingForPage(pageId, limitMinutes) {
-    const noticeLimit = limitMinutes || 0;
+  async getUpcomingForPage(pageId) {
     const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
-    const earliest = new Date(Date.now() - noticeLimit * 60000).toISOString().slice(0, 19).replace('T', ' ');
     let q = `SELECT m.* FROM maintenance_windows m
       INNER JOIN maintenance_notice_pages mnp ON mnp.maintenance_id = m.id
-      WHERE mnp.page_id = $1 AND m.status IN ('upcoming','ongoing') AND m.starts_at >= $2
+      WHERE mnp.page_id = $1 AND m.status IN ('upcoming','ongoing')
+        AND (m.starts_at <= $2 OR m.starts_at - (m.advance_notice_minutes || 0) * INTERVAL '1 minute' <= $2)
       ORDER BY m.starts_at ASC`;
-    return await queryAll(q, [pageId, earliest]);
+    return await queryAll(q, [pageId, now]);
   }
 };
 
