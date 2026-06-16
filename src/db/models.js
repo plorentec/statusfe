@@ -537,7 +537,7 @@ module.exports.maintenance = {
     let q = `SELECT m.* FROM maintenance_windows m
       INNER JOIN maintenance_notice_pages mnp ON mnp.maintenance_id = m.id
       WHERE mnp.page_id = $1 AND m.status IN ('upcoming','ongoing')
-        AND (m.starts_at <= $2 OR m.starts_at - CAST((m.advance_notice_minutes || 0) AS INTEGER) * INTERVAL '1 minute' <= $2)
+        AND (m.starts_at <= $2 OR m.starts_at - COALESCE(m.advance_notice_minutes, 0) * INTERVAL '1 minute' <= $2)
       ORDER BY m.starts_at ASC`;
     return await queryAll(q, [pageId, now]);
   }
@@ -581,7 +581,7 @@ module.exports.analytics = {
     const maxDays = retention ? parseInt(retention) : 365;
     const effectiveDays = days > maxDays ? maxDays : days;
     return await queryAll(
-      'SELECT DATE(created_at) as date, COUNT(*) as views FROM page_views WHERE page_id=$1 AND created_at >= NOW() - ($2 || \' days\')::interval GROUP BY DATE(created_at) ORDER BY date DESC',
+      'SELECT DATE(created_at) as date, COUNT(*) as views FROM page_views WHERE page_id=$1 AND created_at >= NOW() - ($2::text || \' days\')::interval GROUP BY DATE(created_at) ORDER BY date DESC',
       [pageId, effectiveDays]
     );
   },
@@ -600,7 +600,7 @@ module.exports.analytics = {
     const maxDays = retention ? parseInt(retention) : 365;
     const effectiveDays = days > maxDays ? maxDays : days;
     const rows = await queryAll(
-      'SELECT sh.component_id, sh.new_status, DATE(sh.created_at) as date FROM status_history sh JOIN page_components pc ON sh.component_id = pc.component_id WHERE pc.page_id=$1 AND sh.created_at >= NOW() - ($2 || \' days\')::interval',
+      'SELECT sh.component_id, sh.new_status, DATE(sh.created_at) as date FROM status_history sh JOIN page_components pc ON sh.component_id = pc.component_id WHERE pc.page_id=$1 AND sh.created_at >= NOW() - ($2::text || \' days\')::interval',
       [pageId, effectiveDays]
     );
 
@@ -649,7 +649,7 @@ module.exports.analytics = {
     const maxDays = retention ? parseInt(retention) : 365;
     const effectiveDays = days > maxDays ? maxDays : days;
     const rows = await queryAll(
-      'SELECT new_status, DATE(created_at) as date FROM status_history WHERE component_id=$1 AND created_at >= NOW() - ($2 || \' days\')::interval ORDER BY created_at DESC',
+        'SELECT new_status, DATE(created_at) as date FROM status_history WHERE component_id=$1 AND created_at >= NOW() - ($2::text || \' days\')::interval ORDER BY created_at DESC',
       [componentId, effectiveDays]
     );
 
@@ -687,7 +687,7 @@ module.exports.analytics = {
 
     for (const comp of components) {
       const rows = await queryAll(
-        'SELECT new_status, DATE(created_at) as date FROM status_history WHERE component_id=$1 AND created_at >= NOW() - ($2 || \' days\')::interval ORDER BY created_at DESC',
+      'SELECT new_status, DATE(created_at) as date FROM status_history WHERE component_id=$1 AND created_at >= NOW() - ($2::text || \' days\')::interval ORDER BY created_at DESC',
         [comp.id, effectiveDays]
       );
 
@@ -711,7 +711,7 @@ module.exports.analytics = {
       const uptime = totalDays > 0 ? ((operationalDays / totalDays) * 100).toFixed(2) : '100.00';
 
       const history = await queryAll(
-        'SELECT new_status, created_at FROM status_history WHERE component_id=$1 AND created_at >= NOW() - ($2 || \' days\')::interval ORDER BY created_at DESC LIMIT 30',
+        'SELECT new_status, created_at FROM status_history WHERE component_id=$1 AND created_at >= NOW() - ($2::text || \' days\')::interval ORDER BY created_at DESC LIMIT 30',
         [comp.id, effectiveDays]
       );
 
@@ -733,9 +733,9 @@ module.exports.analytics = {
     if (!retention) return 0;
     const days = parseInt(retention);
     let deleted = 0;
-    const viewsDeleted = await run("DELETE FROM page_views WHERE created_at < NOW() - ($1 || ' days')::interval", [days]);
+    const viewsDeleted = await run("DELETE FROM page_views WHERE created_at < NOW() - ($1::text || ' days')::interval", [days]);
     deleted += viewsDeleted.changes;
-    const histDeleted = await run("DELETE FROM status_history WHERE created_at < NOW() - ($1 || ' days')::interval", [days]);
+    const histDeleted = await run("DELETE FROM status_history WHERE created_at < NOW() - ($1::text || ' days')::interval", [days]);
     deleted += histDeleted.changes;
     return deleted;
   }
@@ -1055,6 +1055,6 @@ module.exports.auditLog = {
   },
 
   async cleanOld(days) {
-    await run("DELETE FROM audit_log WHERE created_at < NOW() - ($1 || ' days')::interval", [days]);
+    await run("DELETE FROM audit_log WHERE created_at < NOW() - ($1::text || ' days')::interval", [days]);
   }
 };
