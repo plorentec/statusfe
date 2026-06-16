@@ -6,7 +6,7 @@
 ---
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-**v2.0.0** — 2FA, audit log, multi-page groups, security hardening
+**v2.0.0** — 2FA, audit log, multi-page groups, PostgreSQL migration, security hardening
 
 ---
 
@@ -35,7 +35,8 @@
 git clone https://github.com/plorentec/statusfe.git
 cd statusfe
 cp .env.example .env
-docker compose up -d --build
+docker compose build --no-cache
+docker compose up -d
 ```
 
 Access / Accede en: `http://localhost:3000`
@@ -100,7 +101,7 @@ Access / Accede en: `http://localhost:3000`
 | **SSRF Protection** | Webhook URLs validated against localhost, private IPs, IP addresses | URLs de webhook validadas contra localhost, IPs privadas y direcciones IP |
 | **HTTPS** | Self-signed cert auto-generation via openssl (`HTTPS=true`) | Generación automática de certificado auto-firmado vía openssl |
 | **CORS** | Restricted to `/status/`, `/embed/`, `/api/` paths only | Restringido solo a las rutas `/status/`, `/embed/`, `/api/` |
-| **Session Security** | SQLite persisted, signed cookies (HMAC-SHA256), 24h TTL, hourly cleanup | Persistidas en SQLite, cookies firmadas (HMAC-SHA256), TTL 24h, limpieza horaria |
+| **Session Security** | PostgreSQL persisted, signed cookies (HMAC-SHA256), 24h TTL, hourly cleanup | Persistidas en PostgreSQL, cookies firmadas (HMAC-SHA256), TTL 24h, limpieza horaria |
 | **Registration Lock** | Disabled after first user is created | Desactivada después de crear el primer usuario |
 
 ### API / API REST
@@ -145,11 +146,10 @@ Access / Accede en: `http://localhost:3000`
 
 | Feature / Característica | EN | ES |
 |---|---|---|
-| **SQLite** | Single file, WAL mode, foreign keys enabled | Archivo único, modo WAL, claves foráneas habilitadas |
-| **Auto-Migrations** | ALTER TABLE on every startup (try/catch) | Migraciones automáticas ALTER TABLE en cada inicio |
-| **Hourly Backup** | 7 rolling copies of `statusfe.db` | 7 copias rotativas de `statusfe.db` |
-| **Session Store** | SQLite persisted sessions survive restarts | Sesiones persistidas en SQLite, sobreviven a reinicios |
+| **PostgreSQL** | Production-grade relational database via `pg` pool | Base de datos relacional profesional vía pool `pg` |
 | **Auto-Seed** | Admin user, API key, default page, 6 components on first run | Usuario admin, clave API, página por defecto y 6 componentes en primer uso |
+| **Session Store** | PostgreSQL persisted sessions share the same pool as the app | Sesiones persistidas en PostgreSQL, comparte pool con la app |
+| **SSL Support** | Optional `DB_SSL=true` for managed PostgreSQL (AWS RDS, etc.) | Opcional `DB_SSL=true` para PostgreSQL gestionado (AWS RDS, etc.) |
 
 ---
 
@@ -162,6 +162,12 @@ Access / Accede en: `http://localhost:3000`
 | `PORT` | HTTP port | Puerto HTTP | `3000` |
 | `SESSION_SECRET` | Session signing secret | Secreto de firma de sesiones | auto-generated / auto-generado |
 | `HTTPS` | Enable HTTPS with self-signed cert | Habilitar HTTPS con certificado auto-firmado | `false` |
+| `DB_HOST` | PostgreSQL host | Host de PostgreSQL | `localhost` |
+| `DB_PORT` | PostgreSQL port | Puerto de PostgreSQL | `5432` |
+| `DB_NAME` | Database name | Nombre de base de datos | `statusfe` |
+| `DB_USER` | Database user | Usuario de base de datos | `postgres` |
+| `DB_PASSWORD` | Database password | Contraseña de base de datos | (empty) |
+| `DB_SSL` | Use SSL for PostgreSQL connection | Usar SSL para conexión PostgreSQL | `false` |
 
 ### Docker / Docker
 
@@ -175,11 +181,34 @@ services:
     environment:
       - PORT=3000
       - SESSION_SECRET=${SESSION_SECRET:-change-me-to-a-random-string}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=statusfe
+      - DB_USER=postgres
+      - DB_PASSWORD=statusfe-secret
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
       - statusfe-data:/app/data
 
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=statusfe
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=statusfe-secret
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
 volumes:
   statusfe-data:
+  postgres-data:
 ```
 
 ### Manual Install / Instalación Manual
@@ -187,6 +216,7 @@ volumes:
 ```bash
 npm install
 cp .env.example .env
+# Set DB_HOST, DB_USER, DB_PASSWORD, etc.
 npm start
 ```
 
@@ -315,12 +345,13 @@ src/routes/api.js           ← REST API /api/v1
 src/routes/admin.js         ← Admin UI CRUD
 src/routes/admin-extra.js   ← Notifications, analytics, config
 src/routes/auth.js          ← Login/register/logout
-src/middleware/session.js   ← SQLite session store / Almacenamiento de sesiones
+src/middleware/session.js   ← PostgreSQL session store / Almacenamiento de sesiones
 src/middleware/auth.js      ← API key auth / Autenticación API
 src/middleware/csrf.js      ← CSRF protection / Protección CSRF
 src/middleware/rate-limit.js ← Rate limiting / Limitación de velocidad
 src/middleware/require-2fa.js ← 2FA enforcement / Aplicación 2FA
-src/db/init.js              ← Schema + migrations + seed data
+src/db/init.js              ← Schema + seed data / Esquema + datos iniciales
+src/db/database.js          ← pg Pool singleton / Pool de conexiones PostgreSQL
 src/db/models.js            ← CRUD helpers
 src/utils/email.js          ← Nodemailer / Correo
 src/utils/webhooks.js       ← Webhook delivery / Entrega de webhooks
@@ -328,49 +359,58 @@ src/utils/totp.js           ← TOTP implementation
 src/utils/ssl.js            ← Self-signed SSL generation
 views/                      ← EJS templates / Plantillas
 public/                     ← Static assets / Recursos estáticos
-data/statusfe.db            ← SQLite database (WAL mode)
+data/audit_logs/            ← Daily rotated audit log CSV files / Logs CSV rotativos
 ```
 
 ---
 
 ## Troubleshooting / Solución de Problemas
 
-### SQLite error after Docker rebuild / Error SQLite tras reconstruir Docker
+### PostgreSQL connection error / Error de conexión PostgreSQL
 
 ```bash
-docker compose down
-docker volume rm statusfe_statusfe-data
-docker compose up -d
+# Check PostgreSQL is running
+docker compose ps postgres
+
+# Check PostgreSQL logs
+docker compose logs postgres
+
+# Verify environment variables
+docker compose exec statusfe env | grep DB_
 ```
 
 ### Reset admin password / Restablecer contraseña de admin
 
 ```bash
 docker exec -it statusfe node -e "
-const db = require('./src/db/init');
 const bcrypt = require('bcryptjs');
-db.prepare('UPDATE users SET password_hash=? WHERE email=?').run(
+const { run } = require('./src/db/database');
+run('UPDATE users SET password_hash=? WHERE email=?', [
   bcrypt.hashSync('newpassword', 10), 'admin@status.local'
-);
-"
-```
-
-### Check database schema / Verificar esquema de base de datos
-
-```bash
-docker exec -it statusfe node -e "
-const db = require('./src/db/init');
-console.log(db.prepare('SELECT name FROM sqlite_master WHERE type=\"table\"').all());
+]);
 "
 ```
 
 ### Clean all Docker data / Limpiar todos los datos de Docker
 
 ```bash
-docker compose down
-docker volume rm statusfe_statusfe-data
+docker compose down -v
+docker volume rm statusfe_statusfe-data statusfe_postgres-data
 docker builder prune -af
 docker system prune -f
+```
+
+### npm install fails in corporate network / npm falla en red corporativa
+
+```bash
+# Use alternative registry mirror
+npm config set registry https://registry.npmmirror.com
+npm install
+npm config set registry https://registry.npmjs.org
+
+# Or if behind proxy
+npm config set proxy http://proxy:port
+npm config set https-proxy http://proxy:port
 ```
 
 ---

@@ -10,10 +10,9 @@ All notable changes to StatusFe.
 - **Multi-page Component Groups** — Groups can be assigned to multiple pages simultaneously via `group_pages` many-to-many table.
 - **Changelog Page** — `/admin/changelog` with version history and release notes.
 - **Update Checker** — `/admin/check-update` endpoint queries GitHub API to detect new versions.
-- **SQLite Session Store** — Sessions persisted to SQLite instead of in-memory. Survives restarts.
+- **PostgreSQL Session Store** — Sessions persisted to PostgreSQL instead of in-memory. Survives restarts.
 - **Self-signed SSL** — Auto-generated HTTPS certificates with `HTTPS=true` environment variable.
 - **Auto Session Secret** — Random session secret generated on first run, persisted in `data/session_secret.txt`.
-- **Auto Backup** — SQLite database backed up every hour (7 rolling copies).
 - **Rate Limiting** — Login/register (10/15min), API (60/min), Admin (60/min).
 
 ### Security
@@ -26,7 +25,7 @@ All notable changes to StatusFe.
 - API keys hashed with bcrypt cost factor 10.
 
 ### Technical
-- SQLite tuned for concurrent access: WAL mode, `busy_timeout=5000ms`, `synchronous=NORMAL`.
+- PostgreSQL database with node-postgres (`pg`) pool.
 - API key auth optimized with hash prefix indexing for faster lookups.
 - All admin views include CSRF tokens via auto-inject in master layout.
 - Daily analytics and audit log cleanup cron.
@@ -34,7 +33,8 @@ All notable changes to StatusFe.
 
 ### Changed
 - Component groups now support multiple pages instead of single page assignment.
-- Session store migrated from in-memory to SQLite.
+- Session store migrated from in-memory to PostgreSQL.
+- Database migrated from SQLite to PostgreSQL.
 
 ### Fixed
 - API key authentication broken (bcrypt cost factor 1 → 10).
