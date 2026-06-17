@@ -17,3 +17,7 @@ Screenshot_*.png
 
 # Debug files
 fallo.txt
+error.txt
+
+# IDE / tools
+opencode.json
