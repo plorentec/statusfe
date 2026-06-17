@@ -1,3 +1,19 @@
+# Docker Compose for StatusFe
+#
+# Corporate network troubleshooting:
+# If docker build hangs on npm install (DNS resolution timeout),
+# your corporate firewall may block Docker's internal DNS.
+#
+# Fix option 1: Use host network (uncomment below, remove 'ports:')
+#   network_mode: host
+#
+# Fix option 2: Configure Docker DNS (edit /etc/docker/daemon.json):
+#   {"dns": ["YOUR_CORPORATE_DNS", "8.8.8.8"]}
+#   Then: sudo systemctl restart docker
+#
+# Fix option 3: Use npm mirror (set before build):
+#   npm config set registry https://registry.npmmirror.com
+
 services:
   statusfe:
     build: .
