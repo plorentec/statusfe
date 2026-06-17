@@ -10,8 +10,6 @@ npm run dev        # node --watch src/app.js
 ## Database
 PostgreSQL via `pg` (node-postgres). Env: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_SSL`. Defaults: `localhost:5432`, db `statusfe`, user `postgres`.
 
-**Note:** README.md still references SQLite — that is stale. The app uses PostgreSQL exclusively (no SQLite code in `src/`).
-
 ## Seed data (on first run)
 - Admin user: `admin@status.local` / `admin123`
 - Default API key: a new UUID per fresh DB
@@ -101,4 +99,18 @@ data/audit_logs/      ← Daily rotated audit log CSV files.
 - `admin-extra.js` is mounted after `admin.js` — route conflicts caught by `admin.js` first.
 - CSRF is applied to all routes except `/api/v1` (which uses API key auth).
 - Session table (`sessions`) is created by `session.js` on first access via the shared pg pool.
-- README.md references SQLite — that is outdated. The app uses PostgreSQL. The AGENTS.md here is the source of truth for DB details.
+
+## Docker
+- Dockerfile copies only `package.json`, `src/`, `public/`, `views/` — no lock file, no `node_modules`.
+- `.dockerignore` excludes `node_modules/`, `.env`, `data/`, `error.txt`, `opencode.json`.
+- Corporate network: if `docker build` hangs on `npm install`, your corporate DNS may block Docker's internal DNS.
+  - Fix: configure Docker DNS in `/etc/docker/daemon.json` with your corporate DNS, or use `network_mode: host`.
+  - See `docker-compose.yml` comments for details.
+
+## Recent changes (session context)
+- **PostgreSQL migration**: App uses PostgreSQL exclusively (no SQLite). README/CHANGELOG updated.
+- **Dockerfile fix**: Removed lock file dependency, copies only needed files.
+- **`.dockerignore` fix**: Uncommented `node_modules/` to prevent copying host node_modules into container.
+- **SQL fixes**: Fixed `||` operator errors in PostgreSQL queries (integer || string). Used `COALESCE` and `::text` casts.
+- **package-lock.json**: Regenerated to fix corruption that caused `Cannot find module 'dotenv'` in Docker builds.
+- **Cleanup**: Removed `error.txt` from git history (filter-branch + force push).
