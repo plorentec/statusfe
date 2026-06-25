@@ -6,7 +6,7 @@
 ---
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-**v2.0.0** — 2FA, audit log, multi-page groups, PostgreSQL migration, security hardening
+**v2.0.1** — 2FA, audit log, multi-page groups, PostgreSQL migration, security hardening, template fixes, auto-refresh
 
 ---
 
@@ -59,13 +59,12 @@ Access / Accede en: `http://localhost:3000`
 | **Status Pages** | Multiple pages with custom templates (default, grid, dark) | Múltiples páginas con plantillas personalizables (default, grid, dark) |
 | **Component Health** | Track service health with 5 status levels | Seguimiento de salud de servicios con 5 niveles de estado |
 | **Incidents** | Public incident reports with real-time status tracking | Informes públicos de incidentes con seguimiento de estado en tiempo real |
-| **Maintenance** | Scheduled maintenance windows with auto status transitions | Ventanas de mantenimiento programado con transiciones automáticas de estado |
+| **Maintenance** | Scheduled maintenance windows with auto status transitions and advance notice | Ventanas de mantenimiento programado con transiciones automáticas y aviso anticipado |
 | **Component Groups** | Group components, assign to one or multiple pages | Agrupar componentes, asignar a una o múltiples páginas |
 | **Component Dependencies** | Cascade status changes across related components | Cascada de cambios de estado entre componentes relacionados |
 | **Embed Widget** | Customizable status badge: `/embed/:slug?style=compact\|detailed\|minimal` | Widget de estado personalizable: `/embed/:slug?style=compact\|detailed\|minimal` |
 | **Custom Layout** | Custom CSS, HTML, logo, and layout per page | CSS personalizado, HTML, logo y diseño por página |
-| **Auto-Refresh** | Configurable page refresh interval via meta tag | Refresco automático configurable vía meta tag |
-| **Dark/Light Mode** | Toggle with localStorage persistence | Modo oscuro/claro con persistencia en localStorage |
+| **Auto-Refresh** | Configurable page refresh interval (minimum 15 seconds) | Refresco automático configurable (mínimo 15 segundos) |
 
 ### Admin Dashboard / Panel de Administración
 
@@ -75,7 +74,7 @@ Access / Accede en: `http://localhost:3000`
 | **Pages Management** | CRUD for status pages with templates, custom CSS/HTML, timezone | CRUD de páginas de estado con plantillas, CSS/HTML personalizado, zona horaria |
 | **Components Management** | Full CRUD with quick status change from list | CRUD completo con cambio rápido de estado desde la lista |
 | **Incidents Management** | Create, edit, resolve incidents with cascade status options | Crear, editar y resolver incidentes con opciones de estado en cascada |
-| **Maintenance Windows** | Schedule and manage maintenance periods | Programar y gestionar períodos de mantenimiento |
+| **Maintenance Windows** | Schedule and manage maintenance periods with advance notice | Programar y gestionar períodos de mantenimiento con aviso anticipado |
 | **Users Management** | Create, edit, delete users with role-based access | Crear, editar y eliminar usuarios con acceso basado en roles |
 | **API Keys Management** | Generate, revoke, reactivate keys with scoped permissions | Generar, revocar y reactivar claves con permisos por alcance |
 | **Notifications Center** | Auto-created on status changes, mark read/delete | Centro de notificaciones automáticas por cambios de estado |
