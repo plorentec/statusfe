@@ -130,7 +130,8 @@ router.post('/pages', async (req, res) => {
   if (await pages.getBySlug(slug)) {
     return res.redirect('/admin/pages/new?msg=error&type=error');
   }
-  const page = await pages.create({ name, slug, description, status, template, is_public, refresh_interval, custom_layout: req.body.custom_layout ? 1 : 0, custom_layout_css, custom_layout_html });
+  const ri = Math.max(15, parseInt(refresh_interval) || 15);
+  const page = await pages.create({ name, slug, description, status, template, is_public, refresh_interval: ri, custom_layout: req.body.custom_layout ? 1 : 0, custom_layout_css, custom_layout_html });
   const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
   for (const a of admins) {
     await notifications.create({
@@ -186,7 +187,8 @@ router.put('/pages/:id', async (req, res) => {
   if (slugExists && slugExists.id !== req.params.id) {
     return res.redirect('/admin/pages/' + req.params.id + '/edit?msg=error&type=error');
   }
-  await pages.update(req.params.id, { name, slug, description, status, template, is_public, refresh_interval, custom_layout: req.body.custom_layout ? 1 : 0, custom_layout_css, custom_layout_html });
+  const ri = Math.max(15, parseInt(refresh_interval) || 15);
+  await pages.update(req.params.id, { name, slug, description, status, template, is_public, refresh_interval: ri, custom_layout: req.body.custom_layout ? 1 : 0, custom_layout_css, custom_layout_html });
   const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
   for (const a of admins) {
     await notifications.create({

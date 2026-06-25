@@ -1,45 +1,39 @@
-/* Template 2: Card Grid - Redesigned */
-:root {
-  --grid-bg: #0a0a0f;
-  --grid-card: #12121a;
-  --grid-text: #e2e8f0;
-  --grid-muted: #64748b;
-  --grid-border: #1e1e2e;
-  --grid-shadow: 0 2px 12px rgba(0,0,0,0.3);
-  --grid-radius: 16px;
-  --grid-operational: #10b981;
-  --grid-degraded: #f59e0b;
-  --grid-partial: #f97316;
-  --grid-major: #ef4444;
-  --grid-maintenance: #8b5cf6;
-}
-
+/* Template 2: Card Grid - Light */
 body.template-grid {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  background: var(--grid-bg);
-  color: var(--grid-text);
   line-height: 1.5;
 }
 
+.template-grid header {
+  background: var(--white);
+  border-bottom: 1px solid var(--border);
+  padding: 28px 0;
+}
 .template-grid .page-header {
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  background: var(--white);
+  border-bottom: 1px solid var(--border);
   padding: 28px 0;
 }
 .template-grid .page-header-inner {
   max-width: 960px; margin: 0 auto; padding: 0 20px;
   display: flex; align-items: center; gap: 16px;
 }
-.template-grid .page-header h1 { font-size: 24px; font-weight: 700; color: #fff; }
-.template-grid .page-header p { font-size: 14px; color: rgba(255,255,255,0.6); margin-top: 2px; }
+.template-grid .page-header h1 { font-size: 24px; font-weight: 700; color: var(--text); }
+.template-grid .page-header p { font-size: 14px; color: var(--light); margin-top: 2px; }
 .template-grid .logo { height: 36px; }
+.template-grid .header-content {
+  max-width: 960px; margin: 0 auto; padding: 0 20px;
+  display: flex; align-items: center; gap: 16px;
+}
+.template-grid .header-content h1 { font-size: 24px; font-weight: 700; color: var(--text); }
+.template-grid .header-content .subtitle { font-size: 14px; color: var(--light); margin-top: 2px; }
 
 .template-grid .page-body { padding: 24px 0 48px; }
 .template-grid .container { max-width: 960px; margin: 0 auto; padding: 0 20px; }
 
-/* Overall Status */
 .template-grid .overall-status {
   display: flex; align-items: center; gap: 14px;
-  padding: 16px 24px; border-radius: var(--grid-radius);
+  padding: 16px 24px; border-radius: 12px;
   margin-bottom: 24px; font-weight: 600; font-size: 15px;
 }
 .template-grid .overall-status .overall-label { font-size: 12px; font-weight: 500; opacity: 0.7; display: block; }
@@ -49,33 +43,32 @@ body.template-grid {
   animation: pulse 2s infinite;
 }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
-.template-grid .overall-status.operational { background: rgba(16,185,129,0.12); color: #34d399; }
-.template-grid .overall-status.operational .pulse-dot { background: #34d399; }
-.template-grid .overall-status.under_maintenance { background: rgba(139,92,246,0.12); color: #a78bfa; }
-.template-grid .overall-status.under_maintenance .pulse-dot { background: #a78bfa; }
-.template-grid .overall-status.degraded_performance { background: rgba(245,158,11,0.12); color: #fbbf24; }
-.template-grid .overall-status.degraded_performance .pulse-dot { background: #fbbf24; }
-.template-grid .overall-status.partial_outage { background: rgba(249,115,22,0.12); color: #fb923c; }
-.template-grid .overall-status.partial_outage .pulse-dot { background: #fb923c; }
-.template-grid .overall-status.major_outage { background: rgba(239,68,68,0.12); color: #f87171; }
-.template-grid .overall-status.major_outage .pulse-dot { background: #f87171; }
+.template-grid .overall-status.operational { background: #dcfce7; color: var(--operational); }
+.template-grid .overall-status.operational .pulse-dot { background: var(--operational); }
+.template-grid .overall-status.under_maintenance { background: #fef9c3; color: #854d0e; }
+.template-grid .overall-status.under_maintenance .pulse-dot { background: #eab308; }
+.template-grid .overall-status.degraded_performance { background: #fef3c7; color: #92400e; }
+.template-grid .overall-status.degraded_performance .pulse-dot { background: #f59e0b; }
+.template-grid .overall-status.partial_outage { background: #ffedd5; color: #9a3412; }
+.template-grid .overall-status.partial_outage .pulse-dot { background: #f97316; }
+.template-grid .overall-status.major_outage { background: #fee2e2; color: #991b1b; }
+.template-grid .overall-status.major_outage .pulse-dot { background: #ef4444; }
 
-/* Incidents Panel */
 .template-grid .incidents-panel {
-  border-radius: var(--grid-radius); margin-bottom: 28px; overflow: hidden; border: 1px solid;
+  border-radius: 12px; margin-bottom: 28px; overflow: hidden; border: 1px solid;
 }
-.template-grid .incidents-panel.impact-critical { border-color: rgba(239,68,68,0.3); background: rgba(239,68,68,0.08); }
-.template-grid .incidents-panel.impact-major { border-color: rgba(249,115,22,0.3); background: rgba(249,115,22,0.08); }
-.template-grid .incidents-panel.impact-minor { border-color: rgba(245,158,11,0.3); background: rgba(245,158,11,0.08); }
-.template-grid .incidents-panel.impact-none { border-color: rgba(148,163,184,0.2); background: rgba(148,163,184,0.05); }
+.template-grid .incidents-panel.impact-critical { border-color: #fecaca; background: #fef2f2; }
+.template-grid .incidents-panel.impact-major { border-color: #fed7aa; background: #fff7ed; }
+.template-grid .incidents-panel.impact-minor { border-color: #fef08a; background: #fefce8; }
+.template-grid .incidents-panel.impact-none { border-color: #e2e8f0; background: #f8fafc; }
 .template-grid .incidents-panel-header {
   display: flex; align-items: center; gap: 10px; padding: 14px 20px;
   border-bottom: 1px solid; font-size: 14px; font-weight: 700;
 }
-.template-grid .incidents-panel.impact-critical .incidents-panel-header { border-color: rgba(239,68,68,0.3); color: #f87171; }
-.template-grid .incidents-panel.impact-major .incidents-panel-header { border-color: rgba(249,115,22,0.3); color: #fb923c; }
-.template-grid .incidents-panel.impact-minor .incidents-panel-header { border-color: rgba(245,158,11,0.3); color: #fbbf24; }
-.template-grid .incidents-panel.impact-none .incidents-panel-header { border-color: rgba(148,163,184,0.2); color: #94a3b8; }
+.template-grid .incidents-panel.impact-critical .incidents-panel-header { border-color: #fecaca; color: #991b1b; }
+.template-grid .incidents-panel.impact-major .incidents-panel-header { border-color: #fed7aa; color: #9a3412; }
+.template-grid .incidents-panel.impact-minor .incidents-panel-header { border-color: #fef08a; color: #854d0e; }
+.template-grid .incidents-panel.impact-none .incidents-panel-header { border-color: #e2e8f0; color: #475569; }
 .template-grid .alert-icon { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 .template-grid .incidents-panel.impact-critical .alert-icon { background: #ef4444; }
 .template-grid .incidents-panel.impact-major .alert-icon { background: #f97316; }
@@ -86,86 +79,79 @@ body.template-grid {
   padding: 14px 20px; border-bottom: 1px solid; gap: 12px;
 }
 .template-grid .incident-row:last-child { border-bottom: none; }
-.template-grid .incidents-panel.impact-critical .incident-row { border-color: rgba(239,68,68,0.15); }
-.template-grid .incidents-panel.impact-major .incident-row { border-color: rgba(249,115,22,0.15); }
-.template-grid .incidents-panel.impact-minor .incident-row { border-color: rgba(245,158,11,0.15); }
-.template-grid .incidents-panel.impact-none .incident-row { border-color: rgba(148,163,184,0.1); }
+.template-grid .incidents-panel.impact-critical .incident-row { border-color: #fecaca; }
+.template-grid .incidents-panel.impact-major .incident-row { border-color: #fed7aa; }
+.template-grid .incidents-panel.impact-minor .incident-row { border-color: #fef08a; }
+.template-grid .incidents-panel.impact-none .incident-row { border-color: #e2e8f0; }
 .template-grid .incident-row-left { display: flex; align-items: flex-start; gap: 10px; flex: 1; min-width: 0; }
 .template-grid .incident-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
 .template-grid .incident-dot.impact-critical { background: #ef4444; }
 .template-grid .incident-dot.impact-major { background: #f97316; }
 .template-grid .incident-dot.impact-minor { background: #eab308; }
 .template-grid .incident-dot.impact-none { background: #94a3b8; }
-.template-grid .incident-row-name { font-size: 14px; font-weight: 600; }
-.template-grid .incident-row-msg { font-size: 13px; color: var(--grid-muted); margin-top: 3px; line-height: 1.4; }
+.template-grid .incident-row-name { font-size: 14px; font-weight: 600; color: var(--text); }
+.template-grid .incident-row-msg { font-size: 13px; color: var(--light); margin-top: 3px; line-height: 1.4; }
 .template-grid .incident-row-badge {
   font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px; white-space: nowrap; flex-shrink: 0;
 }
-.template-grid .badge-operational { background: rgba(16,185,129,0.15); color: #34d399; }
-.template-grid .badge-under_maintenance { background: rgba(139,92,246,0.15); color: #a78bfa; }
-.template-grid .badge-degraded_performance { background: rgba(245,158,11,0.15); color: #fbbf24; }
-.template-grid .badge-partial_outage { background: rgba(249,115,22,0.15); color: #fb923c; }
-.template-grid .badge-major_outage { background: rgba(239,68,68,0.15); color: #f87171; }
-.template-grid .badge-investigating { background: rgba(239,68,68,0.15); color: #f87171; }
-.template-grid .badge-identified { background: rgba(249,115,22,0.15); color: #fb923c; }
-.template-grid .badge-monitoring { background: rgba(245,158,11,0.15); color: #fbbf24; }
-.template-grid .badge-resolved { background: rgba(16,185,129,0.15); color: #34d399; }
+.template-grid .badge-operational { background: #dcfce7; color: var(--operational); }
+.template-grid .badge-under_maintenance { background: #fef9c3; color: #854d0e; }
+.template-grid .badge-degraded_performance { background: #fef3c7; color: #92400e; }
+.template-grid .badge-partial_outage { background: #ffedd5; color: #9a3412; }
+.template-grid .badge-major_outage { background: #fee2e2; color: #991b1b; }
+.template-grid .badge-investigating { background: #fee2e2; color: #991b1b; }
+.template-grid .badge-identified { background: #ffedd5; color: #9a3412; }
+.template-grid .badge-monitoring { background: #fef3c7; color: #92400e; }
+.template-grid .badge-resolved { background: #dcfce7; color: var(--operational); }
 
 /* Grid Components */
 .template-grid .grid-container { max-width: 960px; margin: 0 auto; padding: 0 20px; }
 .template-grid .grid-group { margin-bottom: 28px; }
 .template-grid .grid-group h2 {
   font-size: 13px; text-transform: uppercase; letter-spacing: 1.5px;
-  color: var(--grid-muted); margin-bottom: 16px; font-weight: 600;
+  color: var(--light); margin-bottom: 16px; font-weight: 600;
 }
 .template-grid .card-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;
 }
 .template-grid .status-card {
-  background: var(--grid-card); border-radius: var(--grid-radius);
-  padding: 20px; box-shadow: var(--grid-shadow); border: 1px solid var(--grid-border);
+  background: var(--white); border-radius: 12px;
+  padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  border: 1px solid var(--border);
   transition: all 0.2s ease; position: relative; overflow: hidden;
 }
 .template-grid .status-card::before {
   content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
 }
-.template-grid .status-card.operational::before { background: var(--grid-operational); }
-.template-grid .status-card.degraded_performance::before { background: var(--grid-degraded); }
-.template-grid .status-card.partial_outage::before { background: var(--grid-partial); }
-.template-grid .status-card.major_outage::before { background: var(--grid-major); }
-.template-grid .status-card.under_maintenance::before { background: var(--grid-maintenance); }
-.template-grid .status-card.investigating::before { background: var(--grid-major); }
-.template-grid .status-card.identified::before { background: var(--grid-partial); }
-.template-grid .status-card.monitoring::before { background: var(--grid-degraded); }
-.template-grid .status-card.resolved::before { background: var(--grid-operational); }
-.template-grid .status-card:hover { box-shadow: var(--grid-shadow); transform: translateY(-2px); }
+.template-grid .status-card.operational::before { background: var(--operational); }
+.template-grid .status-card.degraded_performance::before { background: #f59e0b; }
+.template-grid .status-card.partial_outage::before { background: #f97316; }
+.template-grid .status-card.major_outage::before { background: #ef4444; }
+.template-grid .status-card.under_maintenance::before { background: #eab308; }
+.template-grid .status-card.investigating::before { background: #ef4444; }
+.template-grid .status-card.identified::before { background: #f97316; }
+.template-grid .status-card.monitoring::before { background: #f59e0b; }
+.template-grid .status-card.resolved::before { background: var(--operational); }
+.template-grid .status-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); transform: translateY(-2px); }
 .template-grid .card-top {
   display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;
 }
-.template-grid .card-name { font-size: 16px; font-weight: 600; }
+.template-grid .card-name { font-size: 16px; font-weight: 600; color: var(--text); }
 .template-grid .card-status {
   font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px;
   text-transform: uppercase; letter-spacing: 0.5px;
 }
-.template-grid .card-status.operational { background: rgba(16,185,129,0.15); color: #34d399; }
-.template-grid .card-status.degraded_performance { background: rgba(245,158,11,0.15); color: #fbbf24; }
-.template-grid .card-status.partial_outage { background: rgba(249,115,22,0.15); color: #fb923c; }
-.template-grid .card-status.major_outage { background: rgba(239,68,68,0.15); color: #f87171; }
-.template-grid .card-status.under_maintenance { background: rgba(139,92,246,0.15); color: #a78bfa; }
-.template-grid .card-status.investigating { background: rgba(239,68,68,0.15); color: #f87171; }
-.template-grid .card-status.identified { background: rgba(249,115,22,0.15); color: #fb923c; }
-.template-grid .card-status.monitoring { background: rgba(245,158,11,0.15); color: #fbbf24; }
-.template-grid .card-status.resolved { background: rgba(16,185,129,0.15); color: #34d399; }
-.template-grid .card-desc { font-size: 13px; color: var(--grid-muted); margin-top: 4px; }
+.template-grid .card-status.operational { background: #dcfce7; color: var(--operational); }
+.template-grid .card-status.degraded_performance { background: #fef3c7; color: #92400e; }
+.template-grid .card-status.partial_outage { background: #ffedd5; color: #9a3412; }
+.template-grid .card-status.major_outage { background: #fee2e2; color: #991b1b; }
+.template-grid .card-status.under_maintenance { background: #fef9c3; color: #854d0e; }
+.template-grid .card-status.investigating { background: #fee2e2; color: #991b1b; }
+.template-grid .card-status.identified { background: #ffedd5; color: #9a3412; }
+.template-grid .card-status.monitoring { background: #fef3c7; color: #92400e; }
+.template-grid .card-status.resolved { background: #dcfce7; color: var(--operational); }
+.template-grid .card-desc { font-size: 13px; color: var(--light); margin-top: 4px; }
 
 .template-grid footer {
-  text-align: center; padding: 24px 0; color: var(--grid-muted); font-size: 13px;
+  text-align: center; padding: 24px 0; color: var(--light); font-size: 13px;
 }
-
-/* Dark mode */
-body.template-grid.status-dark {
-  --grid-bg: #0a0a0f; --grid-card: #12121a; --grid-text: #e2e8f0;
-  --grid-muted: #64748b; --grid-border: #1e1e2e;
-}
-body.template-grid.status-dark .template-grid .overall-status.operational { background: rgba(34,197,94,0.15); }
-body.template-grid.status-dark .template-grid .overall-status.major_outage { background: rgba(239,68,68,0.15); }

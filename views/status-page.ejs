@@ -4,8 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><%= page.name %> - System Status</title>
-<meta name="refresh-interval" content="<%= typeof refreshInterval !== 'undefined' ? refreshInterval : '0' %>">
+<meta name="refresh-interval" content="<%= (typeof refreshInterval !== 'undefined' && refreshInterval) ? Math.max(15, parseInt(refreshInterval)) : 15 %>">
 <link rel="stylesheet" href="/css/status.css">
+<% if (page.template === 'grid') { %>
+<link rel="stylesheet" href="/css/template-grid.css">
+<% } else if (page.template === 'dark') { %>
+<link rel="stylesheet" href="/css/template-dark.css">
+<% } %>
 <% if (page.custom_layout && page.custom_layout_css) { %>
 <style><%= page.custom_layout_css %></style>
 <% } %>
@@ -133,7 +138,7 @@
   layoutHtml = layoutHtml.replace(/\{\{page_status\}\}/g, formatStatus(page.status));
   layoutHtml = layoutHtml.replace(/\{\{page_description\}\}/g, escapeHtml(page.description || ''));
   layoutHtml = layoutHtml.replace(/\{\{pageSlug\}\}/g, escapeHtml(page.slug));
-  layoutHtml = layoutHtml.replace(/\{\{refreshInterval\}\}/g, refreshInterval || '0');
+  layoutHtml = layoutHtml.replace(/\{\{refreshInterval\}\}/g, refreshInterval || '15');
   layoutHtml = layoutHtml.replace(/\{\{pageStatusValue\}\}/g, escapeHtml(page.status));
 %>
 <%- layoutHtml %>
@@ -431,7 +436,7 @@ function formatStatus(s) { return {operational:'Operational',under_maintenance:'
 // Auto-refresh page at configured interval
 (function() {
   var meta = document.querySelector('meta[name="refresh-interval"]');
-  var seconds = meta ? parseInt(meta.content) : 0;
+  var seconds = meta ? Math.max(15, parseInt(meta.content)) : 15;
   if (seconds > 0) {
     var remaining = seconds;
     var counterEl = document.createElement('div');
