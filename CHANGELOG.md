@@ -2,6 +2,16 @@
 
 All notable changes to StatusFe.
 
+## [2.0.1] — 2026-06-25
+
+### Fixed
+- **Template grid** — Restored light theme (was incorrectly dark). Grid template now uses light colors consistent with default template.
+- **Status colors** — Fixed missing colors in dark template (`.dot` class missing `width`/`height`/`border-radius` making dots invisible).
+- **Template CSS loading** — Public status pages now load the correct CSS file per template (`template-grid.css` for grid, `template-dark.css` for dark).
+- **Auto-refresh** — Enforced minimum 15 second refresh interval everywhere (form, backend, template, DB default). Removed "Disabled" option.
+- **Version check** — Fixed update checker to strip 'v' prefix from GitHub release tags before comparing versions.
+- **Docker Compose** — Switched to `network_mode: host` for both services to avoid DNS issues in corporate networks. Added `network: host` to build context.
+
 ## [2.0.0] — 2026-05-31
 
 ### Added
