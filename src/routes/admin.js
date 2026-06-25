@@ -1030,7 +1030,7 @@ router.get('/check-update', requireAuth, async (req, res) => {
       ghRes.on('end', () => {
         try {
           const release = JSON.parse(data);
-          const latestTag = release.tag_name || release.name || currentVersion;
+          const latestTag = (release.tag_name || release.name || currentVersion).replace(/^v/, '');
           const hasUpdate = latestTag !== currentVersion;
           res.json({ currentVersion, latestVersion: latestTag, hasUpdate, url: release.html_url, publishedAt: release.published_at });
         } catch(e) {

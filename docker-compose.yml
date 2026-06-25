@@ -17,6 +17,7 @@ services:
     network_mode: host
     environment:
       - PORT=3000
+      - HOST=0.0.0.0
       - SESSION_SECRET=${SESSION_SECRET:-change-me-to-a-random-string}
       - DB_HOST=127.0.0.1
       - DB_PORT=5432
