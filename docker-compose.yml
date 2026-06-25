@@ -9,7 +9,9 @@
 
 services:
   statusfe:
-    build: .
+    build:
+      context: .
+      network: host
     container_name: statusfe
     restart: unless-stopped
     network_mode: host
