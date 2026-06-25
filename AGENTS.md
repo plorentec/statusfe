@@ -63,13 +63,32 @@ data/audit_logs/        ← Daily rotated CSV exports.
 
 2FA: `require2FA` on `/admin` (skips `role=user`, checks `_2fa_verified` on session).
 
+## Templates & CSS
+- `status-page.ejs` loads CSS per template: `template-grid.css` for grid, `template-dark.css` for dark. Default template only uses `status.css`.
+- `template-grid.css` is a **light** template (white background, white cards). `template-dark.css` is the only dark template.
+- `status.css` defines shared base styles. `template-grid.css` and `template-dark.css` override per-template.
+- `status.css` defines `.header-content` styles that apply to both grid/dark. `template-grid.css` overrides with its own styling.
+- `template-dark.css` has base `.dot` styles (width/height/border-radius) — needed for visibility.
+
+## Refresh interval
+- Minimum 15 seconds enforced everywhere: form select (no "Disabled" option), backend `Math.max(15, ...)`, DB default `15`, template defaults `15`.
+- `models.js` pages.update() casts `refresh_interval` with `Math.max(15, ...)`.
+- `app.js` passes `refreshInterval: refreshInterval ? Math.max(15, parseInt(refreshInterval)) : 15` to templates.
+- `init.js` schema: `refresh_interval INTEGER DEFAULT 15`.
+- JS counter in `status-page.ejs` uses `Math.max(15, ...)`.
+
+## Version check
+- `/check-update` strips 'v' prefix from GitHub tag: `(release.tag_name || ...).replace(/^v/, '')`.
+- `currentVersion` must match format without 'v' (e.g. `2.0.1`, not `v2.0.1`).
+- GitHub releases must use tag format `v2.0.1` (with 'v').
+
 ## Gotchas
 - **SQL**: placeholders `$1, $2, ...` not `?`. Use `NOW()`, `CURRENT_TIMESTAMP`. Intervals: `NOW() - INTERVAL '30 days'` / `($1::text || ' days')::interval`.
 - **SQLite→PG**: `INSERT OR REPLACE` → `INSERT ... ON CONFLICT ... DO UPDATE`. `INSERT OR IGNORE` → `ON CONFLICT ... DO NOTHING`.
 - Adding a module to `models.js` requires updating imports in `admin.js`, `admin-extra.js`, `api.js`, and `app.js`.
 - `admin-extra.js` is mounted after `admin.js` — route conflicts resolved by `admin.js` first.
 - Rate limits: global 200/min, auth 10/15min, API 60/min, admin 60/min (inline in `app.js:109-116`).
-- Docker: copy only `package.json`, `src/`, `public/`, `views/` — no lock file. Docker Compose sidecar: `postgres:16-alpine`, port `5433`. Default password: `statusfe-secret`. If Docker build hangs (DNS timeout): `network_mode: host` or configure Docker DNS in `/etc/docker/daemon.json`.
+- Docker Compose: `network_mode: host` on both services. No `ports:` mapping. `DB_HOST=127.0.0.1` (not `postgres`). Build has `network: host`.
 - Status systemd service at `systemd/statusfe.service` — runs as `www-data`, `WorkingDirectory=/var/www/cachet`.
 
 
