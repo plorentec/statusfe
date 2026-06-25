@@ -4,34 +4,23 @@
 # If docker build hangs on npm install (DNS resolution timeout),
 # your corporate firewall may block Docker's internal DNS.
 #
-# Fix option 1: Use host network (uncomment below, remove 'ports:')
-#   network_mode: host
-#
-# Fix option 2: Configure Docker DNS (edit /etc/docker/daemon.json):
-#   {"dns": ["YOUR_CORPORATE_DNS", "8.8.8.8"]}
-#   Then: sudo systemctl restart docker
-#
-# Fix option 3: Use npm mirror (set before build):
-#   npm config set registry https://registry.npmmirror.com
+# Fix: Use host network (enabled below). Remove 'ports:' and set DB_HOST to the postgres container name
+#   or use network_mode: host on both services so they share the same network namespace.
 
 services:
   statusfe:
     build: .
     container_name: statusfe
     restart: unless-stopped
-    ports:
-      - "${PORT:-3000}:3000"
+    network_mode: host
     environment:
       - PORT=3000
       - SESSION_SECRET=${SESSION_SECRET:-change-me-to-a-random-string}
-      - DB_HOST=postgres
+      - DB_HOST=127.0.0.1
       - DB_PORT=5432
       - DB_NAME=statusfe
       - DB_USER=postgres
       - DB_PASSWORD=statusfe-secret
-    depends_on:
-      postgres:
-        condition: service_healthy
     volumes:
       - statusfe-data:/app/data
 
@@ -39,16 +28,15 @@ services:
     image: postgres:16-alpine
     container_name: statusfe-postgres
     restart: unless-stopped
+    network_mode: host
     environment:
       - POSTGRES_DB=statusfe
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=statusfe-secret
     volumes:
       - postgres-data:/var/lib/postgresql/data
-    ports:
-      - "5433:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -h 127.0.0.1"]
       interval: 5s
       timeout: 3s
       retries: 5
