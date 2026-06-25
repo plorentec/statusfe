@@ -278,7 +278,7 @@ footer { text-align: center; padding: 32px 0; color: var(--light); font-size: 13
 }
 
 /* Header for grid/dark templates */
-header {
+header.page-header {
   background: var(--white);
   border-bottom: 1px solid var(--border);
   padding: 24px 0;

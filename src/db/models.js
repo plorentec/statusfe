@@ -58,7 +58,7 @@ module.exports.pages = {
     const id = uuidv4();
     await run(
       'INSERT INTO pages (id,name,slug,description,status,template,timezone,logo_url,custom_css,custom_html,is_public,refresh_interval,custom_layout,custom_layout_css,custom_layout_html) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)',
-      [id, name, slug, description||'', status||'operational', template||'default', timezone||'UTC', logo_url||null, custom_css||null, custom_html||null, is_public ? 1 : 0, refresh_interval||0, custom_layout ? 1 : 0, custom_layout_css||null, custom_layout_html||null]
+      [id, name, slug, description||'', status||'operational', template||'default', timezone||'UTC', logo_url||null, custom_css||null, custom_html||null, is_public ? 1 : 0, refresh_interval ? Math.max(15, parseInt(refresh_interval)) : 15, custom_layout ? 1 : 0, custom_layout_css||null, custom_layout_html||null]
     );
     return this.getById(id);
   },
@@ -70,6 +70,7 @@ module.exports.pages = {
     for (const k of allowed) {
       if (data[k] !== undefined) {
         let val = data[k];
+        if (k === 'refresh_interval') val = Math.max(15, parseInt(val) || 15);
         if (k === 'is_public') val = (val === 'on' || val === 1 || val === true) ? 1 : 0;
         if (k === 'custom_layout') val = (val === 'on' || val === 1 || val === true) ? 1 : 0;
         fields.push(k+'=$'+(params.length+1));

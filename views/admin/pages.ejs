@@ -187,12 +187,11 @@ Make page public
 <div class="form-group">
 <label for="refresh_interval">Public Page Refresh Interval (seconds)</label>
 <select id="refresh_interval" name="refresh_interval">
-<option value="0" <%= (page.refresh_interval || 0) === 0 ? 'selected' : '' %>>Disabled (manual only)</option>
-<option value="15" <%= (page.refresh_interval || 0) === 15 ? 'selected' : '' %>>15 seconds</option>
-<option value="30" <%= (page.refresh_interval || 0) === 30 ? 'selected' : '' %>>30 seconds</option>
-<option value="60" <%= (page.refresh_interval || 0) === 60 ? 'selected' : '' %>>1 minute</option>
-<option value="120" <%= (page.refresh_interval || 0) === 120 ? 'selected' : '' %>>2 minutes</option>
-<option value="300" <%= (page.refresh_interval || 0) === 300 ? 'selected' : '' %>>5 minutes</option>
+<option value="15" <%= (page.refresh_interval || 15) === 15 ? 'selected' : '' %>>15 seconds</option>
+<option value="30" <%= (page.refresh_interval || 15) === 30 ? 'selected' : '' %>>30 seconds</option>
+<option value="60" <%= (page.refresh_interval || 15) === 60 ? 'selected' : '' %>>1 minute</option>
+<option value="120" <%= (page.refresh_interval || 15) === 120 ? 'selected' : '' %>>2 minutes</option>
+<option value="300" <%= (page.refresh_interval || 15) === 300 ? 'selected' : '' %>>5 minutes</option>
 </select>
 </div>
 <div class="form-group">
