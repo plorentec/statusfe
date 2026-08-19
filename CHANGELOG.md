@@ -2,6 +2,17 @@
 
 All notable changes to StatusFe.
 
+## [2.1.0] — 2026-08-19
+
+### Added
+- **External ID mapping** — `external_id` field on both Components and Pages for linking with external monitoring systems (PRTG, Nagios, etc.).
+- **API lookup by external_id** — Endpoints support filtering by `?external_id=XXX` query parameter: `GET /api/v1/components?external_id=ID` and `GET /api/v1/pages?external_id=ID`.
+- **Admin UI** — External ID column in Pages and Components list tables. Input fields in create/edit forms.
+
+### Updated
+- **Database schema** — Added `external_id TEXT` column to `components` and `pages` tables.
+- **Models** — Added `getByExternalId()` method to both components and pages modules.
+
 ## [2.0.1] — 2026-06-25
 
 ### Fixed
