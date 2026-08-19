@@ -21,6 +21,7 @@ async function createTables() {
       custom_layout INTEGER DEFAULT 0,
       custom_layout_css TEXT,
       custom_layout_html TEXT,
+      external_id TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
@@ -36,6 +37,7 @@ async function createTables() {
       group_name TEXT,
       group_id TEXT,
       dependency_id TEXT,
+      external_id TEXT,
       position INTEGER DEFAULT 0,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

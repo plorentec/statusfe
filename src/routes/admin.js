@@ -120,7 +120,7 @@ router.get('/pages/new', async (req, res) => {
 });
 
 router.post('/pages', async (req, res) => {
-  const { name, slug, description, status, template, is_public, refresh_interval, custom_layout, custom_layout_css, custom_layout_html } = req.body;
+  const { name, slug, description, status, template, is_public, refresh_interval, custom_layout, custom_layout_css, custom_layout_html, external_id } = req.body;
   if (!name || !slug) {
     return res.redirect('/admin/pages/new?msg=error&type=error');
   }
@@ -131,7 +131,7 @@ router.post('/pages', async (req, res) => {
     return res.redirect('/admin/pages/new?msg=error&type=error');
   }
   const ri = Math.max(15, parseInt(refresh_interval) || 15);
-  const page = await pages.create({ name, slug, description, status, template, is_public, refresh_interval: ri, custom_layout: req.body.custom_layout ? 1 : 0, custom_layout_css, custom_layout_html });
+  const page = await pages.create({ name, slug, description, status, template, is_public, refresh_interval: ri, custom_layout: req.body.custom_layout ? 1 : 0, custom_layout_css, custom_layout_html, external_id });
   const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
   for (const a of admins) {
     await notifications.create({
@@ -176,7 +176,7 @@ router.put('/pages/:id', async (req, res) => {
   if (!page) {
     return res.redirect('/admin/pages?msg=error&type=error');
   }
-  const { name, slug, description, status, template, is_public, refresh_interval, custom_layout, custom_layout_css, custom_layout_html } = req.body;
+  const { name, slug, description, status, template, is_public, refresh_interval, custom_layout, custom_layout_css, custom_layout_html, external_id } = req.body;
   if (!name || !slug) {
     return res.redirect('/admin/pages/' + req.params.id + '/edit?msg=error&type=error');
   }
@@ -188,7 +188,7 @@ router.put('/pages/:id', async (req, res) => {
     return res.redirect('/admin/pages/' + req.params.id + '/edit?msg=error&type=error');
   }
   const ri = Math.max(15, parseInt(refresh_interval) || 15);
-  await pages.update(req.params.id, { name, slug, description, status, template, is_public, refresh_interval: ri, custom_layout: req.body.custom_layout ? 1 : 0, custom_layout_css, custom_layout_html });
+  await pages.update(req.params.id, { name, slug, description, status, template, is_public, refresh_interval: ri, custom_layout: req.body.custom_layout ? 1 : 0, custom_layout_css, custom_layout_html, external_id });
   const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
   for (const a of admins) {
     await notifications.create({
@@ -268,11 +268,11 @@ router.get('/components/new', async (req, res) => {
 });
 
 router.post('/components', async (req, res) => {
-  const { name, description, status, group_name, group_id, position } = req.body;
+  const { name, description, status, group_name, group_id, position, external_id } = req.body;
   if (!name) {
     return res.redirect('/admin/components/new?msg=error&type=error');
   }
-  const comp = await components.create({ name, description, status, group_name, group_id, position });
+  const comp = await components.create({ name, description, status, group_name, group_id, position, external_id });
   const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
   for (const a of admins) {
     await notifications.create({
@@ -310,12 +310,12 @@ router.put('/components/:id', async (req, res) => {
   if (!comp) {
     return res.redirect('/admin/components/' + req.params.id + '/edit?msg=error&type=error');
   }
-  const { name, description, status, group_name, group_id, position } = req.body;
+  const { name, description, status, group_name, group_id, position, external_id } = req.body;
   if (!name) {
     return res.redirect('/admin/components/' + req.params.id + '/edit?msg=error&type=error');
   }
   const oldData = { name: comp.name, description: comp.description, status: comp.status, group_name: comp.group_name, position: comp.position };
-  const updated = await components.update(req.params.id, { name, description, status, group_name, group_id, position });
+  const updated = await components.update(req.params.id, { name, description, status, group_name, group_id, position, external_id });
   const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
   for (const a of admins) {
     await notifications.create({

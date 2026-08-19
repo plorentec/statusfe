@@ -53,12 +53,13 @@ module.exports.pages = {
 
   async getById(id) { return await queryOne('SELECT * FROM pages WHERE id=$1', [id]); },
   async getBySlug(slug) { return await queryOne('SELECT * FROM pages WHERE slug=$1', [slug]); },
+  async getByExternalId(ex_id) { if (!ex_id) return null; return await queryOne('SELECT * FROM pages WHERE external_id=$1', [ex_id]); },
 
-  async create({ name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public, template, refresh_interval, custom_layout, custom_layout_css, custom_layout_html }) {
+  async create({ name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public, template, refresh_interval, custom_layout, custom_layout_css, custom_layout_html, external_id }) {
     const id = uuidv4();
     await run(
-      'INSERT INTO pages (id,name,slug,description,status,template,timezone,logo_url,custom_css,custom_html,is_public,refresh_interval,custom_layout,custom_layout_css,custom_layout_html) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)',
-      [id, name, slug, description||'', status||'operational', template||'default', timezone||'UTC', logo_url||null, custom_css||null, custom_html||null, is_public ? 1 : 0, refresh_interval ? Math.max(15, parseInt(refresh_interval)) : 15, custom_layout ? 1 : 0, custom_layout_css||null, custom_layout_html||null]
+      'INSERT INTO pages (id,name,slug,description,status,template,timezone,logo_url,custom_css,custom_html,is_public,refresh_interval,custom_layout,custom_layout_css,custom_layout_html,external_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)',
+      [id, name, slug, description||'', status||'operational', template||'default', timezone||'UTC', logo_url||null, custom_css||null, custom_html||null, is_public ? 1 : 0, refresh_interval ? Math.max(15, parseInt(refresh_interval)) : 15, custom_layout ? 1 : 0, custom_layout_css||null, custom_layout_html||null, external_id||null]
     );
     return this.getById(id);
   },
@@ -66,7 +67,7 @@ module.exports.pages = {
   async update(id, data) {
     const fields = [];
     const params = [];
-    const allowed = ['name','slug','description','status','template','timezone','logo_url','custom_css','custom_html','is_public','refresh_interval','custom_layout','custom_layout_css','custom_layout_html'];
+    const allowed = ['name','slug','description','status','template','timezone','logo_url','custom_css','custom_html','is_public','refresh_interval','custom_layout','custom_layout_css','custom_layout_html','external_id'];
     for (const k of allowed) {
       if (data[k] !== undefined) {
         let val = data[k];
@@ -99,12 +100,13 @@ module.exports.components = {
   },
 
   async get(id) { return await queryOne('SELECT * FROM components WHERE id=$1', [id]); },
+  async getByExternalId(ex_id) { if (!ex_id) return null; return await queryOne('SELECT * FROM components WHERE external_id=$1', [ex_id]); },
 
-  async create({ name, description, status, group_name, group_id, position }) {
+  async create({ name, description, status, group_name, group_id, position, external_id }) {
     const id = uuidv4();
     await run(
-      'INSERT INTO components (id,name,description,status,group_name,group_id,position) VALUES ($1,$2,$3,$4,$5,$6,$7)',
-      [id, name, description||'', status||'operational', group_name||null, group_id||null, position||0]
+      'INSERT INTO components (id,name,description,status,group_name,group_id,external_id,position) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+      [id, name, description||'', status||'operational', group_name||null, group_id||null, external_id||null, position||0]
     );
     return this.get(id);
   },
@@ -113,7 +115,7 @@ module.exports.components = {
     const oldComp = await this.get(id);
     const fields = [];
     const params = [];
-    const allowed = ['name','description','status','group_name','group_id','position'];
+    const allowed = ['name','description','status','group_name','group_id','position','external_id'];
     for (const k of allowed) {
       if (data[k] !== undefined) { fields.push(k+'=$'+(params.length+1)); params.push(data[k]); }
     }

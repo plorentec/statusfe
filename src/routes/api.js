@@ -14,6 +14,7 @@ router.get('/health', (req, res) => {
 
 // Public: list pages (only public ones)
 router.get('/pages', async (req, res) => {
+  if (req.query.external_id) { const p = await pages.getByExternalId(req.query.external_id); return res.json({ page: p || null }); }
   const list = await pages.list({ is_public: 1 });
   res.json({ pages: list, total: list.length });
 });
@@ -40,6 +41,7 @@ router.get('/pages/:slug', async (req, res) => {
 
 // Public: list components
 router.get('/components', async (req, res) => {
+  if (req.query.external_id) { const c = await components.getByExternalId(req.query.external_id); return res.json({ component: c || null }); }
   const f = {};
   if (req.query.status) f.status = req.query.status;
   if (req.query.group) f.group = req.query.group;
@@ -87,16 +89,22 @@ router.get('/info', (req, res) => res.json({ name: 'StatusFe API', version: '1.0
 
 // Pages (admin - requires auth)
 router.get('/pages/admin', async (req, res) => {
+  if (req.query.external_id) { const p = await pages.getByExternalId(req.query.external_id); return res.json({ page: p || null }); }
   const list = await pages.list();
   res.json({ pages: list, total: list.length });
 });
 router.get('/pages/:id', async (req, res) => { const p = await pages.getById(req.params.id) || await pages.getBySlug(req.params.id); if (!p) return res.status(404).json({ error: 'Not found' }); res.json({ page: p }); });
+router.get('/pages', async (req, res) => {
+  if (req.query.external_id) { const p = await pages.getByExternalId(req.query.external_id); return res.json({ page: p || null }); }
+  const list = await pages.list();
+  res.json({ pages: list, total: list.length });
+});
 router.post('/pages', requirePerm('write'), async (req, res) => {
-  const { name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public } = req.body;
+  const { name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public, external_id } = req.body;
   if (!name || !slug) return res.status(400).json({ error: 'name and slug required' });
   const existing = await pages.getBySlug(slug);
   if (existing) return res.status(409).json({ error: 'Slug exists' });
-  const page = await pages.create({ name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public });
+  const page = await pages.create({ name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public, external_id });
   res.status(201).json({ page });
 });
 router.put('/pages/:id', requirePerm('write'), async (req, res) => { res.json({ page: await pages.update(req.params.id, req.body) }); });
@@ -104,6 +112,15 @@ router.delete('/pages/:id', requirePerm('admin'), async (req, res) => { await pa
 
 // Components (admin - requires auth)
 router.get('/components/admin', async (req, res) => {
+  if (req.query.external_id) { const c = await components.getByExternalId(req.query.external_id); return res.json({ component: c || null }); }
+  const f = {};
+  if (req.query.status) f.status = req.query.status;
+  if (req.query.group) f.group = req.query.group;
+  const list = await components.list(f);
+  res.json({ components: list, total: list.length });
+});
+router.get('/components', async (req, res) => {
+  if (req.query.external_id) { const c = await components.getByExternalId(req.query.external_id); return res.json({ component: c || null }); }
   const f = {};
   if (req.query.status) f.status = req.query.status;
   if (req.query.group) f.group = req.query.group;
@@ -116,9 +133,9 @@ router.get('/components/:id', async (req, res) => {
   res.json({ component: c });
 });
 router.post('/components', requirePerm('write'), async (req, res) => {
-  const { name, description, status, group_name, position } = req.body;
+  const { name, description, status, group_name, position, external_id } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
-  const c = await components.create({ name, description, status, group_name, position });
+  const c = await components.create({ name, description, status, group_name, position, external_id });
   const admins = await queryAll("SELECT id FROM users WHERE role=$1", ['admin']);
   admins.forEach(a => {
     notifications.create({
