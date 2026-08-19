@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { queryOne, queryAll, run } = require('../db/database');
-const { pages, components, incidents, apiKeys, webhooks, maintenance, notifications, analytics, dependencies, settings } = require('../db/models');
+const { pages, components, componentGroups, incidents, apiKeys, webhooks, maintenance, notifications, analytics, dependencies, settings } = require('../db/models');
 const { auth, requirePerm } = require('../middleware/auth');
 const { deliver: triggerWebhook } = require('../utils/webhooks');
 
@@ -196,6 +196,46 @@ router.post('/pages/:pageId/components/:componentId', requirePerm('write'), asyn
 router.delete('/pages/:pageId/components/:componentId', requirePerm('write'), async (req, res) => {
   await components.removeFromPage(req.params.pageId, req.params.componentId);
   res.json({ message: 'Removed' });
+});
+
+// ===== COMPONENT GROUPS =====
+// Public: list groups
+router.get('/groups', async (req, res) => {
+  const list = await componentGroups.list(req.query.page_id);
+  res.json({ groups: list, total: list.length });
+});
+
+// Get group with page/component counts
+router.get('/groups/:id', async (req, res) => {
+  const g = await componentGroups.get(req.params.id);
+  if (!g) return res.status(404).json({ error: 'Not found' });
+  const pages = await componentGroups.getPages(req.params.id);
+  const componentsCount = await componentGroups.countComponents(req.params.id);
+  res.json({ group: g, pages, components_count: componentsCount });
+});
+
+// Create group (write)
+router.post('/groups', requirePerm('write'), async (req, res) => {
+  const { name, page_ids, position } = req.body;
+  if (!name) return res.status(400).json({ error: 'name required' });
+  const g = await componentGroups.create({ name, page_ids, position });
+  res.status(201).json({ group: g });
+});
+
+// Update group (write)
+router.put('/groups/:id', requirePerm('write'), async (req, res) => {
+  const existing = await componentGroups.get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Not found' });
+  const g = await componentGroups.update(req.params.id, req.body);
+  res.json({ group: g });
+});
+
+// Delete group (admin)
+router.delete('/groups/:id', requirePerm('admin'), async (req, res) => {
+  const existing = await componentGroups.get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Not found' });
+  await componentGroups.delete(req.params.id);
+  res.json({ message: 'Deleted' });
 });
 
 // Update component status

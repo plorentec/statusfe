@@ -288,6 +288,21 @@ Returns / Obtener: `{ "component": { ... } }` or `{ "component": null }` if not 
 - Acceptado en `POST /components` y `PUT /components/:id` (body: `external_id`).
 - Se muestra en la columna **External ID** de `/admin/components`.
 
+#### Component Groups / Grupos de Componentes
+Public list / Lista pública (no auth):
+```
+GET    /api/v1/groups              — List groups (optional ?page_id=) / Listar grupos
+```
+Authorized CRUD / CRUD autenticado:
+```
+GET    /api/v1/groups/:id          — Get group with pages & component count / Detalle de grupo
+POST   /api/v1/groups              — Create group (write): { name, page_ids[], position } / Crear grupo
+PUT    /api/v1/groups/:id          — Update group (write): { name, position, page_ids[] } / Actualizar grupo
+DELETE /api/v1/groups/:id          — Delete group (admin) / Eliminar grupo
+```
+
+**Acceso por IP / IP access:** todos los endpoints públicos (`GET /api/v1/components`, `GET /api/v1/components?external_id=…`, `GET /api/v1/groups`, `GET /api/v1/pages?external_id=…`) responden tanto por dominio como directamente por IP de la máquina (sin restricción de Host header).
+
 #### Incidents / Incidentes
 ```
 GET    /api/v1/incidents/admin          — List all incidents / Listar incidentes
