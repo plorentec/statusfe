@@ -1,0 +1,31 @@
+## Essential files only - no secrets, no data
+
+# Source code & views
+src/**/*.js
+views/**/*
+
+# Public assets
+public/**/*.css
+public/**/*.js
+public/**/*.svg
+
+# Configuration & build
+package*.json
+Dockerfile
+.dockerignore
+docker-compose.yml
+systemd/**/*
+
+# Docs
+README.md
+CHANGELOG.md
+CONTRIBUTING.md
+CONTRIBUTORS.md
+AGENTS.md
+.env.example
+
+# Excluded from releases:
+#  - node_modules/
+#  - data/
+#  - .env, token.txt, opencode.json
+#  - *.log, Screenshot_*.png, error.txt, fallo.txt
