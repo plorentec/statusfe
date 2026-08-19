@@ -52,7 +52,7 @@
 <div style="font-size:13px;margin-bottom:8px">Permissions: <%- (key_perms || 'read, write') %></div>
 <div class="key-display">
 <code id="newApiKey"><%= key_value %></code>
-<button class="btn btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('newApiKey').textContent);showToast('Key copied!','success')">Copy</button>
+<button class="btn btn-sm" onclick="copyToClipboard(document.getElementById('newApiKey').textContent.trim(), this)">Copy</button>
 </div>
 <p style="margin-top:12px;color:#dc2626;font-weight:600;font-size:13px">⚠ This key will never be shown again. Save it now.</p>
 </div>
