@@ -6,7 +6,7 @@
 ---
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-**v2.0.1** — 2FA, audit log, multi-page groups, PostgreSQL migration, security hardening, template fixes, auto-refresh
+**v2.1.0** — 2FA, audit log, multi-page groups, PostgreSQL migration, security hardening, external_id mapping
 
 ---
 
@@ -73,6 +73,7 @@ Access / Accede en: `http://localhost:3000`
 | **Dashboard Overview** | Stats: pages, components, incidents, users, disk usage | Resumen: páginas, componentes, incidentes, usuarios, uso de disco |
 | **Pages Management** | CRUD for status pages with templates, custom CSS/HTML, timezone | CRUD de páginas de estado con plantillas, CSS/HTML personalizado, zona horaria |
 | **Components Management** | Full CRUD with quick status change from list | CRUD completo con cambio rápido de estado desde la lista |
+| **External ID Mapping** | Map components & pages to external monitoring systems (PRTG, Nagios) with API lookup by `?external_id=` | Mapear componentes y páginas a sistemas externos (PRTG, Nagios) con búsqueda por `?external_id=` |
 | **Incidents Management** | Create, edit, resolve incidents with cascade status options | Crear, editar y resolver incidentes con opciones de estado en cascada |
 | **Maintenance Windows** | Schedule and manage maintenance periods with advance notice | Programar y gestionar períodos de mantenimiento con aviso anticipado |
 | **Users Management** | Create, edit, delete users with role-based access | Crear, editar y eliminar usuarios con acceso basado en roles |
@@ -255,6 +256,16 @@ POST   /api/v1/pages              — Create page (write) / Crear página
 PUT    /api/v1/pages/:id          — Update page (write) / Actualizar página
 DELETE /api/v1/pages/:id          — Delete page (admin) / Eliminar página
 ```
+**External ID** — Look up a page by its external mapping ID / Buscar página por su ID de mapeo externo:
+```
+GET    /api/v1/pages?external_id=MY-EXTERNAL-ID
+```
+Returns `/ Obtener`: `{ "page": { ... } }` or `{ "page": null }` if not found / o `null` si no existe.
+
+`external_id` field / campo:
+- Facultativo (optional). Free-form TEXT to map a page to an external monitoring system (e.g. PRTG, Nagios) / Texto libre para vincular la página con un sistema externo.
+- Acceptado en `POST /pages` y `PUT /pages/:id` (body: `external_id`).
+- Se muestra en la columna **External ID** de `/admin/pages`.
 
 #### Components / Componentes
 ```
@@ -266,6 +277,16 @@ DELETE /api/v1/components/:id          — Delete component (admin) / Eliminar c
 PUT    /api/v1/components/:id/status   — Update status (write) / Actualizar estado
 GET    /api/v1/components/:id/history  — Status history / Historial de estados
 ```
+**External ID** — Look up a component by its external mapping ID / Buscar componente por su ID de mapeo externo:
+```
+GET    /api/v1/components?external_id=MY-EXTERNAL-ID
+```
+Returns / Obtener: `{ "component": { ... } }` or `{ "component": null }` if not found / o `null` si no existe.
+
+`external_id` field / campo:
+- Facultativo (optional). Free-form TEXT to map a component to an external monitoring system / Texto libre para vincular el componente con un sistema de monitoreo externo (PRTG, Nagios, etc.).
+- Acceptado en `POST /components` y `PUT /components/:id` (body: `external_id`).
+- Se muestra en la columna **External ID** de `/admin/components`.
 
 #### Incidents / Incidentes
 ```
