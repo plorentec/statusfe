@@ -2,7 +2,7 @@
 
 All notable changes to StatusFe.
 
-## [2.2.0] — 2026-09-02
+## [2.2.0] — 2026-09-02 (publicado: https://github.com/plorentec/statusfe/releases/tag/v2.2.0)
 
 ### Added
 - **Create groups from the component form** — New "New Group" field: type a name and the group is created (or reused, case-insensitive) and linked to the component. Also available via API (`new_group_name` on component create/update).

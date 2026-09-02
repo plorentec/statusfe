@@ -49,8 +49,9 @@ data/audit_logs/        ← Daily rotated CSV exports.
 - `components.updateStatus(componentId, newStatus, pageIdOrSlug)` — 3rd param auto-resolves slugs via `pages.getBySlug()`.
 - `app.js` daily cron (`setInterval 24h`): cleans old analytics via `analytics.cleanOldData()`, rotates audit log to CSV, prunes audit_log > 365 days.
 - Custom CSS/HTML: sanitized on save via `src/utils/sanitize.js` (models level) and injected raw with `<%- %>` in `status-page.ejs`: `sanitizeCss` strips `</style`/`</textarea`/HTML comments from CSS; `sanitizeHtml` escapes `</textarea` in HTML. Admin-trusted content (allows `<script>` for tracking by design).
-- Custom groups: `component_groups` + `group_pages` join table. Groups assigned to a page drag all their components onto it; groups with no page rows are global. Components displayed on a page = individual `page_components` ∪ group-derived ∪ global groups — unified in `components.getForPage(pageId)` (used by `/status/:slug`, `/api/v1/status/:slug`, `/api/v1/pages/:slug`, embed). Group can also be created inline from the component form via `new_group_name` (`componentGroups.findOrCreateByName`, case-insensitive).
-- Page slugs must match `^[a-z-9]+$`.
+- Custom groups: `component_groups` + `group_pages` join table. Groups assigned to a page drag all their components onto it; groups with no page rows are global. Components displayed on a page = individual `page_components` ∪ group-derived ∪ global groups — unified in `components.getForPage(pageId)` (used by `/status/:slug`, `/api/v1/status/:slug`, `/api/v1/pages/:slug`, embed). Group can also be created inline from the component form via `new_group_name` (`componentGroups.findOrCreateByName`, case-insensitive). Components `resolveGroup({group_id, new_group_name})`: new name wins; empty values normalize to NULL.
+- Global Customize theme (`/admin/customize`): `settings.getCustomization()` (module-cached, invalidated on save) → injected into `status-page.ejs` as `:root` vars `--bg/--text/--radius` + `--sf-primary/--sf-secondary`; `views/partials/_logo.ejs` renders `logo_text`/`logo_color`. Ignores legacy garbage values (literal `"undefined"` strings from the old broken form).
+- Page slugs must match `^[a-z0-9-]+$` (enforced in admin.js pages routes).
 - Registration disabled after first user is created.
 - Cache-Control: `no-cache, no-store, must-revalidate` on all responses.
 - HTTPS: set `HTTPS=true` to enable self-signed cert via openssl (`src/utils/ssl.js`).
@@ -81,7 +82,29 @@ data/audit_logs/        ← Daily rotated CSV exports.
 ## Version check
 - `/check-update` strips 'v' prefix from GitHub tag: `(release.tag_name || ...).replace(/^v/, '')`.
 - `currentVersion` comes from `package.json` (`pkg.version`) — bump the version there (and CHANGELOG) when releasing; no hardcoded strings. Status page footers use `app.locals.version`.
-- GitHub releases must use tag format `v2.0.1` (with 'v').
+- GitHub releases must use tag format `v2.2.0` (with 'v'). Release checklist: bump `package.json` + `CHANGELOG.md` → push → `git tag -a vX.Y.Z` + push tag → GitHub release with changelog notes.
+
+## Verification / tests
+No test framework. Regression harnesses live in `scratch/` (committed) and run against an **in-memory PostgreSQL** (`pg-mem`, installed ad-hoc with `npm i --no-save pg-mem` — NOT a project dependency):
+- `scratch/verify_plan.js` — models: group create/reuse, resolveGroup, getForPage union/dedupe/order, sanitization on pages create/update.
+- `scratch/verify_render.js` — renders every touched EJS template with route-accurate locals.
+- `scratch/verify_smoke.js` — boots the real app against pg-mem and makes HTTP requests (health, status page, embed, audit route existence).
+- `scratch/verify_e2e.js` — full flow: login → CSRF → create component with new group → create page with that group → public page shows them. Session cookie is `session_id`, CSRF via `x-csrf-token` header.
+
+pg-mem limitations to keep queries portable (see Gotchas): no `integer * interval` (use `(n::text || ' minutes')::interval`), no window functions `OVER`, no correlated subqueries referencing outer aliases inside SELECT lists (DISTINCT ON + LEFT JOIN works).
+
+## Backlog
+Improvement ideas not yet implemented live in `ROADMAP.md`.
+
+## Production deployment (192.168.1.104 "yoda")
+- SSH: `ssh -i /f/llaves/ia_opencode_key root@192.168.1.104` (same key as 192.168.1.113).
+- **Docker Compose** at `/root/statusfe` (git clone of this repo, branch `main`). Containers: `statusfe` (app, `network_mode: host`) + `statusfe-postgres`.
+- App listens on **3080** (Apache on :80 proxies `/` → `127.0.0.1:3080`, vhost `cachet-le-ssl.conf`). The port is pinned via **`docker-compose.override.yml`** (untracked — do NOT delete it; the repo compose says PORT=3000 which is taken by another container's docker-proxy).
+- **Real database = PostgreSQL native on the host** at 127.0.0.1:5432 (db `statusfe`). The `statusfe-postgres` container is REDUNDANT and sits in a permanent crash loop (cannot bind 5432 — already owned by host postgres). Safe to `docker stop statusfe-postgres` if desired; the app never uses it.
+- Volume `statusfe-data` → `/app/data` (session secret, audit CSVs) persists across container recreations.
+- **Deploy command**: `cd /root/statusfe && git fetch && git reset --hard origin/main && docker compose build statusfe && docker compose up -d --no-deps statusfe`.
+- `systemd/statusfe.service` in the repo is legacy/alternative (bare node as `www-data`) — production uses Docker.
+- Version on the admin panel (`/admin/check-update`) compares `package.json` against the latest GitHub release tag — publish a release after bumping so the banner clears.
 
 ## Gotchas
 - **SQL**: placeholders `$1, $2, ...` not `?`. Use `NOW()`, `CURRENT_TIMESTAMP`. Intervals: `NOW() - INTERVAL '30 days'` / `($1::text || ' days')::interval`.
@@ -89,7 +112,6 @@ data/audit_logs/        ← Daily rotated CSV exports.
 - Adding a module to `models.js` requires updating imports in `admin.js`, `admin-extra.js`, `api.js`, and `app.js`.
 - `admin-extra.js` is mounted after `admin.js` — route conflicts resolved by `admin.js` first.
 - Rate limits: global 200/min, auth 10/15min, API 60/min, admin 60/min (inline in `app.js:109-116`).
-- Docker Compose: `network_mode: host` on both services. No `ports:` mapping. `DB_HOST=127.0.0.1` (not `postgres`). Build has `network: host`.
-- Status systemd service at `systemd/statusfe.service` — runs as `www-data`, `WorkingDirectory=/var/www/cachet`.
+- Docker Compose: `network_mode: host` on both services. No `ports:` mapping. `DB_HOST=127.0.0.1` (not `postgres`). Build has `network: host`. See Production deployment section for the live server specifics.
 
 
