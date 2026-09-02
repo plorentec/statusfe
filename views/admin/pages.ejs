@@ -217,13 +217,28 @@ Make page public
 <% } %>
 </div>
 <div class="form-group">
+<label>Groups shown on this page</label>
+<% if (groups && groups.length > 0) { %>
+<div class="component-checkboxes">
+<% groups.forEach(g => { %>
+<label class="component-checkbox">
+<input type="checkbox" name="group_ids" value="<%= g.id %>" <%= (selectedGroupIds || []).includes(g.id) ? 'checked' : '' %>>
+<%= g.name %>
+</label>
+<% }) %>
+</div>
+<small class="text-muted">All components of the selected groups appear automatically on this page, ordered by group position. Groups with no pages assigned are global (shown on every page).</small>
+<% } else { %>
+<small class="text-muted">No groups created yet. <a href="/admin/groups/new">Create a group</a> to show its components here automatically.</small>
+<% } %>
+</div>
+<div class="form-group">
 <label for="custom_css">Custom CSS</label>
 <textarea id="custom_css" name="custom_css" rows="6" placeholder="/* Your custom CSS */"><%= page.custom_css || '' %></textarea>
 <small class="text-muted">CSS injected into the status page. Use it to override styles, change colors, fonts, etc.</small>
 </div>
 <div class="form-group">
-<label for="custom_html">Custom HTML (injected before
-</label>
+<label for="custom_html">Custom HTML (injected before &lt;/body&gt;)</label>
 <textarea id="custom_html" name="custom_html" rows="6" placeholder="<!-- Your custom HTML -->"><%= (page.custom_html || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') %></textarea>
 <small class="text-muted">HTML injected at the bottom of the status page. Use it for embed widgets, tracking scripts, etc.</small>
 </div>

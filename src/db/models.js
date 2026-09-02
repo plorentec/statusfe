@@ -1,5 +1,8 @@
 const { prepare, run, queryOne, queryAll } = require('./database');
 const { v4: uuidv4 } = require('uuid');
+const { sanitizeCss, sanitizeHtml } = require('../utils/sanitize');
+
+let customizationCache = null;
 
 function isUUID(str) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
@@ -59,7 +62,7 @@ module.exports.pages = {
     const id = uuidv4();
     await run(
       'INSERT INTO pages (id,name,slug,description,status,template,timezone,logo_url,custom_css,custom_html,is_public,refresh_interval,custom_layout,custom_layout_css,custom_layout_html,external_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)',
-      [id, name, slug, description||'', status||'operational', template||'default', timezone||'UTC', logo_url||null, custom_css||null, custom_html||null, is_public ? 1 : 0, refresh_interval ? Math.max(15, parseInt(refresh_interval)) : 15, custom_layout ? 1 : 0, custom_layout_css||null, custom_layout_html||null, external_id||null]
+      [id, name, slug, description||'', status||'operational', template||'default', timezone||'UTC', logo_url||null, sanitizeCss(custom_css)||null, sanitizeHtml(custom_html)||null, is_public ? 1 : 0, refresh_interval ? Math.max(15, parseInt(refresh_interval)) : 15, custom_layout ? 1 : 0, sanitizeCss(custom_layout_css)||null, sanitizeHtml(custom_layout_html)||null, external_id||null]
     );
     return this.getById(id);
   },
@@ -74,6 +77,8 @@ module.exports.pages = {
         if (k === 'refresh_interval') val = Math.max(15, parseInt(val) || 15);
         if (k === 'is_public') val = (val === 'on' || val === 1 || val === true) ? 1 : 0;
         if (k === 'custom_layout') val = (val === 'on' || val === 1 || val === true) ? 1 : 0;
+        if (k === 'custom_css' || k === 'custom_layout_css') val = sanitizeCss(val);
+        if (k === 'custom_html' || k === 'custom_layout_html') val = sanitizeHtml(val);
         fields.push(k+'=$'+(params.length+1));
         params.push(val);
       }
@@ -102,6 +107,60 @@ module.exports.components = {
   async get(id) { return await queryOne('SELECT * FROM components WHERE id=$1', [id]); },
   async getByExternalId(ex_id) { if (!ex_id) return null; return await queryOne('SELECT * FROM components WHERE external_id=$1', [ex_id]); },
 
+  // Components displayed on a status page = union of:
+  //   1. components individually assigned via page_components
+  //   2. components whose group is assigned to this page (group_pages)
+  //   3. components of global groups (groups with no page assignment)
+  // Deduplicated; current_status resolves override_status, page/global history
+  // and dependency cascade; group_name resolved from group_id (fallback legacy text).
+  async getForPage(pageId) {
+    const rows = await queryAll(`
+      SELECT DISTINCT c.*, pc.position as pc_position,
+        COALESCE(sh.new_status, c.status) as current_status
+      FROM components c
+      LEFT JOIN page_components pc ON pc.component_id = c.id AND pc.page_id = $1
+      LEFT JOIN (
+        SELECT DISTINCT ON (component_id) component_id, new_status
+        FROM status_history
+        WHERE page_id = $1 OR page_id IS NULL
+        ORDER BY component_id, created_at DESC
+      ) sh ON sh.component_id = c.id
+      WHERE pc.component_id IS NOT NULL
+         OR c.group_id IN (SELECT group_id FROM group_pages WHERE page_id = $1)
+         OR c.group_id IN (SELECT component_groups.id FROM component_groups WHERE component_groups.id NOT IN (SELECT group_pages.group_id FROM group_pages))
+    `, [pageId]);
+
+    const allGroups = await module.exports.componentGroups.list();
+    const groupById = new Map(allGroups.map(g => [g.id, g]));
+    for (const c of rows) {
+      const g = c.group_id ? groupById.get(c.group_id) : null;
+      c.group_name = g ? g.name : (c.group_name || 'Other');
+      c.group_position = g ? g.position : Number.MAX_SAFE_INTEGER;
+      if (c.override_status) {
+        c.current_status = c.override_status;
+      } else {
+        const deps = await module.exports.dependencies.listDependsOnComponent(c.id);
+        for (const dep of deps) {
+          if (!dep.cascade_status) continue;
+          const depComp = await module.exports.components.get(dep.depends_on);
+          if (depComp && depComp.status !== 'operational') {
+            c.current_status = depComp.status;
+            break;
+          }
+        }
+      }
+    }
+
+    rows.sort((a, b) => {
+      if (a.group_position !== b.group_position) return a.group_position - b.group_position;
+      const pa = a.pc_position != null ? a.pc_position : 1000000 + (a.position || 0);
+      const pb = b.pc_position != null ? b.pc_position : 1000000 + (b.position || 0);
+      if (pa !== pb) return pa - pb;
+      return String(a.name).localeCompare(String(b.name));
+    });
+    return rows;
+  },
+
   async create({ name, description, status, group_name, group_id, position, external_id }) {
     const id = uuidv4();
     await run(
@@ -111,13 +170,34 @@ module.exports.components = {
     return this.get(id);
   },
 
+  // Resolve group for a component payload: new_group_name wins over group_id.
+  // Returns { group_id, group_name } with the group's canonical name synced.
+  async resolveGroup({ group_id, new_group_name }) {
+    let finalGroupId = group_id || null;
+    let finalGroupName = null;
+    const newName = String(new_group_name || '').trim();
+    if (newName) {
+      const group = await module.exports.componentGroups.findOrCreateByName(newName);
+      if (group) { finalGroupId = group.id; finalGroupName = group.name; }
+    } else if (finalGroupId) {
+      const g = await module.exports.componentGroups.get(finalGroupId);
+      if (g) finalGroupName = g.name;
+      else finalGroupId = null;
+    }
+    return { group_id: finalGroupId, group_name: finalGroupName };
+  },
+
   async update(id, data) {
     const oldComp = await this.get(id);
     const fields = [];
     const params = [];
     const allowed = ['name','description','status','group_name','group_id','position','external_id'];
     for (const k of allowed) {
-      if (data[k] !== undefined) { fields.push(k+'=$'+(params.length+1)); params.push(data[k]); }
+      if (data[k] !== undefined) {
+        let val = data[k];
+        if ((k === 'group_id' || k === 'group_name') && (val === '' || val === null)) val = null;
+        fields.push(k+'=$'+(params.length+1)); params.push(val);
+      }
     }
     if (fields.length) {
       params.push(id);
@@ -540,7 +620,7 @@ module.exports.maintenance = {
     let q = `SELECT m.* FROM maintenance_windows m
       INNER JOIN maintenance_notice_pages mnp ON mnp.maintenance_id = m.id
       WHERE mnp.page_id = $1 AND m.status IN ('upcoming','ongoing')
-        AND (m.starts_at <= $2 OR m.starts_at - COALESCE(m.advance_notice_minutes, 0) * INTERVAL '1 minute' <= $2)
+        AND (m.starts_at <= $2 OR m.starts_at - (COALESCE(m.advance_notice_minutes, 0)::text || ' minutes')::interval <= $2)
       ORDER BY m.starts_at ASC`;
     return await queryAll(q, [pageId, now]);
   }
@@ -772,6 +852,49 @@ module.exports.settings = {
     }
     return true;
   },
+
+  // Global status-page theme (admin Customize page). Values override the
+  // --bg/--text/--radius variables already defined in status.css :root and add
+  // --sf-primary/--sf-secondary. Cached in memory; cache is invalidated on save.
+  async getCustomization() {
+    if (customizationCache) return customizationCache;
+    // Legacy guard: the old broken Customize form stored the literal string
+    // "undefined" — treat it as missing.
+    const get = async (key, def) => {
+      const v = await this.get(key);
+      return (v && v !== 'undefined') ? v : def;
+    };
+    const c = {
+      primary_color: await get('custom_primary_color', '#10b981'),
+      secondary_color: await get('custom_secondary_color', '#059669'),
+      bg_color: await get('custom_bg_color', '#ffffff'),
+      text_color: await get('custom_text_color', '#1e293b'),
+      font_family: await get('custom_font_family', "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"),
+      logo_text: await get('custom_logo_text', 'StatusFe'),
+      logo_color: await get('custom_logo_color', '#10b981'),
+      border_radius: await get('custom_border_radius', '12'),
+    };
+    customizationCache = c;
+    return c;
+  },
+
+  async setCustomization(data) {
+    const map = {
+      primary_color: 'custom_primary_color',
+      secondary_color: 'custom_secondary_color',
+      bg_color: 'custom_bg_color',
+      text_color: 'custom_text_color',
+      font_family: 'custom_font_family',
+      logo_text: 'custom_logo_text',
+      logo_color: 'custom_logo_color',
+      border_radius: 'custom_border_radius',
+    };
+    for (const [k, settingKey] of Object.entries(map)) {
+      if (data[k] !== undefined && data[k] !== '') await this.set(settingKey, data[k]);
+    }
+    customizationCache = null;
+    return true;
+  },
   async delete(key) { await run('DELETE FROM settings WHERE key=$1', [key]); return true; }
 };
 
@@ -933,6 +1056,23 @@ module.exports.statusMappings = {
 
 // ===== COMPONENT GROUPS =====
 module.exports.componentGroups = {
+  async findByName(name) {
+    const trimmed = String(name || '').trim();
+    if (!trimmed) return null;
+    return await queryOne('SELECT * FROM component_groups WHERE LOWER(name)=LOWER($1)', [trimmed]);
+  },
+
+  async findOrCreateByName(name) {
+    const trimmed = String(name || '').trim();
+    if (!trimmed) return null;
+    let group = await this.findByName(trimmed);
+    if (!group) {
+      const pos = await queryOne('SELECT COALESCE(MAX(position), -1) + 1 as next FROM component_groups');
+      group = await this.create({ name: trimmed, position: pos ? pos.next : 0 });
+    }
+    return group;
+  },
+
   async list(pageId) {
     let q = 'SELECT * FROM component_groups WHERE 1=1';
     const p = [];

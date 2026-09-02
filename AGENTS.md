@@ -48,7 +48,8 @@ data/audit_logs/        ← Daily rotated CSV exports.
 - Flash messages use URL query params (`?msg=success`), not server-side sessions.
 - `components.updateStatus(componentId, newStatus, pageIdOrSlug)` — 3rd param auto-resolves slugs via `pages.getBySlug()`.
 - `app.js` daily cron (`setInterval 24h`): cleans old analytics via `analytics.cleanOldData()`, rotates audit log to CSV, prunes audit_log > 365 days.
-- Custom CSS/HTML: `</style>` / `</textarea>` / HTML comments stripped in `custom_css`; `</textarea>` escaped in `custom_html`.
+- Custom CSS/HTML: sanitized on save via `src/utils/sanitize.js` (models level) and injected raw with `<%- %>` in `status-page.ejs`: `sanitizeCss` strips `</style`/`</textarea`/HTML comments from CSS; `sanitizeHtml` escapes `</textarea` in HTML. Admin-trusted content (allows `<script>` for tracking by design).
+- Custom groups: `component_groups` + `group_pages` join table. Groups assigned to a page drag all their components onto it; groups with no page rows are global. Components displayed on a page = individual `page_components` ∪ group-derived ∪ global groups — unified in `components.getForPage(pageId)` (used by `/status/:slug`, `/api/v1/status/:slug`, `/api/v1/pages/:slug`, embed). Group can also be created inline from the component form via `new_group_name` (`componentGroups.findOrCreateByName`, case-insensitive).
 - Page slugs must match `^[a-z-9]+$`.
 - Registration disabled after first user is created.
 - Cache-Control: `no-cache, no-store, must-revalidate` on all responses.
@@ -79,7 +80,7 @@ data/audit_logs/        ← Daily rotated CSV exports.
 
 ## Version check
 - `/check-update` strips 'v' prefix from GitHub tag: `(release.tag_name || ...).replace(/^v/, '')`.
-- `currentVersion` must match format without 'v' (e.g. `2.0.1`, not `v2.0.1`).
+- `currentVersion` comes from `package.json` (`pkg.version`) — bump the version there (and CHANGELOG) when releasing; no hardcoded strings. Status page footers use `app.locals.version`.
 - GitHub releases must use tag format `v2.0.1` (with 'v').
 
 ## Gotchas

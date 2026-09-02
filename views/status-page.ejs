@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="/css/template-dark.css">
 <% } %>
 <% if (page.custom_layout && page.custom_layout_css) { %>
-<style><%= page.custom_layout_css %></style>
+<style><%- sanitizeCss(page.custom_layout_css) %></style>
 <% } %>
 <% if (page.custom_layout) { %>
 <style>
@@ -54,7 +54,21 @@
 .maintenance-banner .maint-time svg { width:12px; height:12px; }
 </style>
 <% } %>
-<% if (page.custom_css) { %><style><%= (page.custom_css || '').replace(/<\/style>/gi, '').replace(/<!--/g, '').replace(/-->/g, '') %></style><% } %>
+<% if (typeof customization !== 'undefined' && customization) { %>
+<style>
+/* Global theme (Admin → Customize). Overrides status.css :root vars;
+   the dark template re-scopes --bg/--text locally so it keeps its colors. */
+:root {
+  --bg: <%- sanitizeCss(customization.bg_color) %>;
+  --text: <%- sanitizeCss(customization.text_color) %>;
+  --radius: <%- sanitizeCss(String(customization.border_radius).replace(/[^0-9]/g, '')) %>px;
+  --sf-primary: <%- sanitizeCss(customization.primary_color) %>;
+  --sf-secondary: <%- sanitizeCss(customization.secondary_color) %>;
+}
+body { font-family: <%- sanitizeCss(customization.font_family) %>; }
+</style>
+<% } %>
+<% if (page.custom_css) { %><style><%- sanitizeCss(page.custom_css || '') %></style><% } %>
 </head>
 <body class="<%= page.custom_layout ? 'custom-layout' : 'template-' + page.template %>">
 
@@ -141,7 +155,7 @@
   layoutHtml = layoutHtml.replace(/\{\{refreshInterval\}\}/g, refreshInterval || '15');
   layoutHtml = layoutHtml.replace(/\{\{pageStatusValue\}\}/g, escapeHtml(page.status));
 %>
-<%- layoutHtml %>
+<%- sanitizeHtml(layoutHtml) %>
 <% } else if (page.template === 'default') { %>
 <!-- ===== DEFAULT TEMPLATE ===== -->
 <div class="page-header">
@@ -228,7 +242,7 @@
 </div>
 </div>
 </main>
-<footer><p>Powered by StatusFe v2.0.1</p></footer>
+<footer><p>Powered by StatusFe v<%= version %></p></footer>
 
 <!-- ===== GRID TEMPLATE ===== -->
 <% } else if (page.template === 'grid') { %>
@@ -405,12 +419,12 @@
 <% } %>
 </div>
 </div>
-<footer><p>Powered by StatusFe v2.0.1</p></footer>
+<footer><p>Powered by StatusFe v<%= version %></p></footer>
 <% } %>
 
 <script>
+<% function escapeJsString(str) { if (typeof str !== 'string') return str; return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/</g, '\\u003c').replace(/>/g, '\\u003e'); } %>
 <% if (page.custom_layout) { %>
-  function escapeJsString(str) { if (typeof str !== 'string') return str; return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/</g, '\\u003c').replace(/>/g, '\\u003e'); }
 // Custom layout mode — data available for JS
 window.STATUSFE_DATA = {
   page: { name: '<%= escapeJsString(page.name)%>', slug: '<%= page.slug %>', status: '<%= page.status %>', description: '<%= escapeJsString(page.description || '')%>' },
@@ -456,6 +470,6 @@ function formatStatus(s) { return {operational:'Operational',under_maintenance:'
   }
 })();
 </script>
-<% if (page.custom_html && !page.custom_layout) { %><%= page.custom_html %><% } %>
+<% if (page.custom_html && !page.custom_layout) { %><%- sanitizeHtml(page.custom_html) %><% } %>
 </body>
 </html>

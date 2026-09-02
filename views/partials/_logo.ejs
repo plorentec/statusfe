@@ -1,1 +1,9 @@
-<span style="display:inline-flex;align-items:center;gap:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-weight:800;font-size:28px;color:currentColor;text-decoration:none;letter-spacing:-0.5px;"><span style="display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;background:linear-gradient(135deg,#10b981,#059669);border-radius:10px;color:#fff;font-size:22px;font-weight:900;line-height:1;">S</span><span>Status<span style="color:#10b981;">Fe</span></span></span>
+<%
+  var logoText = (typeof customization !== 'undefined' && customization && customization.logo_text) ? String(customization.logo_text) : 'StatusFe';
+  var logoColor = (typeof customization !== 'undefined' && customization && customization.logo_color) ? String(customization.logo_color) : '#10b981';
+  var badgeLetter = logoText.charAt(0).toUpperCase();
+  // Keep the classic two-tone split only for the default brand text; custom
+  // names render in a single color to avoid awkward mid-word splits.
+  var isDefaultBrand = logoText === 'StatusFe';
+%>
+<span style="display:inline-flex;align-items:center;gap:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-weight:800;font-size:28px;color:currentColor;text-decoration:none;letter-spacing:-0.5px;"><span style="display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;background:<%= logoColor %>;border-radius:10px;color:#fff;font-size:22px;font-weight:900;line-height:1;"><%= badgeLetter %></span><% if (isDefaultBrand) { %><span>Status<span style="color:<%= logoColor %>;">Fe</span></span><% } else { %><span><%= logoText %></span><% } %></span>

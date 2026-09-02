@@ -6,6 +6,7 @@ const { queryOne, queryAll, run } = require('../db/database');
 const fs = require('fs');
 const path = require('path');
 const { pages, components, componentGroups, apiKeys, incidents, maintenance, notifications, settings, auditLog } = require('../db/models');
+const pkg = require('../../package.json');
 const { requireAuth } = require('../middleware/session');
 const { layout, exposeLocals } = require('../middleware/layout');
 
@@ -38,12 +39,11 @@ router.get('/', async (req, res) => {
   const unread = await notifications.listUnread(req.user.id);
 
   // Disk usage
-  const dbPath = path.join(__dirname, '..', '..', 'data', 'statusfe.db');
   let diskInfo = { used: 0, total: 0, percentage: 0, dbSize: 0 };
   try {
-    const stat = fs.statSync(dbPath);
-    diskInfo.dbSize = stat.size;
-    
+    const sizeRow = await queryOne('SELECT pg_database_size(current_database()) as size');
+    diskInfo.dbSize = parseInt(sizeRow.size);
+
     // Read disk usage via df (supports both GNU and BusyBox/Alpine)
     try {
       const { execSync } = require('child_process');
@@ -73,7 +73,7 @@ router.get('/', async (req, res) => {
       }
     } catch(e) {
       // fallback: just show DB size
-      diskInfo = { used: stat.size, total: 0, percentage: 0, dbSize: stat.size, dbOnly: true };
+      diskInfo = { used: diskInfo.dbSize, total: 0, percentage: 0, dbSize: diskInfo.dbSize, dbOnly: true };
     }
   } catch(e) {}
 
@@ -115,7 +115,9 @@ router.get('/pages/new', async (req, res) => {
     pageMode: 'create',
     page: {},
     components: allComponents,
-    assignedComponentIds: assignedIds
+    assignedComponentIds: assignedIds,
+    groups: await componentGroups.list(),
+    selectedGroupIds: []
   });
 });
 
@@ -148,8 +150,23 @@ router.post('/pages', async (req, res) => {
       if (compId) await components.assignToPage(page.id, compId, idx + 1);
     }
   }
+  // Sync groups shown on this page (components of these groups appear automatically)
+  await syncPageGroups(page.id, req.body.group_ids);
   res.redirect('/admin/pages?msg=success&type=success');
 });
+
+// Save the list of component groups displayed on a page (group_pages join table).
+// Groups with no page rows are global and appear on every page.
+async function syncPageGroups(pageId, groupIds) {
+  await run('DELETE FROM group_pages WHERE page_id=$1', [pageId]);
+  let ids = groupIds || [];
+  if (!Array.isArray(ids)) ids = [ids];
+  for (const gid of ids) {
+    if (gid && await componentGroups.get(gid)) {
+      await run('INSERT INTO group_pages (group_id, page_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [gid, pageId]);
+    }
+  }
+}
 
 router.get('/pages/:id/edit', async (req, res) => {
   const page = await pages.getById(req.params.id) || await pages.getBySlug(req.params.id);
@@ -167,7 +184,9 @@ router.get('/pages/:id/edit', async (req, res) => {
     pageMode: 'edit',
     page,
     components: allComponents,
-    assignedComponentIds: assignedIds
+    assignedComponentIds: assignedIds,
+    groups: await componentGroups.list(),
+    selectedGroupIds: await componentGroups.getPageIds(page.id)
   });
 });
 
@@ -208,6 +227,8 @@ router.put('/pages/:id', async (req, res) => {
   } else {
     await run('DELETE FROM page_components WHERE page_id=$1', [req.params.id]);
   }
+  // Sync groups shown on this page (components of these groups appear automatically)
+  await syncPageGroups(req.params.id, req.body.group_ids);
   res.redirect('/admin/pages?msg=success&type=success');
 });
 
@@ -268,11 +289,12 @@ router.get('/components/new', async (req, res) => {
 });
 
 router.post('/components', async (req, res) => {
-  const { name, description, status, group_name, group_id, position, external_id } = req.body;
+  const { name, description, status, position, external_id } = req.body;
   if (!name) {
     return res.redirect('/admin/components/new?msg=error&type=error');
   }
-  const comp = await components.create({ name, description, status, group_name, group_id, position, external_id });
+  const group = await components.resolveGroup(req.body);
+  const comp = await components.create({ name, description, status, group_id: group.group_id, group_name: group.group_name, position, external_id });
   const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
   for (const a of admins) {
     await notifications.create({
@@ -310,12 +332,13 @@ router.put('/components/:id', async (req, res) => {
   if (!comp) {
     return res.redirect('/admin/components/' + req.params.id + '/edit?msg=error&type=error');
   }
-  const { name, description, status, group_name, group_id, position, external_id } = req.body;
+  const { name, description, status, position, external_id } = req.body;
   if (!name) {
     return res.redirect('/admin/components/' + req.params.id + '/edit?msg=error&type=error');
   }
   const oldData = { name: comp.name, description: comp.description, status: comp.status, group_name: comp.group_name, position: comp.position };
-  const updated = await components.update(req.params.id, { name, description, status, group_name, group_id, position, external_id });
+  const group = await components.resolveGroup(req.body);
+  const updated = await components.update(req.params.id, { name, description, status, group_id: group.group_id, group_name: group.group_name, position, external_id });
   const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
   for (const a of admins) {
     await notifications.create({
@@ -868,7 +891,7 @@ router.get('/audit', async (req, res) => {
   }));
 });
 
-router.post('/admin/audit/cleanup', async (req, res) => {
+router.post('/audit/cleanup', async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin required' });
   const days = parseInt(req.body.retention_days) || 90;
   await auditLog.cleanOld(days);
@@ -1019,7 +1042,7 @@ router.get('/changelog', async (req, res) => {
 // Check for updates
 router.get('/check-update', requireAuth, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin required' });
-  const currentVersion = '2.0.1';
+  const currentVersion = pkg.version;
   try {
     const https = require('https');
     https.get('https://api.github.com/repos/plorentec/statusfe/releases/latest', {

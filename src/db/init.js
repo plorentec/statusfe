@@ -17,7 +17,7 @@ async function createTables() {
       custom_css TEXT,
       custom_html TEXT,
       is_public INTEGER DEFAULT 1,
-      refresh_interval INTEGER DEFAULT 0,
+      refresh_interval INTEGER DEFAULT 15,
       custom_layout INTEGER DEFAULT 0,
       custom_layout_css TEXT,
       custom_layout_html TEXT,

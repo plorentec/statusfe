@@ -78,9 +78,13 @@ function closeCleanupModal() {
 
 function doCleanup() {
   const days = document.getElementById('retention_days').value;
+  const tokenEl = document.getElementById('csrfToken');
   fetch('/admin/audit/cleanup', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-CSRF-Token': tokenEl ? tokenEl.value : ''
+    },
     body: 'retention_days=' + days
   }).then(() => location.reload());
 }

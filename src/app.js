@@ -159,7 +159,8 @@ app.use((req, res, next) => {
 const { require2FA } = require('./middleware/require-2fa');
 app.use('/admin', require2FA);
 
-const { pages, components, incidents, analytics, dependencies, notifications, maintenance } = require('./db/models');
+const { pages, components, incidents, analytics, dependencies, notifications, maintenance, settings } = require('./db/models');
+const { queryAll } = require('./db/database');
 
 // Make unread notification count and csrfToken available to all admin views
 app.use((req, res, next) => {
@@ -202,6 +203,12 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, '..', 'views'));
 app.set('view cache', false);
 
+// Make sanitizers available to all templates (custom CSS/HTML injection)
+const { sanitizeCss, sanitizeHtml } = require('./utils/sanitize');
+app.locals.sanitizeCss = sanitizeCss;
+app.locals.sanitizeHtml = sanitizeHtml;
+app.locals.version = pkg.version;
+
 // Disable all caching
 app.use(function(req, res, next) {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -221,35 +228,10 @@ app.get('/status/:slug', async (req, res) => {
     if (page.is_public !== 1) return res.status(404).send('Not found');
     
     analytics.recordView(page.id, req.ip, req.get('User-Agent') || '', req.get('Referrer') || '').catch(() => {});
-    
-    const { queryAll } = require('./db/database');
-    const pageComps = await queryAll(`
-      SELECT c.*, pc.position,
-        (SELECT new_status FROM status_history WHERE component_id=c.id AND (page_id=$1 OR page_id IS NULL) ORDER BY created_at DESC LIMIT 1) as current_status
-      FROM components c JOIN page_components pc ON c.id=pc.component_id WHERE pc.page_id=$2 ORDER BY pc.position,c.name
-    `, [page.id, page.id]);
 
+    const resolvedComps = await components.getForPage(page.id);
     const allGroups = await queryAll('SELECT id, name FROM component_groups ORDER BY position, name');
-    
-    const resolvedComps = await Promise.all(pageComps.map(async c => {
-      const group = allGroups.find(g => g.id === c.group_id);
-      c.group_name = group ? group.name : (c.group_name || 'Other');
-      // If override_status is set, use it and skip cascade
-      if (c.override_status) {
-        return { ...c, current_status: c.override_status };
-      }
-      const deps = await dependencies.listDependsOnComponent(c.id);
-      if (deps.length > 0) {
-        for (const dep of deps) {
-          const depComp = await components.get(dep.depends_on);
-          if (depComp && depComp.status !== 'operational' && dep.cascade_status) {
-            return { ...c, current_status: depComp.status };
-          }
-        }
-      }
-      return c;
-    }));
-    
+
     const incs = await incidents.list({ page_id: page.id, visible: 1 });
     
     const upcomingMaintenance = await maintenance.getUpcomingForPage(page.id);
@@ -258,10 +240,10 @@ app.get('/status/:slug', async (req, res) => {
     if (compIds.length > 0) {
       const compIncs = await queryAll(`
         SELECT * FROM incidents 
-        WHERE component_id IN (SELECT component_id FROM page_components WHERE page_id=$1) 
+        WHERE component_id = ANY($1::text[])
         AND visible=1 AND status != 'resolved'
         ORDER BY starts_at DESC
-      `, [page.id]);
+      `, [compIds]);
       const existingIds = new Set(incs.map(i => i.id));
       compIncs.forEach(inc => { if (!existingIds.has(inc.id)) incs.push(inc); });
     }
@@ -283,7 +265,8 @@ app.get('/status/:slug', async (req, res) => {
     
     const formatStatus = s => ({operational:'Operational',under_maintenance:'Under Maintenance',degraded_performance:'Degraded Performance',partial_outage:'Partial Outage',major_outage:'Major Outage',investigating:'Investigating',identified:'Identified',monitoring:'Monitoring',resolved:'Resolved'}[s] || s);
     const refreshInterval = page.refresh_interval || 0;
-    res.render('status-page', { page, components: resolvedComps, incidents: incs, incidentsByComponent, formatStatus, refreshInterval: refreshInterval ? parseInt(refreshInterval) : 0, groups: allGroups, upcomingMaintenance });
+    const customization = await settings.getCustomization();
+    res.render('status-page', { page, components: resolvedComps, incidents: incs, incidentsByComponent, formatStatus, refreshInterval: refreshInterval ? parseInt(refreshInterval) : 0, groups: allGroups, upcomingMaintenance, customization });
   } catch(e) {
     console.error('Status page error:', e);
     res.status(500).send('Internal error');
@@ -296,12 +279,7 @@ app.get('/embed/:slug', async (req, res) => {
     const page = await pages.getBySlug(req.params.slug);
     if (!page) return res.status(404).send('Not found');
     if (page.is_public !== 1) return res.status(404).send('Not found');
-    const { queryAll } = require('./db/database');
-    const comps = await queryAll(`
-      SELECT c.name, c.status,
-        (SELECT new_status FROM status_history WHERE component_id=c.id AND page_id=$1 ORDER BY created_at DESC LIMIT 1) as current_status
-      FROM components c JOIN page_components pc ON c.id=pc.component_id WHERE pc.page_id=$2 ORDER BY pc.position
-    `, [page.id, page.id]);
+    const comps = await components.getForPage(page.id);
     let status = 'operational';
     const order = { operational: 0, under_maintenance: 1, degraded_performance: 2, partial_outage: 3, major_outage: 4 };
     comps.forEach(c => { const s = c.current_status || c.status; if (order[s] > order[status]) status = s; });

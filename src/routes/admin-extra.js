@@ -49,11 +49,10 @@ router.get('/analytics', async (req, res) => {
   const retention = await settings.get('analytics_retention_days') || '365';
 
   // Disk usage
-  const dbPath = path.join(__dirname, '..', '..', 'data', 'statusfe.db');
   let diskInfo = { percentage: 0, total: 0, used: 0, dbSize: 0, dbOnly: false };
   try {
-    const stat = fs.statSync(dbPath);
-    diskInfo.dbSize = stat.size;
+    const sizeRow = await queryOne('SELECT pg_database_size(current_database()) as size');
+    diskInfo.dbSize = parseInt(sizeRow.size);
     try {
       const { execSync } = require('child_process');
       const rootPath = path.join(__dirname, '..', '..');
@@ -301,18 +300,7 @@ router.delete('/dependencies/:id', async (req, res) => {
 
 // ===== PAGE CUSTOMIZATION =====
 router.get('/customize', async (req, res) => {
-  const settingsLocal = require('../db/models').settings;
-  const customization = {
-    primary_color: settingsLocal.get('custom_primary_color') || '#10b981',
-    secondary_color: settingsLocal.get('custom_secondary_color') || '#059669',
-    bg_color: settingsLocal.get('custom_bg_color') || '#f8f9fb',
-    text_color: settingsLocal.get('custom_text_color') || '#1a1a2e',
-    font_family: settingsLocal.get('custom_font_family') || '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-    logo_text: settingsLocal.get('custom_logo_text') || 'StatusFe',
-    logo_color: settingsLocal.get('custom_logo_color') || '#10b981',
-    page_structure: settingsLocal.get('custom_page_structure') || 'default',
-    border_radius: settingsLocal.get('custom_border_radius') || '12',
-  };
+  const customization = await settings.getCustomization();
   res.render('admin/customize', {
     title: 'Customize',
     user: req.user,
@@ -323,17 +311,7 @@ router.get('/customize', async (req, res) => {
 });
 
 router.post('/customize', async (req, res) => {
-  const { primary_color, secondary_color, bg_color, text_color, font_family, logo_text, logo_color, page_structure, border_radius } = req.body;
-  const settingsLocal = require('../db/models').settings;
-  await settingsLocal.set('custom_primary_color', primary_color);
-  await settingsLocal.set('custom_secondary_color', secondary_color);
-  await settingsLocal.set('custom_bg_color', bg_color);
-  await settingsLocal.set('custom_text_color', text_color);
-  await settingsLocal.set('custom_font_family', font_family);
-  await settingsLocal.set('custom_logo_text', logo_text);
-  await settingsLocal.set('custom_logo_color', logo_color);
-  await settingsLocal.set('custom_page_structure', page_structure);
-  await settingsLocal.set('custom_border_radius', border_radius);
+  await settings.setCustomization(req.body);
   res.redirect('/admin/customize?msg=success&type=success');
 });
 

@@ -2,6 +2,26 @@
 
 All notable changes to StatusFe.
 
+## [2.2.0] — 2026-09-02
+
+### Added
+- **Create groups from the component form** — New "New Group" field: type a name and the group is created (or reused, case-insensitive) and linked to the component. Also available via API (`new_group_name` on component create/update).
+- **Groups with components on pages** — Page create/edit forms now have a "Groups shown on this page" selector. All components of the selected groups appear automatically on the public page (union with individually assigned components), ordered by group position. Groups with no pages assigned remain global (shown on every page).
+- **Global theme applied** — The Customize page values (colors, font, radius, logo text/color) now actually style all public status pages via CSS variables (`--bg`, `--text`, `--radius`, `--sf-primary`, `--sf-secondary`) and the logo partial.
+
+### Fixed
+- **Custom CSS/HTML not working** — `custom_css` and `custom_html` were injected HTML-escaped: CSS with quotes broke (`&quot;`) and custom HTML rendered as plain text. Both are now injected raw after sanitization (new `src/utils/sanitize.js`: strips `</style`/HTML comments from CSS, escapes `</textarea` in HTML). Same for full custom layout CSS/HTML.
+- **Customize page saved nothing** — Form inputs were outside the `<form>` tag; saving overwrote settings with literal `"undefined"` strings. Fields are now inside the form; stored `"undefined"` garbage values are ignored.
+- **Version check** — Update checker compared against hardcoded `2.0.1`; now uses `package.json` version. Public page footers show the real version too.
+- **Audit cleanup button** — Route was defined at `/admin/admin/audit/cleanup` (double prefix) so the button 404'd; fixed and the fetch now sends the CSRF header.
+- **Dashboard/Analytics DB size** — Still read the old SQLite file (`data/statusfe.db`) and always showed 0; now uses PostgreSQL `pg_database_size()`.
+- **Empty group saved as empty string** — Clearing the group on a component now stores `NULL` instead of `''`.
+- **Truncated label** — "Custom HTML (injected before" label on the page form is complete now.
+- **Schema default** — `pages.refresh_interval` DB default is now 15, matching documented behavior.
+
+### Changed
+- Status page/API component queries unified in `components.getForPage(pageId)` — public page, `/api/v1/status/:slug`, `/api/v1/pages/:slug` and the embed widget now share the same component set and status resolution (override, cascade, group-derived components).
+
 ## [2.1.0] — 2026-08-19
 
 ### Added

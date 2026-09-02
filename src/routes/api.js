@@ -23,11 +23,7 @@ router.get('/pages', async (req, res) => {
 router.get('/pages/:slug', async (req, res) => {
   const page = await pages.getBySlug(req.params.slug);
   if (!page) return res.status(404).json({ error: 'Not found' });
-  const comps = await queryAll(`
-    SELECT c.*, pc.position,
-      (SELECT new_status FROM status_history WHERE component_id=c.id AND page_id=$1 ORDER BY created_at DESC LIMIT 1) as current_status
-    FROM components c JOIN page_components pc ON c.id=pc.component_id WHERE pc.page_id=$1 ORDER BY pc.position,c.name
-  `, [page.id]);
+  const comps = await components.getForPage(page.id);
   const incs = await incidents.list({ page_id: page.id, visible: 1 });
   const incidentsByComponent = {};
   comps.forEach(c => { incidentsByComponent[c.id] = []; });
@@ -64,11 +60,7 @@ router.get('/status/:slug', async (req, res) => {
   const page = await pages.getBySlug(req.params.slug);
   if (!page) return res.status(404).json({ error: 'Not found' });
   if (page.is_public !== 1) return res.status(404).json({ error: 'Not found' });
-  const comps = await queryAll(`
-    SELECT c.*,
-      (SELECT new_status FROM status_history WHERE component_id=c.id AND page_id=$1 ORDER BY created_at DESC LIMIT 1) as current_status
-    FROM components c JOIN page_components pc ON c.id=pc.component_id WHERE pc.page_id=$1 ORDER BY pc.position,c.name
-  `, [page.id]);
+  const comps = await components.getForPage(page.id);
   
   const allIncs = await incidents.list({ page_id: page.id, visible: 1 });
   const incidentsByComponent = {};
@@ -133,9 +125,10 @@ router.get('/components/:id', async (req, res) => {
   res.json({ component: c });
 });
 router.post('/components', requirePerm('write'), async (req, res) => {
-  const { name, description, status, group_name, position, external_id } = req.body;
+  const { name, description, status, position, external_id } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
-  const c = await components.create({ name, description, status, group_name, position, external_id });
+  const group = await components.resolveGroup(req.body);
+  const c = await components.create({ name, description, status, group_id: group.group_id, group_name: group.group_name, position, external_id });
   const admins = await queryAll("SELECT id FROM users WHERE role=$1", ['admin']);
   admins.forEach(a => {
     notifications.create({
@@ -150,7 +143,13 @@ router.post('/components', requirePerm('write'), async (req, res) => {
 });
 router.put('/components/:id', requirePerm('write'), async (req, res) => {
   const oldComp = await components.get(req.params.id);
-  const c = await components.update(req.params.id, req.body);
+  const body = { ...req.body };
+  if (body.group_id !== undefined || body.group_name !== undefined || body.new_group_name !== undefined) {
+    const group = await components.resolveGroup(body);
+    body.group_id = group.group_id;
+    body.group_name = group.group_name;
+  }
+  const c = await components.update(req.params.id, body);
   if (c && oldComp) {
     const admins = await queryAll("SELECT id FROM users WHERE role=$1", ['admin']);
     admins.forEach(a => {
