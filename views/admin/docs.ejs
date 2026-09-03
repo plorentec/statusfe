@@ -114,10 +114,10 @@
 <h3 class="doc-h2">POST /api/v1/components <span class="doc-perm-badge perm-write">[write]</span></h3>
 <p class="doc-desc">Create component</p>
 <p class="doc-params-label">Body parameters:</p>
-<p class="doc-desc"><code data-curl="name">name</code> (required) \u2014 <code data-curl="description">description</code> \u2014 <code data-curl="status">status</code> \u2014 <code data-curl="group_name">group_name</code> \u2014 <code data-curl="position">position</code></p>
+<p class="doc-desc"><code data-curl="name">name</code> (required) \u2014 <code data-curl="description">description</code> \u2014 <code data-curl="status">status</code> \u2014 <code data-curl="group_name">group_name</code> \u2014 <code data-curl="group_ids">group_ids</code> (array: put the component in several groups) \u2014 <code data-curl="position">position</code></p>
 <div class="doc-code-block">
 <button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
-<code data-curl="$ curl -X POST -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d &#39;{&quot;name&quot;:&quot;CDN&quot;,&quot;group_name&quot;:&quot;Infrastructure&quot;,&quot;status&quot;:&quot;operational&quot;}&#39; BASE_URL + &quot;/api/v1/components&quot;">$ curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" -d '{"name":"CDN","group_name":"Infrastructure","status":"operational"}' BASE_URL + "/api/v1/components"</code>
+<code data-curl="$ curl -X POST -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d &#39;{&quot;name&quot;:&quot;CDN&quot;,&quot;group_ids&quot;:[&quot;GROUP_UUID_1&quot;,&quot;GROUP_UUID_2&quot;],&quot;status&quot;:&quot;operational&quot;}&#39; BASE_URL + &quot;/api/v1/components&quot;">$ curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" -d '{"name":"CDN","group_ids":["GROUP_UUID_1","GROUP_UUID_2"],"status":"operational"}' BASE_URL + "/api/v1/components"</code>
 </div>
 
 <h3 class="doc-h2">PUT /api/v1/components/:id <span class="doc-perm-badge perm-write">[write]</span></h3>

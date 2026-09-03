@@ -103,6 +103,31 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 });
 
+// Filterable checkbox list: type in the box, matching rows stay visible.
+// Markup contract: input#X, list container#Y whose direct filterable children
+// carry data-filter-row + data-filter-text; an optional [data-filter-empty]
+// element inside the container shows when nothing matches.
+function sfBindFilter(inputId, listId) {
+  var input = document.getElementById(inputId);
+  var list = document.getElementById(listId);
+  if (!input || !list || input.dataset.sfBound) return;
+  input.dataset.sfBound = '1';
+  var empty = list.querySelector('[data-filter-empty]');
+  var apply = function() {
+    var q = (input.value || '').trim().toLowerCase();
+    var rows = list.querySelectorAll('[data-filter-row]');
+    var visible = 0;
+    for (var i = 0; i < rows.length; i++) {
+      var text = rows[i].getAttribute('data-filter-text') || rows[i].textContent || '';
+      var hit = !q || text.toLowerCase().indexOf(q) !== -1;
+      rows[i].style.display = hit ? '' : 'none';
+      if (hit) visible++;
+    }
+    if (empty) empty.style.display = (visible === 0) ? '' : 'none';
+  };
+  input.addEventListener('input', apply);
+}
+
 // CSRF token helper — attach token to every fetch
 function csrfFetch(url, options) {
   options = options || {};

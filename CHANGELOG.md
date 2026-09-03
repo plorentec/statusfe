@@ -2,6 +2,18 @@
 
 All notable changes to StatusFe.
 
+## [2.2.2] — 2026-09-03
+
+### Fixed
+- **"CSRF token missing" when adding/editing statuses** — the Component/Incident Statuses config page (`/admin/config/*-statuses`) rendered its forms without the `_csrf` field (the partial was included but nothing injected the token into the forms), so every save returned `403 CSRF token missing`. The injection script is now present; covered by e2e (POST without token → 403, with token → 302 success).
+- **Assigned groups were not pre-checked when editing a page** — `GET /admin/pages/:id/edit` passed `componentGroups.getPageIds(page.id)` (queries `group_pages WHERE group_id=$1` with the PAGE id → always empty). Now uses the new `getGroupIdsForPage(pageId)` (`WHERE page_id=$1`), so saved groups show as checked. Covered by e2e.
+
+### Added
+- **A component can belong to MULTIPLE groups** — new `component_group_members` join table (many-to-many, auto-backfilled from the legacy `components.group_id` on boot). The component form now has group CHECKBOXES (multi-select) plus the existing "New Group" field; the list shows all group names. On status pages a multi-group component appears under EACH displayed group it belongs to (a page showing 2 of its groups renders it in both sections; a page showing only one renders it once). API: `group_ids` (array or comma-joined string) on component create/update, `GET /api/v1/components?group=` now matches any of the component's groups, and group member counts use the join table. Backwards compatible: `group_id`/`group_name` remain as the primary group.
+- **Group members managed from the group form** — group create/edit now includes a searchable member picker (`member_component_ids`): check components to put them in the group (e.g. two routers → "RED CASA"), uncheck to remove them. `componentGroups.setMembers/getMembers`; removing a member keeps its other groups and re-points its primary group; a member with no groups gets this group as primary. Also on the REST API (`POST/PUT /api/v1/groups`), and `page_ids` now accepts comma-joined strings everywhere.
+- **Searchable long lists** — the Components and Groups checkbox lists on the page form, group checkboxes on the component form and the member picker all have a type-to-filter box (`sfBindFilter` in admin.js + `.filter-input` styles; lists are now scrollable with `.component-checkboxes`). No external dependencies.
+- **Group aggregated status on status pages** — every group header (default/grid/dark templates) now shows a badge with the WORST status of its components: if one member of "RED CASA" goes down, the group header goes down with it. Statuses outside the standard 5 rank as degraded.
+
 ## [2.2.1] — 2026-09-03
 
 ### Security

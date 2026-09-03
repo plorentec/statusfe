@@ -92,6 +92,24 @@
 <label for="position">Position</label>
 <input type="number" id="position" name="position" value="<%= group.position || 0 %>" min="0">
 </div>
+<div class="form-group">
+<label>Group members (components)</label>
+<% if (components && components.length > 0) { %>
+<input type="text" id="memberFilter" class="filter-input" placeholder="Type to search components...">
+<div class="component-checkboxes" id="memberList">
+<% components.forEach(c => { %>
+<label class="component-checkbox" data-filter-row data-filter-text="<%= c.name %> <%= c.group_name || '' %>">
+<input type="checkbox" name="member_component_ids" value="<%= c.id %>" <%= (selectedMemberIds || []).includes(c.id) ? 'checked' : '' %>>
+<%= c.name %> <small class="text-muted">(<%= c.group_name || 'Other' %>)</small>
+</label>
+<% }) %>
+<div data-filter-empty style="display:none;" class="text-muted">No components match your search.</div>
+</div>
+<small class="text-muted">Manage the group from here too: check the components that belong to it. A component can belong to several groups. Unchecking removes it from this group (it stays in any other groups it has).</small>
+<% } else { %>
+<small class="text-muted">No components created yet. <a href="/admin/components/new">Create components first</a>.</small>
+<% } %>
+</div>
 <div class="form-actions">
 <button type="submit" class="btn btn-primary"><%= groupMode === 'create' ? 'Create Group' : 'Save Changes' %></button>
 <% if (groupMode === 'edit') { %>
@@ -120,6 +138,9 @@ document.addEventListener('DOMContentLoaded', function() {
       input.value = token;
       forms[i].appendChild(input);
     }
+  }
+  if (typeof sfBindFilter === 'function') {
+    sfBindFilter('memberFilter', 'memberList');
   }
 });
 </script>

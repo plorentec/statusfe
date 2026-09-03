@@ -275,6 +275,17 @@ async function createTables() {
     )
   `);
 
+  // Many-to-many: a component can belong to multiple groups.
+  await run(`
+    CREATE TABLE IF NOT EXISTS component_group_members (
+      component_id TEXT NOT NULL,
+      group_id TEXT NOT NULL,
+      PRIMARY KEY (component_id, group_id),
+      FOREIGN KEY (component_id) REFERENCES components(id) ON DELETE CASCADE,
+      FOREIGN KEY (group_id) REFERENCES component_groups(id) ON DELETE CASCADE
+    )
+  `);
+
   await run(`
     CREATE TABLE IF NOT EXISTS audit_log (
       id TEXT PRIMARY KEY,
@@ -311,6 +322,8 @@ async function createTables() {
     'idx_component_statuses_pos ON component_statuses(position)',
     'idx_incident_statuses_pos ON incident_statuses(position)',
     'idx_status_mappings_incident ON status_mappings(incident_status)',
+    'idx_component_group_members_group ON component_group_members(group_id)',
+    'idx_component_group_members_component ON component_group_members(component_id)',
     'idx_audit_user ON audit_log(user_id)',
     'idx_audit_created ON audit_log(created_at)',
   ];
@@ -439,10 +452,21 @@ async function init() {
   try {
     await createTables();
     await seed();
+    await migrate();
   } catch(e) {
     console.error('DB init failed:', e.message);
     process.exit(1);
   }
 }
 
-module.exports = { init, prepare, run, queryOne, queryAll };
+// Backfill the many-to-many group membership table from the legacy
+// components.group_id column (idempotent — runs on every boot).
+async function migrate() {
+  await run(`
+    INSERT INTO component_group_members (component_id, group_id)
+    SELECT id, group_id FROM components WHERE group_id IS NOT NULL
+    ON CONFLICT DO NOTHING
+  `);
+}
+
+module.exports = { init, migrate, prepare, run, queryOne, queryAll };

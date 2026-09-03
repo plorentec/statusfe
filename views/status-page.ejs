@@ -101,8 +101,22 @@ body { font-family: <%- sanitizeCss(customization.font_family) %>; }
     var ampm = h >= 12 ? 'p.m.' : 'a.m.';
     h = h % 12;
     if (h === 0) h = 12;
-    m = m < 10 ? '0' + m : m;
+    m = m < 10 ? '0' + m : '' + m;
     return day + ' ' + month + ' ' + year + ', ' + h + ':' + m + ' ' + ampm;
+  }
+
+  // Group aggregated status = WORST status among its components: if one member
+  // goes down, the group header goes down with it.
+  var SEVERITY = { operational: 0, under_maintenance: 1, degraded_performance: 2, partial_outage: 3, major_outage: 4 };
+  function worstStatus(list) {
+    var worst = 'operational';
+    var rank = 0;
+    (list || []).forEach(function(c) {
+      var s = c.status;
+      var r = (s in SEVERITY) ? SEVERITY[s] : SEVERITY.degraded_performance;
+      if (r > rank) { rank = r; worst = s; }
+    });
+    return worst;
   }
 %>
 
@@ -223,8 +237,9 @@ body { font-family: <%- sanitizeCss(customization.font_family) %>; }
   groups[g].push({ name: c.name, status: c.current_status || c.status, description: c.description });
 }); %>
 <% for (const [name, comps] of Object.entries(groups)) { %>
+<% const gw = worstStatus(comps); %>
 <div class="component-group">
-<h2><%= name %></h2>
+<h2><%= name %> <span class="component-badge badge-<%= gw %>"><%= formatStatus(gw) %></span></h2>
 <% comps.forEach(c => { %>
 <div class="component-row status-<%= c.status %>">
 <div class="component-row-left">
@@ -312,8 +327,9 @@ body { font-family: <%- sanitizeCss(customization.font_family) %>; }
   groups[g].push({ name: c.name, status: c.current_status || c.status, description: c.description });
 }); %>
 <% for (const [groupName, comps] of Object.entries(groups)) { %>
+<% const gw = worstStatus(comps); %>
 <div class="grid-group">
-<h2><%= groupName %></h2>
+<h2><%= groupName %> <span class="card-status <%= gw %>"><%= formatStatus(gw) %></span></h2>
 <div class="card-grid">
 <% comps.forEach(c => { %>
 <div class="status-card <%= c.status %>">
@@ -399,8 +415,9 @@ body { font-family: <%- sanitizeCss(customization.font_family) %>; }
   groups[g].push({ name: c.name, status: c.current_status || c.status, description: c.description });
 }); %>
 <% for (const [groupName, comps] of Object.entries(groups)) { %>
+<% const gw = worstStatus(comps); %>
 <div class="dark-group">
-<h2><%= groupName %></h2>
+<h2><%= groupName %> <span class="dark-badge <%= gw %>"><%= formatStatus(gw) %></span></h2>
 <% comps.forEach(c => { %>
 <div class="dark-item">
 <div class="dark-item-left">

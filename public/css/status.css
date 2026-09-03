@@ -160,6 +160,17 @@ body.template-dark {
   border-bottom: 1px solid var(--border);
   font-weight: 600;
 }
+/* Aggregated group status badge (worst status of its members) */
+.component-group h2 .component-badge,
+.grid-group h2 .card-status,
+.dark-group h2 .dark-badge {
+  margin-left: 10px;
+  vertical-align: middle;
+  font-size: 11px;
+  padding: 2px 10px;
+  text-transform: none;
+  letter-spacing: 0;
+}
 .component-row {
   display: flex;
   align-items: center;

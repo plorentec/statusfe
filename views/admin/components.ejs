@@ -45,7 +45,7 @@
 <tr>
 <td><strong><%= c.name %></strong><br><small class="text-muted"><%= c.description || '' %></small></td>
 <td><small><code><%= c.external_id || '-' %></code></small></td>
-<td><% if (c.group_id) { const g = groups.find(x => x.id === c.group_id); %><%= g ? g.name : '-' %><% } else { %><%= c.group_name || '-' %><% } %></td>
+<td><% const compGroups = c.groups || []; if (compGroups.length > 0) { %><%= compGroups.map(g => g.name).join(', ') %><% } else { %><%= c.group_name || '-' %><% } %></td>
 <td><span class="status-badge status-<%= c.status %>"><%= c.status %></span></td>
 <td><%= c.position %></td>
 <td><%= c.created_at %></td>
@@ -91,19 +91,28 @@
 </div>
 <div class="form-row">
 <div class="form-group">
-<label for="group_id">Group</label>
-<select id="group_id" name="group_id">
-<option value="">No group</option>
-<% if (groups) { groups.forEach(g => { %>
-<option value="<%= g.id %>" <%= component.group_id === g.id ? 'selected' : '' %>><%= g.name %></option>
-<% }); } %>
-</select>
-<small class="text-muted">Assign this component to an existing group.</small>
+<label>Groups (select one or more)</label>
+<% if (groups && groups.length > 0) { %>
+<input type="text" id="compGroupFilter" class="filter-input" placeholder="Type to search groups...">
+<% } %>
+<div style="max-height: 180px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; padding: 10px;" id="compGroupList">
+<% if (groups && groups.length > 0) { groups.forEach(g => { %>
+<label data-filter-row data-filter-text="<%= g.name %>" style="display: block; padding: 4px 0; cursor: pointer;">
+<input type="checkbox" name="group_ids" value="<%= g.id %>" <%= (selectedGroupIds || []).includes(g.id) ? 'checked' : '' %>>
+<%= g.name %>
+</label>
+<% }); %>
+<div data-filter-empty style="display:none;" class="text-muted">No groups match your search.</div>
+<% } else { %>
+<small class="text-muted">No groups yet — type a name below to create one.</small>
+<% } %>
+</div>
+<small class="text-muted">A component can belong to several groups; it will show up on every page that displays any of them.</small>
 </div>
 <div class="form-group">
 <label for="new_group_name">New Group</label>
-<input type="text" id="new_group_name" name="new_group_name" value="<%= !component.group_id ? (component.group_name || '') : '' %>" placeholder="Infrastructure">
-<small class="text-muted">Type a name to create a group with it (wins over the selector if filled).</small>
+<input type="text" id="new_group_name" name="new_group_name" value="<%= (!component.group_id && !(selectedGroupIds || []).length) ? (component.group_name || '') : '' %>" placeholder="Infrastructure">
+<small class="text-muted">Type a name to create (or reuse) a group and add this component to it. Combined with the checkboxes above.</small>
 </div>
 <div class="form-group">
 <label for="position">Position</label>
@@ -153,6 +162,9 @@
         forms[i].appendChild(input);
       }
     }
+  }
+  if (typeof sfBindFilter === 'function') {
+    sfBindFilter('compGroupFilter', 'compGroupList');
   }
 })();
 </script>

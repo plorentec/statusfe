@@ -204,14 +204,17 @@ Make page public
 <div class="form-group">
 <label>Components</label>
 <% if (components && components.length > 0) { %>
-<div class="component-checkboxes">
+<input type="text" id="pageCompFilter" class="filter-input" placeholder="Type to search components...">
+<div class="component-checkboxes" id="pageCompList">
 <% components.forEach(c => { %>
-<label class="component-checkbox">
+<label class="component-checkbox" data-filter-row data-filter-text="<%= c.name %> <%= c.group_name || '' %>">
 <input type="checkbox" name="component_ids" value="<%= c.id %>" <%= (assignedComponentIds || []).includes(c.id) ? 'checked' : '' %>>
 <%= c.name %> <small class="text-muted">(<%= c.group_name || 'Other' %>)</small>
 </label>
 <% }) %>
+<div data-filter-empty style="display:none;" class="text-muted">No components match your search.</div>
 </div>
+<small class="text-muted"><%= components.length %> component<%= components.length === 1 ? '' : 's' %> — assigned ones stay checked while you search.</small>
 <% } else { %>
 <small class="text-muted">No components created yet. <a href="/admin/components/new">Create components first</a>.</small>
 <% } %>
@@ -219,13 +222,15 @@ Make page public
 <div class="form-group">
 <label>Groups shown on this page</label>
 <% if (groups && groups.length > 0) { %>
-<div class="component-checkboxes">
+<input type="text" id="pageGroupFilter" class="filter-input" placeholder="Type to search groups...">
+<div class="component-checkboxes" id="pageGroupList">
 <% groups.forEach(g => { %>
-<label class="component-checkbox">
+<label class="component-checkbox" data-filter-row data-filter-text="<%= g.name %>">
 <input type="checkbox" name="group_ids" value="<%= g.id %>" <%= (selectedGroupIds || []).includes(g.id) ? 'checked' : '' %>>
 <%= g.name %>
 </label>
 <% }) %>
+<div data-filter-empty style="display:none;" class="text-muted">No groups match your search.</div>
 </div>
 <small class="text-muted">All components of the selected groups appear automatically on this page, ordered by group position. Groups with no pages assigned are global (shown on every page).</small>
 <% } else { %>
@@ -321,6 +326,10 @@ document.addEventListener('DOMContentLoaded', function() {
     cb.addEventListener('change', function() {
       fields.style.display = this.checked ? '' : 'none';
     });
+  }
+  if (typeof sfBindFilter === 'function') {
+    sfBindFilter('pageCompFilter', 'pageCompList');
+    sfBindFilter('pageGroupFilter', 'pageGroupList');
   }
 });
 </script>

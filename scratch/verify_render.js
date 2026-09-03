@@ -46,15 +46,50 @@ if (clHtml.includes('<div id="custom">hola</div>')) { console.log('FAIL custom h
 if (!clHtml.includes('<h1>Test Page</h1>')) { console.log('FAIL layout placeholder'); failures++; }
 
 // admin templates with exact route locals
-render('components/list', path.join(__dirname, '../views/admin/components.ejs'), { title: 'Components', user: { name: 'u', role: 'admin' }, message: null, messageType: null, components: comps, componentMode: 'list', groups: [{ id: 'g1', name: 'Infra' }], csrfToken: 'tok' });
-render('components/create', path.join(__dirname, '../views/admin/components.ejs'), { title: 'New Component', user: { name: 'u', role: 'admin' }, message: null, messageType: null, components: comps, componentMode: 'create', component: {}, groups: [{ id: 'g1', name: 'Infra' }], csrfToken: 'tok' });
-render('components/edit', path.join(__dirname, '../views/admin/components.ejs'), { title: 'Edit Component', user: { name: 'u', role: 'admin' }, message: null, messageType: null, components: comps, componentMode: 'edit', component: comps[0], groups: [{ id: 'g1', name: 'Infra' }], pages: [{ id: 'p1', name: 'A' }], csrfToken: 'tok' });
+render('components/list', path.join(__dirname, '../views/admin/components.ejs'), { title: 'Components', user: { name: 'u', role: 'admin' }, message: null, messageType: null, components: [{ ...comps[0], groups: [{ id: 'g1', name: 'Infra' }, { id: 'g2', name: 'Red' }] }, comps[1]], componentMode: 'list', groups: [{ id: 'g1', name: 'Infra' }, { id: 'g2', name: 'Red' }], csrfToken: 'tok' });
+render('components/create', path.join(__dirname, '../views/admin/components.ejs'), { title: 'New Component', user: { name: 'u', role: 'admin' }, message: null, messageType: null, components: comps, componentMode: 'create', component: {}, groups: [{ id: 'g1', name: 'Infra' }], selectedGroupIds: [], csrfToken: 'tok' });
+render('components/edit', path.join(__dirname, '../views/admin/components.ejs'), { title: 'Edit Component', user: { name: 'u', role: 'admin' }, message: null, messageType: null, components: comps, componentMode: 'edit', component: comps[0], groups: [{ id: 'g1', name: 'Infra' }, { id: 'g2', name: 'Red' }], selectedGroupIds: ['g1', 'g2'], pages: [{ id: 'p1', name: 'A' }], csrfToken: 'tok' });
+render('config-statuses/component', path.join(__dirname, '../views/admin/config-statuses.ejs'), { title: 'Component Statuses', user: { name: 'u', role: 'admin' }, statuses: [{ value: 'operational', label: 'Operational', color: '#10b981', position: 0, is_system: 1 }], type: 'component', message: null, messageType: null, csrfToken: 'tok' });
+render('config-statuses/incident', path.join(__dirname, '../views/admin/config-statuses.ejs'), { title: 'Incident Statuses', user: { name: 'u', role: 'admin' }, statuses: [{ value: 'investigating', label: 'Investigating', color: '#ef4444', position: 0, is_system: 1 }], type: 'incident', message: null, messageType: null, csrfToken: 'tok' });
 render('pages/list', path.join(__dirname, '../views/admin/pages.ejs'), { title: 'Pages', user: { name: 'u', role: 'admin' }, message: null, messageType: null, pages: [mkPage('default')], pageMode: 'list' });
 render('pages/create', path.join(__dirname, '../views/admin/pages.ejs'), { title: 'New Page', user: { name: 'u', role: 'admin' }, message: null, messageType: null, pages: [mkPage('default')], pageMode: 'create', page: {}, components: comps, assignedComponentIds: [], groups: [{ id: 'g1', name: 'Infra' }], selectedGroupIds: [] });
 render('pages/edit', path.join(__dirname, '../views/admin/pages.ejs'), { title: 'Edit Page', user: { name: 'u', role: 'admin' }, message: null, messageType: null, pages: [mkPage('default')], pageMode: 'edit', page: mkPage('grid'), components: comps, assignedComponentIds: ['c1'], groups: [{ id: 'g1', name: 'Infra' }], selectedGroupIds: ['g1'] });
+render('groups/create', path.join(__dirname, '../views/admin/groups.ejs'), { title: 'New Group', user: { name: 'u', role: 'admin' }, message: null, messageType: null, groups: [], pages: [{ id: 'p1', name: 'A' }], components: comps, groupMode: 'create', group: {}, selectedPageIds: [], selectedMemberIds: [] });
+render('groups/edit', path.join(__dirname, '../views/admin/groups.ejs'), { title: 'Edit Group', user: { name: 'u', role: 'admin' }, message: null, messageType: null, groups: [], pages: [{ id: 'p1', name: 'A' }], components: comps, groupMode: 'edit', group: { id: 'g1', name: 'Infra', position: 0 }, selectedPageIds: ['p1'], selectedMemberIds: ['c1'] });
 render('customize', path.join(__dirname, '../views/admin/customize.ejs'), { title: 'Customize', user: { name: 'u', role: 'admin' }, customization, message: 'success', messageType: 'success' });
 render('logo/no-customization', path.join(__dirname, '../views/partials/_logo.ejs'), {});
 render('logo/custom', path.join(__dirname, '../views/partials/_logo.ejs'), { customization: { ...customization, logo_text: 'Mi Empresa', logo_color: '#ff0000' } });
+
+// config-statuses: the CSRF injection script must be present (fixes "CSRF token missing")
+const csHtml = render('config-statuses/csrf-check', path.join(__dirname, '../views/admin/config-statuses.ejs'), { title: 'Component Statuses', user: { name: 'u', role: 'admin' }, statuses: [], type: 'component', message: null, messageType: null, csrfToken: 'tok' });
+if (!csHtml.includes("input.name = '_csrf'")) { console.log('FAIL config-statuses sin inyección CSRF'); failures++; }
+if (!csHtml.includes('id="csrfToken"')) { console.log('FAIL config-statuses sin input csrfToken'); failures++; }
+// components edit: checkboxes multi-grupo marcados
+const ceHtml = render('components/edit/csrf', path.join(__dirname, '../views/admin/components.ejs'), { title: 'Edit Component', user: { name: 'u', role: 'admin' }, message: null, messageType: null, components: comps, componentMode: 'edit', component: comps[0], groups: [{ id: 'g1', name: 'Infra' }, { id: 'g2', name: 'Red' }], selectedGroupIds: ['g1', 'g2'], pages: [], csrfToken: 'tok' });
+if (!ceHtml.includes('name="group_ids"')) { console.log('FAIL components/edit sin checkboxes group_ids'); failures++; }
+if ((ceHtml.match(/checked/g) || []).length < 2) { console.log('FAIL components/edit: los 2 grupos deberían salir marcados'); failures++; }
+
+// pages/edit: el grupo asignado debe salir PRE-MARCADO (bug reportado)
+const peHtml = render('pages/edit/group-checked', path.join(__dirname, '../views/admin/pages.ejs'), { title: 'Edit Page', user: { name: 'u', role: 'admin' }, message: null, messageType: null, pages: [mkPage('default')], pageMode: 'edit', page: mkPage('default'), components: comps, assignedComponentIds: [], groups: [{ id: 'gX', name: 'Infra' }], selectedGroupIds: ['gX'] });
+if (!peHtml.includes('name="group_ids" value="gX" checked')) { console.log('FAIL pages/edit: grupo asignado no sale marcado'); failures++; }
+if (!peHtml.includes('pageCompFilter') || !peHtml.includes('data-filter-row')) { console.log('FAIL pages/edit: falta filtro de búsqueda'); failures++; }
+// groups/edit: member picker pre-marcado + filtro
+const geHtml = render('groups/edit/members', path.join(__dirname, '../views/admin/groups.ejs'), { title: 'Edit Group', user: { name: 'u', role: 'admin' }, message: null, messageType: null, groups: [], pages: [], components: comps, groupMode: 'edit', group: { id: 'g1', name: 'Infra', position: 0 }, selectedPageIds: [], selectedMemberIds: ['c1'] });
+if (!geHtml.includes('name="member_component_ids" value="c1" checked')) { console.log('FAIL groups/edit: miembro no pre-marcado'); failures++; }
+if (!geHtml.includes('memberFilter')) { console.log('FAIL groups/edit: falta filtro de miembros'); failures++; }
+// status-page: badge de grupo = PEOR estado de sus componentes
+const badgeComps = [
+  { id: 'c1', name: 'R1', status: 'operational', current_status: 'operational', description: '', group_name: 'Red Casa', group_id: 'g1' },
+  { id: 'c2', name: 'R2', status: 'major_outage', current_status: 'major_outage', description: '', group_name: 'Red Casa', group_id: 'g1' },
+];
+const badgeHtml = render('status-page/group-badge', path.join(__dirname, '../views/status-page.ejs'), { ...base, components: badgeComps, incidents: [], incidentsByComponent: {} });
+if (!badgeHtml.includes('badge-major_outage')) { console.log('FAIL status-page: grupo no muestra el peor estado'); failures++; }
+if (!badgeHtml.includes('Red Casa <span class="component-badge badge-major_outage"')) { console.log('FAIL status-page: badge no junto al nombre del grupo'); failures++; }
+// grid + dark también
+const badgeGrid = render('status-page/group-badge-grid', path.join(__dirname, '../views/status-page.ejs'), { ...base, page: mkPage('grid'), components: badgeComps, incidents: [], incidentsByComponent: {} });
+if (!badgeGrid.includes('card-status major_outage')) { console.log('FAIL grid: badge de grupo ausente'); failures++; }
+const badgeDark = render('status-page/group-badge-dark', path.join(__dirname, '../views/status-page.ejs'), { ...base, page: mkPage('dark'), components: badgeComps, incidents: [], incidentsByComponent: {} });
+if (!badgeDark.includes('dark-badge major_outage')) { console.log('FAIL dark: badge de grupo ausente'); failures++; }
 
 console.log(failures === 0 ? '\nRENDER TESTS PASSED' : `\n${failures} RENDER FAILURES`);
 process.exit(failures === 0 ? 0 : 1);

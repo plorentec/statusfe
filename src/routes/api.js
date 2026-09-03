@@ -128,7 +128,7 @@ router.post('/components', requirePerm('write'), async (req, res) => {
   const { name, description, status, position, external_id } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
   const group = await components.resolveGroup(req.body);
-  const c = await components.create({ name, description, status, group_id: group.group_id, group_name: group.group_name, position, external_id });
+  const c = await components.create({ name, description, status, group_id: group.group_id, group_name: group.group_name, group_ids: group.group_ids, position, external_id });
   const admins = await queryAll("SELECT id FROM users WHERE role=$1", ['admin']);
   admins.forEach(a => {
     notifications.create({
@@ -144,10 +144,11 @@ router.post('/components', requirePerm('write'), async (req, res) => {
 router.put('/components/:id', requirePerm('write'), async (req, res) => {
   const oldComp = await components.get(req.params.id);
   const body = { ...req.body };
-  if (body.group_id !== undefined || body.group_name !== undefined || body.new_group_name !== undefined) {
+  if (body.group_id !== undefined || body.group_ids !== undefined || body.group_name !== undefined || body.new_group_name !== undefined) {
     const group = await components.resolveGroup(body);
     body.group_id = group.group_id;
     body.group_name = group.group_name;
+    body.group_ids = group.group_ids;
   }
   const c = await components.update(req.params.id, body);
   if (c && oldComp) {
@@ -218,7 +219,11 @@ router.post('/groups', requirePerm('write'), async (req, res) => {
   const { name, page_ids, position } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
   const g = await componentGroups.create({ name, page_ids, position });
-  res.status(201).json({ group: g });
+  // Optional member picker (array or comma-joined string of component ids)
+  if (req.body.member_component_ids !== undefined) {
+    await componentGroups.setMembers(g.id, req.body.member_component_ids);
+  }
+  res.status(201).json({ group: await componentGroups.get(g.id), members: await componentGroups.getMembers(g.id) });
 });
 
 // Update group (write)
@@ -226,7 +231,10 @@ router.put('/groups/:id', requirePerm('write'), async (req, res) => {
   const existing = await componentGroups.get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Not found' });
   const g = await componentGroups.update(req.params.id, req.body);
-  res.json({ group: g });
+  if (req.body.member_component_ids !== undefined) {
+    await componentGroups.setMembers(req.params.id, req.body.member_component_ids);
+  }
+  res.json({ group: await componentGroups.get(req.params.id), members: await componentGroups.getMembers(req.params.id) });
 });
 
 // Delete group (admin)

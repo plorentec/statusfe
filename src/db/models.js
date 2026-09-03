@@ -99,9 +99,16 @@ module.exports.components = {
     let q = 'SELECT * FROM components WHERE 1=1';
     const p = [];
     if (filters.status) { q += ' AND status=$' + (p.length + 1); p.push(filters.status); }
-    if (filters.group) { q += ' AND group_name=$' + (p.length + 1); p.push(filters.group); }
     q += ' ORDER BY position,name';
-    return await queryAll(q, p);
+    let rows = await queryAll(q, p);
+    const memberMap = await module.exports.components.getGroupsForMany(rows.map(r => r.id));
+    for (const r of rows) r.groups = memberMap.get(r.id) || [];
+    // Group filter matches ANY of the component's groups (membership or legacy name)
+    if (filters.group) {
+      const target = String(filters.group).toLowerCase();
+      rows = rows.filter(r => String(r.group_name || '').toLowerCase() === target || r.groups.some(g => String(g.name).toLowerCase() === target));
+    }
+    return rows;
   },
 
   async get(id) { return await queryOne('SELECT * FROM components WHERE id=$1', [id]); },
@@ -126,65 +133,122 @@ module.exports.components = {
         ORDER BY component_id, created_at DESC
       ) sh ON sh.component_id = c.id
       WHERE pc.component_id IS NOT NULL
-         OR c.group_id IN (SELECT group_id FROM group_pages WHERE page_id = $1)
-         OR c.group_id IN (SELECT component_groups.id FROM component_groups WHERE component_groups.id NOT IN (SELECT group_pages.group_id FROM group_pages))
+         OR c.id IN (SELECT cgm.component_id FROM component_group_members cgm
+                     JOIN group_pages gp ON gp.group_id = cgm.group_id WHERE gp.page_id = $1)
+         OR c.id IN (SELECT cgm.component_id FROM component_group_members cgm
+                     WHERE cgm.group_id IN (SELECT id FROM component_groups WHERE id NOT IN (SELECT group_id FROM group_pages)))
     `, [pageId]);
 
     const allGroups = await module.exports.componentGroups.list();
     const groupById = new Map(allGroups.map(g => [g.id, g]));
+
+    // Groups displayed on this page = groups bound via group_pages + global groups
+    // (groups with no group_pages rows appear on every page).
+    const displayedGroupIds = new Set([
+      ...(await queryAll('SELECT group_id FROM group_pages WHERE page_id=$1', [pageId])).map(r => r.group_id),
+      ...(await queryAll('SELECT id FROM component_groups WHERE id NOT IN (SELECT group_id FROM group_pages)', [])).map(r => r.id)
+    ]);
+
+    // Memberships for the fetched components (component_id -> Set(group_id))
+    const memberships = new Map();
+    if (rows.length) {
+      const memberRows = await queryAll(
+        `SELECT component_id, group_id FROM component_group_members WHERE component_id IN (${rows.map((_, i) => '$' + (i + 1)).join(',')})`,
+        rows.map(r => r.id)
+      );
+      for (const m of memberRows) {
+        if (!memberships.has(m.component_id)) memberships.set(m.component_id, new Set());
+        memberships.get(m.component_id).add(m.group_id);
+      }
+    }
+
+    const result = [];
     for (const c of rows) {
-      const g = c.group_id ? groupById.get(c.group_id) : null;
-      c.group_name = g ? g.name : (c.group_name || 'Other');
-      c.group_position = g ? g.position : Number.MAX_SAFE_INTEGER;
+      // Resolve effective status once per component (override / dependency cascade)
+      let currentStatus = c.current_status;
       if (c.override_status) {
-        c.current_status = c.override_status;
+        currentStatus = c.override_status;
       } else {
         const deps = await module.exports.dependencies.listDependsOnComponent(c.id);
         for (const dep of deps) {
           if (!dep.cascade_status) continue;
           const depComp = await module.exports.components.get(dep.depends_on);
           if (depComp && depComp.status !== 'operational') {
-            c.current_status = depComp.status;
+            currentStatus = depComp.status;
             break;
           }
         }
       }
+
+      const memberGroups = [...(memberships.get(c.id) || [])]
+        .map(gid => groupById.get(gid)).filter(Boolean);
+      const displayed = memberGroups.filter(g => displayedGroupIds.has(g.id));
+
+      if (displayed.length > 0) {
+        // A component in multiple groups appears under each displayed group.
+        for (const g of displayed) {
+          result.push({ ...c, current_status: currentStatus, group_name: g.name, group_position: g.position });
+        }
+      } else {
+        // Directly assigned to the page but not in any displayed group: fall back
+        // to the component's primary/legacy group label, else 'Other'.
+        const fb = c.group_id ? groupById.get(c.group_id) : null;
+        result.push({
+          ...c,
+          current_status: currentStatus,
+          group_name: c.group_name || 'Other',
+          group_position: fb ? fb.position : Number.MAX_SAFE_INTEGER
+        });
+      }
     }
 
-    rows.sort((a, b) => {
+    result.sort((a, b) => {
       if (a.group_position !== b.group_position) return a.group_position - b.group_position;
       const pa = a.pc_position != null ? a.pc_position : 1000000 + (a.position || 0);
       const pb = b.pc_position != null ? b.pc_position : 1000000 + (b.position || 0);
       if (pa !== pb) return pa - pb;
       return String(a.name).localeCompare(String(b.name));
     });
-    return rows;
+    return result;
   },
 
-  async create({ name, description, status, group_name, group_id, position, external_id }) {
+  async create({ name, description, status, group_name, group_id, group_ids, position, external_id }) {
     const id = uuidv4();
     await run(
       'INSERT INTO components (id,name,description,status,group_name,group_id,external_id,position) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
       [id, name, description||'', status||'operational', group_name||null, group_id||null, external_id||null, position||0]
     );
+    const gids = (group_ids && group_ids.length) ? group_ids : (group_id ? [group_id] : []);
+    if (gids.length) await this.setGroups(id, gids);
     return this.get(id);
   },
 
-  // Resolve group for a component payload: new_group_name wins over group_id.
-  // Returns { group_id, group_name } with the group's canonical name synced.
-  async resolveGroup({ group_id, new_group_name }) {
-    let finalGroupId = group_id || null;
-    let finalGroupName = null;
+  // Resolve groups for a component payload: supports a single group_id (legacy),
+  // a group_ids array (many-to-many), and new_group_name (find-or-create, wins).
+  // Returns { group_id, group_name, group_ids } with canonical names synced.
+  async resolveGroup({ group_id, group_ids, new_group_name }) {
+    let ids = [];
+    if (Array.isArray(group_ids)) ids = group_ids.filter(Boolean);
+    else if (typeof group_ids === 'string' && group_ids) ids = group_ids.split(',').map(s => s.trim()).filter(Boolean);
+    else if (group_id) ids = [group_id];
     const newName = String(new_group_name || '').trim();
     if (newName) {
       const group = await module.exports.componentGroups.findOrCreateByName(newName);
-      if (group) { finalGroupId = group.id; finalGroupName = group.name; }
-    } else if (finalGroupId) {
+      if (group && !ids.includes(group.id)) ids.unshift(group.id);
+    }
+    // Validate + dedupe, preserving order
+    const unique = [];
+    for (const id of ids) {
+      const g = await module.exports.componentGroups.get(id);
+      if (g && !unique.includes(g.id)) unique.push(g.id);
+    }
+    const finalGroupId = unique.length ? unique[0] : null;
+    let finalGroupName = null;
+    if (finalGroupId) {
       const g = await module.exports.componentGroups.get(finalGroupId);
       if (g) finalGroupName = g.name;
-      else finalGroupId = null;
     }
-    return { group_id: finalGroupId, group_name: finalGroupName };
+    return { group_id: finalGroupId, group_name: finalGroupName, group_ids: unique };
   },
 
   async update(id, data) {
@@ -202,6 +266,12 @@ module.exports.components = {
     if (fields.length) {
       params.push(id);
       await run('UPDATE components SET ' + fields.join(',') + ', updated_at=NOW() WHERE id=$' + (params.length), ...params);
+    }
+    // Keep the many-to-many memberships in sync with the group fields.
+    if (data.group_ids !== undefined) {
+      await this.setGroups(id, data.group_ids);
+    } else if (data.group_id !== undefined) {
+      await this.setGroups(id, data.group_id ? [data.group_id] : []);
     }
     if (data.status && oldComp.status !== data.status) {
       const pages = await queryAll('SELECT page_id FROM page_components WHERE component_id=$1', [id]);
@@ -221,6 +291,58 @@ module.exports.components = {
   },
 
   async delete(id) { await run('DELETE FROM components WHERE id=$1', [id]); return true; },
+
+  // Get the groups a component belongs to (ordered).
+  async getGroups(componentId) {
+    return await queryAll(
+      'SELECT g.* FROM component_groups g JOIN component_group_members cgm ON cgm.group_id = g.id WHERE cgm.component_id=$1 ORDER BY g.position, g.name',
+      [componentId]
+    );
+  },
+
+  // Sync a component's group memberships. The first group becomes the legacy
+  // primary group_id/group_name (kept for backwards-compatible queries/display).
+  async setGroups(componentId, groupIds) {
+    let ids = [];
+    if (Array.isArray(groupIds)) ids = groupIds.filter(Boolean);
+    else if (typeof groupIds === 'string' && groupIds) ids = groupIds.split(',').map(s => s.trim()).filter(Boolean);
+    const unique = [...new Set(ids)];
+    await run('DELETE FROM component_group_members WHERE component_id=$1', [componentId]);
+    for (const gid of unique) {
+      const g = await module.exports.componentGroups.get(gid);
+      if (g) await run('INSERT INTO component_group_members (component_id, group_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [componentId, gid]);
+    }
+    const primary = unique[0] || null;
+    if (primary) {
+      const g = await module.exports.componentGroups.get(primary);
+      await run('UPDATE components SET group_id=$1, group_name=$2 WHERE id=$3', [primary, g ? g.name : null, componentId]);
+    } else {
+      await run('UPDATE components SET group_id=NULL WHERE id=$1', [componentId]);
+    }
+    return await this.getGroups(componentId);
+  },
+
+  // Map component_id -> array of group objects for a batch of component ids.
+  async getGroupsForMany(componentIds) {
+    const map = new Map();
+    if (!componentIds || componentIds.length === 0) return map;
+    const members = await queryAll(
+      `SELECT component_id, group_id FROM component_group_members WHERE component_id IN (${componentIds.map((_, i) => '$' + (i + 1)).join(',')})`,
+      componentIds
+    );
+    if (members.length === 0) return map;
+    const groupIds = [...new Set(members.map(m => m.group_id))];
+    const groups = await queryAll(`SELECT * FROM component_groups WHERE id IN (${groupIds.map((_, i) => '$' + (i + 1)).join(',')})`, groupIds);
+    const groupById = new Map(groups.map(g => [g.id, g]));
+    for (const m of members) {
+      const g = groupById.get(m.group_id);
+      if (g) {
+        if (!map.has(m.component_id)) map.set(m.component_id, []);
+        map.get(m.component_id).push(g);
+      }
+    }
+    return map;
+  },
 
   async assignToPage(pageId, componentId, position) {
     const page = await module.exports.pages.getById(pageId) || await module.exports.pages.getBySlug(pageId);
@@ -1099,18 +1221,70 @@ module.exports.componentGroups = {
     return await queryAll("SELECT page_id FROM group_pages WHERE group_id=$1", [id]).then(rows => rows.map(r => r.page_id));
   },
 
+  // Group ids assigned to a page (the inverse of getPageIds — used to pre-check
+  // the "Groups shown on this page" checkboxes when editing a page).
+  async getGroupIdsForPage(pageId) {
+    return await queryAll("SELECT group_id FROM group_pages WHERE page_id=$1", [pageId]).then(rows => rows.map(r => r.group_id));
+  },
+
+  // Components that belong to this group (many-to-many).
+  async getMembers(id) {
+    return await queryAll(
+      'SELECT c.* FROM components c JOIN component_group_members cgm ON cgm.component_id = c.id WHERE cgm.group_id=$1 ORDER BY c.position, c.name',
+      [id]
+    );
+  },
+
+  // Sync a group's member list (exact): add newly-selected components, remove
+  // unselected ones. Other groups of each component are preserved; the legacy
+  // primary group_id/group_name is kept or re-pointed when affected.
+  async setMembers(groupId, componentIds) {
+    let ids = [];
+    if (Array.isArray(componentIds)) ids = componentIds.filter(Boolean);
+    else if (typeof componentIds === 'string' && componentIds) ids = componentIds.split(',').map(s => s.trim()).filter(Boolean);
+    const selected = [...new Set(ids)];
+    const current = (await queryAll('SELECT component_id FROM component_group_members WHERE group_id=$1', [groupId])).map(r => r.component_id);
+    const currentSet = new Set(current);
+    const selectedSet = new Set(selected);
+    const group = await this.get(groupId);
+    const groupName = group ? group.name : null;
+
+    for (const cid of selected.filter(id => !currentSet.has(id))) {
+      const comp = await module.exports.components.get(cid);
+      if (!comp) continue;
+      await run('INSERT INTO component_group_members (component_id, group_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [cid, groupId]);
+      // Component had no group at all -> make this its primary (legacy compat)
+      if (!comp.group_id) {
+        await run('UPDATE components SET group_id=$1, group_name=$2 WHERE id=$3', [groupId, groupName, cid]);
+      }
+    }
+    for (const cid of current.filter(id => !selectedSet.has(id))) {
+      await run('DELETE FROM component_group_members WHERE component_id=$1 AND group_id=$2', [cid, groupId]);
+      const comp = await module.exports.components.get(cid);
+      if (comp && comp.group_id === groupId) {
+        // It was the component's primary group: re-point to another membership or NULL
+        const rest = await module.exports.components.getGroups(cid);
+        if (rest.length) {
+          await run('UPDATE components SET group_id=$1, group_name=$2 WHERE id=$3', [rest[0].id, rest[0].name, cid]);
+        } else {
+          await run('UPDATE components SET group_id=NULL, group_name=NULL WHERE id=$1', [cid]);
+        }
+      }
+    }
+    return this.getMembers(groupId);
+  },
+
   async countComponents(id) {
-    const result = await queryOne("SELECT COUNT(*) as c FROM components WHERE group_id=$1", [id]);
+    const result = await queryOne("SELECT COUNT(*) as c FROM component_group_members WHERE group_id=$1", [id]);
     return result.c;
   },
 
   async create({ name, page_ids, position }) {
     const id = uuidv4();
     await run('INSERT INTO component_groups (id, name, position) VALUES ($1,$2,$3)', [id, name, parseInt(position) || 0]);
-    if (page_ids && Array.isArray(page_ids) && page_ids.length > 0) {
-      for (const pid of page_ids) {
-        await run('INSERT INTO group_pages (group_id, page_id) VALUES ($1,$2)', [id, pid]);
-      }
+    const pids = this._normalizeIds(page_ids);
+    for (const pid of pids) {
+      await run('INSERT INTO group_pages (group_id, page_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [id, pid]);
     }
     return this.get(id);
   },
@@ -1128,13 +1302,20 @@ module.exports.componentGroups = {
     }
     if (data.page_ids !== undefined) {
       await run('DELETE FROM group_pages WHERE group_id=$1', [id]);
-      if (Array.isArray(data.page_ids) && data.page_ids.length > 0) {
-        for (const pid of data.page_ids) {
-          await run('INSERT INTO group_pages (group_id, page_id) VALUES ($1,$2)', [id, pid]);
-        }
+      const pids = this._normalizeIds(data.page_ids);
+      for (const pid of pids) {
+        await run('INSERT INTO group_pages (group_id, page_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [id, pid]);
       }
     }
     return this.get(id);
+  },
+
+  // Accept array or comma-joined string of ids ('id1,id2'), deduped.
+  _normalizeIds(value) {
+    let ids = [];
+    if (Array.isArray(value)) ids = value.filter(Boolean);
+    else if (typeof value === 'string' && value) ids = value.split(',').map(s => s.trim()).filter(Boolean);
+    return [...new Set(ids)];
   },
 
   async delete(id) {

@@ -43,7 +43,7 @@ const check = (name, cond, extra) => {
   const page = await req('GET', '/status/admin');
   check('GET /status/admin = 200', page.status === 200, 'status ' + page.status);
   check('status page agrupa por texto legacy (Infrastructure)', page.body.includes('Infrastructure'));
-  check('status page footer v2.2.1', page.body.includes('Powered by StatusFe v2.2.1'));
+  check('status page footer con versión de package.json', page.body.includes('Powered by StatusFe v' + require('../package.json').version));
   check('status page tema :root inyectado', page.body.includes('--sf-primary'));
   check('status page contador refresco', page.body.includes('refresh-counter'));
 

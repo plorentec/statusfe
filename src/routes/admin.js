@@ -156,7 +156,10 @@ router.post('/pages', async (req, res) => {
 async function syncPageGroups(pageId, groupIds) {
   await run('DELETE FROM group_pages WHERE page_id=$1', [pageId]);
   let ids = groupIds || [];
-  if (!Array.isArray(ids)) ids = [ids];
+  if (!Array.isArray(ids)) {
+    // Accept comma-joined strings from API-style callers ('id1,id2')
+    ids = String(ids).split(',').map(s => s.trim()).filter(Boolean);
+  }
   for (const gid of ids) {
     if (gid && await componentGroups.get(gid)) {
       await run('INSERT INTO group_pages (group_id, page_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [gid, pageId]);
@@ -182,7 +185,10 @@ router.get('/pages/:id/edit', async (req, res) => {
     components: allComponents,
     assignedComponentIds: assignedIds,
     groups: await componentGroups.list(),
-    selectedGroupIds: await componentGroups.getPageIds(page.id)
+    // BUGFIX: was componentGroups.getPageIds(page.id) — that queries WHERE
+    // group_id=$1 with the PAGE id, always empty. Groups saved on the page
+    // were never pre-checked when re-opening the form.
+    selectedGroupIds: await componentGroups.getGroupIdsForPage(page.id)
   });
 });
 
@@ -280,6 +286,7 @@ router.get('/components/new', async (req, res) => {
     componentMode: 'create',
     component: {},
     groups: await componentGroups.list(),
+    selectedGroupIds: [],
     csrfToken: res.locals.csrfToken
   });
 });
@@ -290,7 +297,7 @@ router.post('/components', async (req, res) => {
     return res.redirect('/admin/components/new?msg=error&type=error');
   }
   const group = await components.resolveGroup(req.body);
-  const comp = await components.create({ name, description, status, group_id: group.group_id, group_name: group.group_name, position, external_id });
+  const comp = await components.create({ name, description, status, group_id: group.group_id, group_name: group.group_name, group_ids: group.group_ids, position, external_id });
   const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
   for (const a of admins) {
     await notifications.create({
@@ -318,6 +325,7 @@ router.get('/components/:id/edit', async (req, res) => {
     componentMode: 'edit',
     component: comp,
     groups: await componentGroups.list(),
+    selectedGroupIds: (await components.getGroups(comp.id)).map(g => g.id),
     pages: await pages.list(),
     csrfToken: res.locals.csrfToken
   });
@@ -334,7 +342,7 @@ router.put('/components/:id', async (req, res) => {
   }
   const oldData = { name: comp.name, description: comp.description, status: comp.status, group_name: comp.group_name, position: comp.position };
   const group = await components.resolveGroup(req.body);
-  const updated = await components.update(req.params.id, { name, description, status, group_id: group.group_id, group_name: group.group_name, position, external_id });
+  const updated = await components.update(req.params.id, { name, description, status, group_id: group.group_id, group_name: group.group_name, group_ids: group.group_ids, position, external_id });
   const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
   for (const a of admins) {
     await notifications.create({
@@ -483,9 +491,11 @@ router.get('/groups/new', async (req, res) => {
     messageType: res.locals.messageType,
     groups: await componentGroups.list(),
     pages: allPages,
+    components: await components.list(),
     groupMode: 'create',
     group: {},
-    selectedPageIds: []
+    selectedPageIds: [],
+    selectedMemberIds: []
   });
 });
 
@@ -499,9 +509,13 @@ router.post('/groups', async (req, res) => {
   if (Array.isArray(page_ids)) {
     selected = page_ids.filter(Boolean);
   } else if (typeof page_ids === 'string' && page_ids) {
-    selected = [page_ids];
+    selected = page_ids.split(',').map(s => s.trim()).filter(Boolean);
   }
-  await componentGroups.create({ name, page_ids: selected, position: parseInt(position) || 0 });
+  const group = await componentGroups.create({ name, page_ids: selected, position: parseInt(position) || 0 });
+  // Optional member picker: only sync when the field was sent (undefined = untouched)
+  if (req.body.member_component_ids !== undefined) {
+    await componentGroups.setMembers(group.id, req.body.member_component_ids);
+  }
   res.redirect('/admin/groups?msg=success&type=success');
 });
 
@@ -519,9 +533,11 @@ router.get('/groups/:id/edit', async (req, res) => {
     messageType: res.locals.messageType,
     groups: await componentGroups.list(),
     pages: allPages,
+    components: await components.list(),
     groupMode: 'edit',
     group,
-    selectedPageIds
+    selectedPageIds,
+    selectedMemberIds: (await componentGroups.getMembers(group.id)).map(c => c.id)
   });
 });
 
@@ -538,9 +554,12 @@ router.put('/groups/:id', async (req, res) => {
   if (Array.isArray(page_ids)) {
     selected = page_ids.filter(Boolean);
   } else if (typeof page_ids === 'string' && page_ids) {
-    selected = [page_ids];
+    selected = page_ids.split(',').map(s => s.trim()).filter(Boolean);
   }
   await componentGroups.update(req.params.id, { name, page_ids: selected, position: parseInt(position) || 0 });
+  if (req.body.member_component_ids !== undefined) {
+    await componentGroups.setMembers(req.params.id, req.body.member_component_ids);
+  }
   res.redirect('/admin/groups?msg=success&type=success');
 });
 
