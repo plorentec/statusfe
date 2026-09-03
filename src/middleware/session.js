@@ -16,9 +16,14 @@ function verifySignedCookie(cookie) {
   const hmac = crypto.createHmac('sha256', SESSION_SECRET);
   hmac.update(value);
   const expected = value + '.' + hmac.digest('hex').substring(0, 16);
-  if (crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(cookie))) {
-    try { return JSON.parse(value); } catch { return null; }
-  }
+  // Guard length BEFORE timingSafeEqual: comparing buffers of different lengths
+  // throws — a malformed cookie must degrade to "anonymous", never a 500.
+  if (cookie.length !== expected.length) return null;
+  try {
+    if (crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(cookie))) {
+      return JSON.parse(value);
+    }
+  } catch { return null; }
   return null;
 }
 
@@ -67,10 +72,11 @@ async function destroySession(cookie) {
   }
 }
 
-// Clean expired sessions every hour
+// Clean expired sessions every hour (also temp 2FA-login sessions, dead in 10 min)
 setInterval(async () => {
   try {
     await run("DELETE FROM sessions WHERE created_at < NOW() - INTERVAL '24 hours'");
+    await run("DELETE FROM sessions WHERE LEFT(id, 5) = '_2fa_' AND created_at < NOW() - INTERVAL '10 minutes'");
   } catch(e) {}
 }, 60 * 60 * 1000);
 
@@ -132,10 +138,34 @@ async function session(req, res, next) {
     }
   }
 
-  res.flash = function(message, type) {
+  // One-shot server-side flash (set via res.flash): read cookie, load, delete.
+  let flashKey = null;
+  if (req.headers && req.headers.cookie) {
+    for (const c of req.headers.cookie.split(';')) {
+      const [name, ...parts] = c.trim().split('=');
+      if (name === '_flash_key') flashKey = decodeURIComponent(parts.join('='));
+    }
+  }
+  if (flashKey) {
+    try {
+      const row = await queryOne('SELECT data FROM sessions WHERE id=$1', ['_flash_' + flashKey]);
+      if (row) {
+        await run('DELETE FROM sessions WHERE id=$1', ['_flash_' + flashKey]);
+        const f = JSON.parse(row.data);
+        if (!res.locals.message) {
+          res.locals.message = f.message;
+          res.locals.messageType = f.type || 'success';
+        }
+        if (f.extra) Object.assign(res.locals, f.extra);
+      }
+    } catch(e) {}
+    res.clearCookie('_flash_key', { path: '/' });
+  }
+
+  res.flash = function(message, type, extra) {
     type = type || 'success';
-    const key = '_flash_' + crypto.randomBytes(8).toString('hex');
-    run('INSERT INTO sessions (id, data, created_at) VALUES ($1, $2, NOW())', [key, JSON.stringify({ message, type, createdAt: Date.now() })]).catch(() => {});
+    const key = crypto.randomBytes(8).toString('hex');
+    run('INSERT INTO sessions (id, data, created_at) VALUES ($1, $2, NOW())', ['_flash_' + key, JSON.stringify({ message, type, extra: extra || null })]).catch(() => {});
     res.cookie('_flash_key', key, { httpOnly: true, maxAge: 10000, sameSite: 'lax' });
   };
 
@@ -170,4 +200,4 @@ async function initSessionTable() {
   }
 }
 
-module.exports = { session, requireAuth, optionalAuth, createSession, getSession, destroySession, initSessionTable };
+module.exports = { session, requireAuth, optionalAuth, createSession, getSession, destroySession, initSessionTable, verifySignedCookie };

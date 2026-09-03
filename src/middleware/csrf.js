@@ -22,10 +22,11 @@ function csrfProtection(req, res, next) {
     return res.status(403).json({ error: 'CSRF token invalid' });
   }
 
-  if (!crypto.timingSafeEqual(
-    Buffer.from(token.padEnd(stored.length, '\0')),
-    Buffer.from(stored.padEnd(token.length, '\0'))
-  )) {
+  // Compare SHA-256 digests instead of raw strings: fixed 32-byte length means
+  // timingSafeEqual never throws on mismatched input lengths (malformed tokens
+  // get a clean 403, not a 500), and the comparison stays constant-time.
+  const digest = (v) => crypto.createHash('sha256').update(String(v)).digest();
+  if (!crypto.timingSafeEqual(digest(token), digest(stored))) {
     return res.status(403).json({ error: 'CSRF token invalid' });
   }
 

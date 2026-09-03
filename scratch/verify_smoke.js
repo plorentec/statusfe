@@ -10,11 +10,13 @@ require.cache[pgPath] = { id: pgPath, filename: pgPath, loaded: true, exports: {
 process.env.PORT = '3997';
 const app = require(path.join(__dirname, '..', 'src', 'app.js'));
 
-function req(method, p, body) {
+function req(method, p, body, extraHeaders) {
   return new Promise((resolve, reject) => {
     const http = require('http');
     const data = body ? JSON.stringify(body) : null;
-    const r = http.request({ host: '127.0.0.1', port: 3997, path: p, method, headers: data ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } : {} }, res => {
+    const headers = { ...(extraHeaders || {}) };
+    if (data) { headers['Content-Type'] = headers['Content-Type'] || 'application/json'; headers['Content-Length'] = Buffer.byteLength(data); }
+    const r = http.request({ host: '127.0.0.1', port: 3997, path: p, method, headers }, res => {
       let out = '';
       res.on('data', c => out += c);
       res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: out }));
@@ -41,7 +43,7 @@ const check = (name, cond, extra) => {
   const page = await req('GET', '/status/admin');
   check('GET /status/admin = 200', page.status === 200, 'status ' + page.status);
   check('status page agrupa por texto legacy (Infrastructure)', page.body.includes('Infrastructure'));
-  check('status page footer v2.2.0', page.body.includes('Powered by StatusFe v2.2.0'));
+  check('status page footer v2.2.1', page.body.includes('Powered by StatusFe v2.2.1'));
   check('status page tema :root inyectado', page.body.includes('--sf-primary'));
   check('status page contador refresco', page.body.includes('refresh-counter'));
 
@@ -61,6 +63,17 @@ const check = (name, cond, extra) => {
 
   const notFound = await req('GET', '/status/no-existe');
   check('GET /status/no-existe = 404', notFound.status === 404);
+
+  // ===== v2.2.1: seguridad =====
+  const badCookie = await req('GET', '/status/admin', {}, { Cookie: 'session_id=basura-totalmente-invalida' });
+  check('cookie de sesión malformada => 200 anónimo (no 500)', badCookie.status === 200, 'status ' + badCookie.status);
+  const badCsrf = await req('POST', '/admin/api-keys', {}, { Cookie: 'session_id=x.y', 'Content-Type': 'application/json' });
+  check('CSRF ausente => 403 (no 500)', badCsrf.status === 403, 'status ' + badCsrf.status);
+  const reg = await req('GET', '/register');
+  check('/register redirige a /login (página muerta eliminada)', reg.status === 302 && String(reg.headers.location).includes('/login'), reg.status + ' -> ' + reg.headers.location);
+  let last2fa = null;
+  for (let i = 0; i < 12; i++) { last2fa = await req('GET', '/auth/2fa'); }
+  check('/auth/2fa con rate-limit (429 al 11º)', last2fa.status === 429, 'último status ' + last2fa.status);
 
   console.log(failures === 0 ? '\nINTEGRATION SMOKE PASSED' : `\n${failures} INTEGRATION FAILURES`);
   process.exit(failures === 0 ? 0 : 1);

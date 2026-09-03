@@ -104,6 +104,8 @@ function safeLimiter(limiter) {
 app.use(safeLimiter(globalLimiter));
 app.use('/auth/login', safeLimiter(authLimiter));
 app.use('/auth/register', safeLimiter(authLimiter));
+app.use('/auth/2fa', safeLimiter(authLimiter));
+app.use('/auth/set-password', safeLimiter(authLimiter));
 app.use('/api/v1', safeLimiter(apiLimiter));
 
 const adminLimiter = rateLimit({
@@ -190,10 +192,9 @@ app.get('/login', (req, res) => {
   if (req.user) return res.redirect('/admin');
   res.render('login', { title: 'Login', user: req.user });
 });
-app.get('/register', (req, res) => {
-  if (req.user) return res.redirect('/admin');
-  res.render('register', { title: 'Register', user: req.user });
-});
+// Registration is closed (users are created from the admin panel). The old
+// page rendered a form with no POST handler behind it — redirect instead.
+app.get('/register', (req, res) => res.redirect('/login?msg=registered'));
 
 // Admin routes (protected)
 app.use('/admin', adminRoutes);

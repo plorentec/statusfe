@@ -82,14 +82,25 @@ data/audit_logs/        ← Daily rotated CSV exports.
 ## Version check
 - `/check-update` strips 'v' prefix from GitHub tag: `(release.tag_name || ...).replace(/^v/, '')`.
 - `currentVersion` comes from `package.json` (`pkg.version`) — bump the version there (and CHANGELOG) when releasing; no hardcoded strings. Status page footers use `app.locals.version`.
-- GitHub releases must use tag format `v2.2.0` (with 'v'). Release checklist: bump `package.json` + `CHANGELOG.md` → push → `git tag -a vX.Y.Z` + push tag → GitHub release with changelog notes.
+- GitHub releases must use tag format `v2.2.1` (with 'v'). Release checklist: bump `package.json` + `CHANGELOG.md` → push → `git tag -a vX.Y.Z` + push tag → GitHub release with changelog notes.
+
+## Security model (v2.2.1)
+- `/admin/docs` is **admin-only** (`role=user` is redirected) — it displays full API keys.
+- Malformed session/CSRF tokens must never throw: session cookies degrade to anonymous, CSRF returns 403 (digest comparison, fixed-length).
+- Rate limits: `/auth/login`, `/auth/register`, `/auth/2fa`, `/auth/set-password` → authLimiter (10/15 min).
+- `res.flash(msg, type, extra)` = one-shot server-side flash stored in the `sessions` table (row id `_flash_<key>`, cookie `_flash_key`, 10 s); session middleware loads + deletes it and injects `message`/`messageType` + extras into res.locals. Use for post-redirect one-time data (e.g. new API key) — never pass secrets via URL.
+- Webhook delivery DNS-resolves the target and skips requests resolving to private/loopback/link-local IPs (`isPrivateIp` in `src/utils/webhooks.js`).
+- The nodemailer transporter is cached per SMTP settings fingerprint — changes in the admin panel apply on the next send without restart.
+- `layout(res, view, locals)` requires the `res` argument (per-request res.locals; the old module-level cache leaked data between concurrent requests).
+- `/register` redirects to `/login` (registration closed; users are created from the admin panel). `/auth/2fa/setup` redirects to `/admin/2fa/setup` (the only 2FA setup implementation).
+- `apiKeys.authenticate(key)` looks up by 8-char prefix, throttles `last_used_at` writes to 1/min.
 
 ## Verification / tests
 No test framework. Regression harnesses live in `scratch/` (committed) and run against an **in-memory PostgreSQL** (`pg-mem`, installed ad-hoc with `npm i --no-save pg-mem` — NOT a project dependency):
-- `scratch/verify_plan.js` — models: group create/reuse, resolveGroup, getForPage union/dedupe/order, sanitization on pages create/update.
+- `scratch/verify_plan.js` — models: group create/reuse, resolveGroup, getForPage union/dedupe/order, sanitization on pages create/update. v2.2.1: verifySignedCookie (malformed cookies → null, no throw), `isPrivateIp` ranges, apiKeys.authenticate prefix lookup + last_used_at throttle.
 - `scratch/verify_render.js` — renders every touched EJS template with route-accurate locals.
-- `scratch/verify_smoke.js` — boots the real app against pg-mem and makes HTTP requests (health, status page, embed, audit route existence).
-- `scratch/verify_e2e.js` — full flow: login → CSRF → create component with new group → create page with that group → public page shows them. Session cookie is `session_id`, CSRF via `x-csrf-token` header.
+- `scratch/verify_smoke.js` — boots the real app against pg-mem and makes HTTP requests (health, status page, embed, audit route existence). v2.2.1: garbage session cookie → 200 anonymous (not 500), missing CSRF → 403 (not 500), `/register` redirect, `/auth/2fa` rate limit (429).
+- `scratch/verify_e2e.js` — full flow: login → CSRF → create component with new group → create page with that group → public page shows them. Session cookie is `session_id`, CSRF via `x-csrf-token` header. v2.2.1: API key creation → clean redirect → key shown ONCE via server-side flash (gone on reload); role=user login → `/admin/docs` redirects (admin-only); `/auth/2fa/setup` redirects to `/admin/2fa/setup`. Test user deleted after.
 
 pg-mem limitations to keep queries portable (see Gotchas): no `integer * interval` (use `(n::text || ' minutes')::interval`), no window functions `OVER`, no correlated subqueries referencing outer aliases inside SELECT lists (DISTINCT ON + LEFT JOIN works).
 

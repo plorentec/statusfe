@@ -514,12 +514,20 @@ module.exports.apiKeys = {
 
   async authenticate(key) {
     if (!key) return null;
+    // Lookup by prefix first (index-friendly) instead of bcrypt-comparing every
+    // active key on each request.
+    const prefix = String(key).substring(0, 8);
     const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
-    const rows = await queryAll("SELECT * FROM api_keys WHERE is_active=1 AND (expires_at IS NULL OR expires_at > $1)", [now]);
+    const rows = await queryAll(
+      'SELECT * FROM api_keys WHERE is_active=1 AND key_prefix=$1 AND (expires_at IS NULL OR expires_at > $2)',
+      [prefix, now]
+    );
     const bcrypt = require('bcryptjs');
     for (const r of rows) {
       if (bcrypt.compareSync(key, r.key_hash)) {
-        await run('UPDATE api_keys SET last_used_at=NOW() WHERE id=$1', [r.id]);
+        // Throttle last_used_at writes to ~1/minute per key (was: one UPDATE per request)
+        const stale = !r.last_used_at || (Date.now() - new Date(r.last_used_at).getTime() > 60 * 1000);
+        if (stale) run('UPDATE api_keys SET last_used_at=NOW() WHERE id=$1', [r.id]).catch(() => {});
         const page = await queryOne('SELECT slug FROM pages WHERE id=$1', [r.page_id]);
         return { id: r.id, name: r.name, permissions: JSON.parse(r.permissions), page_id: r.page_id, page_slug: page?.slug, rate_limit: r.rate_limit };
       }

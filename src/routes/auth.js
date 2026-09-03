@@ -4,7 +4,11 @@ const bcrypt = require('bcryptjs');
 const { queryOne, run } = require('../db/database');
 const { createSession, destroySession, getSession } = require('../middleware/session');
 const { passwordResets, auditLog } = require('../db/models');
-const { generateSecret, verify, getURI } = require('../utils/totp');
+const { verify } = require('../utils/totp');
+
+// Compared when the email doesn't exist so real and missing users take the
+// same bcrypt path (prevents user enumeration via response timing).
+const DUMMY_HASH = bcrypt.hashSync('statusfe-no-such-user', 10);
 
 // POST /auth/login — step 1: password
 router.post('/login', async (req, res) => {
@@ -14,13 +18,12 @@ router.post('/login', async (req, res) => {
   }
 
   const user = await queryOne('SELECT * FROM users WHERE email=$1', [email]);
-  if (!user) {
-    return res.redirect('/login?msg=error&type=error');
-  }
-
-  const valid = bcrypt.compareSync(password, user.password_hash);
-  if (!valid) {
-    await auditLog.create({ user_id: null, action: 'login_failed', details: `Failed login for ${email}`, ip: req.ip, user_agent: req.get('User-Agent') || '' });
+  // Always run bcrypt work, whether or not the user exists (anti-enumeration)
+  const valid = bcrypt.compareSync(password, user ? user.password_hash : DUMMY_HASH);
+  if (!user || !valid) {
+    if (user) {
+      await auditLog.create({ user_id: null, action: 'login_failed', details: `Failed login for ${email}`, ip: req.ip, user_agent: req.get('User-Agent') || '' });
+    }
     return res.redirect('/login?msg=error&type=error');
   }
 
@@ -31,7 +34,7 @@ router.post('/login', async (req, res) => {
       'INSERT INTO sessions (id, data, created_at) VALUES ($1, $2, NOW())',
       ['_2fa_' + tempId, JSON.stringify({ userId: user.id, email: user.email, name: user.name, role: user.role })]
     );
-    res.cookie('_2fa_token', tempId, { httpOnly: true, maxAge: 5 * 60 * 60 * 1000, sameSite: 'lax' });
+    res.cookie('_2fa_token', tempId, { httpOnly: true, maxAge: 10 * 60 * 1000, sameSite: 'lax' });
     return res.redirect('/auth/2fa');
   }
   console.log('[2FA] Skipping for user', user.email, 'totp_enabled=', user.totp_enabled, 'has_secret=', !!user.totp_secret);
@@ -142,50 +145,8 @@ router.post('/set-password', async (req, res) => {
 });
 
 // ===== 2FA SETUP =====
-
-// GET /admin/2fa/setup — show QR code
-router.get('/2fa/setup', async (req, res) => {
-  if (!req.user) return res.redirect('/login');
-  let user = await queryOne('SELECT * FROM users WHERE id=$1', [req.user.id]);
-  if (!user.totp_secret) {
-    const secret = generateSecret();
-    await run('UPDATE users SET totp_secret=$1 WHERE id=$2', [secret, req.user.id]);
-    user.totp_secret = secret;
-  }
-  const uri = getURI(user.totp_secret, user.email, 'StatusFe');
-  try {
-    const qrUrl = await new Promise((resolve, reject) => {
-      require('qrcode').toDataURL(uri, (err, qrUrl) => {
-        if (err) reject(err);
-        else resolve(qrUrl);
-      });
-    });
-    res.render('admin/2fa-setup', { title: '2FA Setup', user, qr: qrUrl, totpEnabled: !!user.totp_enabled });
-  } catch(err) {
-    console.error('QR Code generation error:', err);
-    return res.status(500).send('Failed to generate QR code');
-  }
-});
-
-// POST /admin/2fa/setup — enable/disable 2FA
-router.post('/2fa/setup', async (req, res) => {
-  const { action, code } = req.body;
-  const user = await queryOne('SELECT * FROM users WHERE id=$1', [req.user.id]);
-
-  if (action === 'enable') {
-    if (!user.totp_secret || !verify(code, user.totp_secret, 'StatusFe', user.email)) {
-      return res.redirect('/admin/2fa/setup?msg=invalid&type=error');
-    }
-    await run('UPDATE users SET totp_enabled=1 WHERE id=$1', [req.user.id]);
-    await auditLog.create({ user_id: req.user.id, action: '2fa_enabled', details: '2FA enabled', ip: req.ip, user_agent: req.get('User-Agent') || '' });
-  } else if (action === 'disable') {
-    if (!verify(code, user.totp_secret, 'StatusFe', user.email)) {
-      return res.redirect('/admin/2fa/setup?msg=invalid&type=error');
-    }
-    await run('UPDATE users SET totp_enabled=0, totp_secret=NULL WHERE id=$1', [req.user.id]);
-    await auditLog.create({ user_id: req.user.id, action: '2fa_disabled', details: '2FA disabled', ip: req.ip, user_agent: req.get('User-Agent') || '' });
-  }
-  res.redirect('/admin/2fa/setup');
-});
+// Setup lives in /admin/2fa/setup (admin.js) — the complete implementation
+// with secret normalization + audit log. Old path redirects for compatibility.
+router.get('/2fa/setup', (req, res) => res.redirect('/admin/2fa/setup'));
 
 module.exports = router;

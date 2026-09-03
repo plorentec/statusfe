@@ -8,7 +8,7 @@ require.cache[pgPath] = { id: pgPath, filename: pgPath, loaded: true, exports: {
 
 process.env.PORT = '3996';
 const app = require(path.join(__dirname, '..', 'src', 'app.js'));
-const { queryOne } = require(path.join(__dirname, '..', 'src', 'db', 'database'));
+const { queryOne, run } = require(path.join(__dirname, '..', 'src', 'db', 'database'));
 
 function req(method, p, { body, headers = {}, redirect = 'manual' } = {}) {
   return new Promise((resolve, reject) => {
@@ -98,6 +98,42 @@ const check = (name, cond, extra) => {
   // 7. Group page renders with the group listed
   const groupsPage = await req('GET', '/admin/groups', { headers: { Cookie: cookieHeader() } });
   check('GET /admin/groups lista "Grupo E2E"', groupsPage.status === 200 && groupsPage.body.includes('Grupo E2E'));
+
+  // 8. v2.2.1: API key via one-shot flash (never in the URL)
+  const setupRedirect = await req('GET', '/auth/2fa/setup', { headers: { Cookie: cookieHeader() } });
+  check('/auth/2fa/setup redirige a /admin/2fa/setup', setupRedirect.status === 302 && String(setupRedirect.headers.location).includes('/admin/2fa/setup'), setupRedirect.status + ' -> ' + setupRedirect.headers.location);
+  const mkKey = await req('POST', '/admin/api-keys', {
+    headers: { Cookie: cookieHeader(), 'x-csrf-token': csrf },
+    body: { name: 'E2E Key', permissions: 'read' }
+  });
+  check('POST /admin/api-keys redirect limpio (sin ?key=)', mkKey.status === 302 && !String(mkKey.headers.location).includes('key='), mkKey.status + ' -> ' + mkKey.headers.location);
+  const cookieAfterKey = (() => { absorb(mkKey); return cookieHeader(); })();
+  const keyPage1 = await req('GET', '/admin/api-keys', { headers: { Cookie: cookieAfterKey } });
+  check('API key mostrada UNA vez (flash server-side)', keyPage1.status === 200 && keyPage1.body.includes('E2E Key') && keyPage1.body.includes('newApiKey'));
+  const keyPage2 = await req('GET', '/admin/api-keys', { headers: { Cookie: cookieHeader() } });
+  check('API key ya NO visible en la 2ª carga', keyPage2.status === 200 && !keyPage2.body.includes('newApiKey'));
+
+  // 9. v2.2.1: /admin/docs SOLO admin (rol=user => redirect, sin ver claves)
+  const mkUser = await req('POST', '/admin/users', {
+    headers: { Cookie: cookieHeader(), 'x-csrf-token': csrf },
+    body: { email: 'e2e-user@test.local', password: 'test123', name: 'E2E User', role: 'user' }
+  });
+  check('POST /admin/users crea usuario rol=user', mkUser.status === 302, mkUser.status);
+  const savedAdminJar = { ...jar };
+  for (const k of Object.keys(jar)) delete jar[k];
+  const userLogin = await req('POST', '/auth/login', { body: { email: 'e2e-user@test.local', password: 'test123' } });
+  const userCookie = (() => { absorb(userLogin); return cookieHeader(); })();
+  check('login usuario rol=user', userLogin.status === 302, userLogin.status);
+  const docsAsUser = await req('GET', '/admin/docs', { headers: { Cookie: userCookie } });
+  check('/admin/docs con rol=user => redirect (sin claves)', docsAsUser.status === 302 && String(docsAsUser.headers.location).includes('/admin'), docsAsUser.status + ' -> ' + docsAsUser.headers.location);
+  const fakeLogin = await req('POST', '/auth/login', { body: { email: 'no-existe@test.local', password: 'whatever1' } });
+  check('login con email inexistente => 302 (mismo camino, anti-enumeración)', fakeLogin.status === 302, fakeLogin.status);
+  // restore admin session and clean up the test user
+  for (const k of Object.keys(jar)) delete jar[k];
+  Object.assign(jar, savedAdminJar);
+  const testUser = await queryOne('SELECT id FROM users WHERE email=$1', ['e2e-user@test.local']);
+  await run('DELETE FROM users WHERE id=$1', [testUser.id]);
+  check('usuario de prueba eliminado', !!testUser);
 
   console.log(failures === 0 ? '\nE2E PASSED' : `\n${failures} E2E FAILURES`);
   process.exit(failures === 0 ? 0 : 1);

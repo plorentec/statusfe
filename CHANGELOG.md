@@ -2,6 +2,28 @@
 
 All notable changes to StatusFe.
 
+## [2.2.1] — 2026-09-03
+
+### Security
+- **API Docs page is admin-only** — `/admin/docs` displayed every API key in full plaintext to ANY logged-in user (including `role=user`). Non-admin users are now redirected; full keys are only loaded for admins.
+- **Malformed session cookies no longer cause 500s** — `verifySignedCookie` guards buffer lengths before `timingSafeEqual` (it threw on length mismatch). A garbage cookie now degrades to "anonymous" on every request.
+- **CSRF check no longer causes 500s** — the token/cookie comparison now runs on fixed-length SHA-256 digests, so wrong-length tokens get a clean `403` instead of an uncaught exception.
+- **2FA rate limits** — `/auth/2fa` and `/auth/set-password` now use the auth rate limiter (10 attempts / 15 min), preventing TOTP brute force.
+- **2FA login token lifetime reduced** — the `_2fa_token` cookie went from 5 hours to 10 minutes; stale temp 2FA sessions are cleaned hourly.
+- **SSRF hardening on webhooks** — webhook targets are DNS-resolved at delivery time and skipped if they resolve to private/loopback/link-local addresses (hostname validation at creation time alone was bypassable).
+- **Login anti-enumeration** — a bcrypt compare runs even for unknown emails, so failed logins for existing/missing users take a similar time.
+
+### Fixed
+- **Flash messages actually display now** — `res.flash(msg, type)` wrote a session row nothing ever read. The session middleware now loads and deletes the row on the next request and injects `message`/`messageType` (plus extras) into locals.
+- **API key creation no longer leaks the key via URL** — the one-time key display moved from query params (browser history + Apache logs) to the server-side flash; the key is shown once on `/admin/api-keys` and gone on reload.
+- **Cross-request data leak in layout** — `layout()` cached `res.locals` in a module-level object shared by all concurrent requests. It now always renders from the current request's `res.locals`.
+- **SMTP settings changes apply without restart** — the nodemailer transporter is cached per settings fingerprint (host/port/user/pass/secure) and rebuilt when settings change.
+- **Dead /register page removed** — the page rendered a form with no `POST /register` handler behind it (submitting = 404). `/register` now redirects to `/login`.
+- **Duplicate 2FA setup removed** — `/auth/2fa/setup` was a second, divergent implementation of `/admin/2fa/setup` (missing secret normalization + audit log). The old path redirects.
+
+### Performance
+- **API key authentication is prefix-indexed** — lookup by 8-char key prefix instead of bcrypt-comparing every active key per request; `last_used_at` is written at most once per minute per key.
+
 ## [2.2.0] — 2026-09-02 (publicado: https://github.com/plorentec/statusfe/releases/tag/v2.2.0)
 
 ### Added

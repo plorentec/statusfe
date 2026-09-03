@@ -2,41 +2,36 @@ const nodemailer = require('nodemailer');
 
 let transporter = null;
 
-async function getTransporter() {
-  if (transporter) return transporter;
-
-  const settings = require('../db/models').settings;
-  const smtp = await settings.get('smtp_host');
-  const port = await settings.get('smtp_port');
-  const user = await settings.get('smtp_user');
-  const pass = await settings.get('smtp_pass');
-  const secure = await settings.get('smtp_secure') === 'true';
-  const from = await settings.get('smtp_from');
-
-  if (!smtp || !from) {
-    return null;
-  }
+// Cached per settings fingerprint: changing SMTP settings in the admin panel
+// takes effect on the next send (previously the old transporter was reused
+// forever and a restart was needed).
+async function getTransporter(smtp) {
+  const fingerprint = JSON.stringify([smtp.host, smtp.port, smtp.user, smtp.pass, smtp.secure]);
+  if (transporter && transporter.__fingerprint === fingerprint) return transporter;
+  if (!smtp.host) return null;
 
   transporter = nodemailer.createTransport({
-    host: smtp,
-    port: parseInt(port) || 587,
-    secure: secure || false,
-    auth: user ? { user, pass } : undefined,
+    host: smtp.host,
+    port: parseInt(smtp.port) || 587,
+    secure: smtp.secure === 'true' || smtp.secure === true,
+    auth: smtp.user ? { user: smtp.user, pass: smtp.pass } : undefined,
   });
+  transporter.__fingerprint = fingerprint;
 
   return transporter;
 }
 
 async function sendEmail(to, subject, html) {
   const settings = require('../db/models').settings;
-  const from = await settings.get('smtp_from');
-  const name = (await settings.get('smtp_from_name')) || 'StatusFe';
+  const smtp = await settings.getSMTP();
+  const from = smtp.from;
+  const name = smtp.from_name || 'StatusFe';
 
   if (!from) {
     return { ok: false, error: 'No SMTP from address configured' };
   }
 
-  const transporter = await getTransporter();
+  const transporter = await getTransporter(smtp);
   if (!transporter) {
     return { ok: false, error: 'SMTP not configured (missing host or from address)' };
   }

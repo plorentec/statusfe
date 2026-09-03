@@ -8,13 +8,9 @@ const path = require('path');
 const { pages, components, componentGroups, apiKeys, incidents, maintenance, notifications, settings, auditLog } = require('../db/models');
 const pkg = require('../../package.json');
 const { requireAuth } = require('../middleware/session');
-const { layout, exposeLocals } = require('../middleware/layout');
+const { layout } = require('../middleware/layout');
 
 router.use(requireAuth);
-router.use((req, res, next) => {
-  exposeLocals(res);
-  next();
-});
 
 // GET /admin - Dashboard
 router.get('/', async (req, res) => {
@@ -77,7 +73,7 @@ router.get('/', async (req, res) => {
     }
   } catch(e) {}
 
-  res.send(layout('dashboard', {
+  res.send(layout(res, 'dashboard', {
     title: 'Dashboard',
     user,
     message: res.locals.message,
@@ -632,7 +628,10 @@ router.post('/api-keys', async (req, res) => {
   }
   const result = await apiKeys.create({ name, permissions: permArray });
   const permStr = (result.permissions || []).join(', ');
-  res.redirect('/admin/api-keys?msg=key_created&type=success&key=' + encodeURIComponent(result.key) + '&perms=' + encodeURIComponent(permStr));
+  // Key shown once via one-shot server-side flash (NOT via URL — it would end up
+  // in browser history and Apache access logs).
+  res.flash('API key created. Copy it now — it won\'t be shown again.', 'success', { key_value: result.key, key_perms: permStr });
+  res.redirect('/admin/api-keys');
 });
 
 router.delete('/api-keys/:id', async (req, res) => {
@@ -651,7 +650,13 @@ router.delete('/api-keys/:id/permanent', async (req, res) => {
 });
 
 // ===== API DOCS =====
+// ===== API DOCS =====
+// Admin-only: this page displays full API keys, so role=user must never reach it
+// (it previously exposed every key to ANY logged-in user — privilege escalation).
 router.get('/docs', async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.redirect('/admin?msg=admin&type=error');
+  }
   const allKeys = await apiKeys.list();
   // For docs page, include full keys for the dropdown selector
   const keysWithFull = (await Promise.all(allKeys.map(async k => {
@@ -659,7 +664,7 @@ router.get('/docs', async (req, res) => {
     return full ? {...k, key: full.key} : k;
   })));
   console.log('RENDERING docs.ejs from:', res.app.get('views'));
-  res.send(layout('docs', {
+  res.send(layout(res, 'docs', {
     title: 'API Docs',
     user: req.user,
     message: res.locals.message,
@@ -881,7 +886,7 @@ router.get('/audit', async (req, res) => {
     return res.redirect('/admin?msg=admin&type=error');
   }
   const logs = await auditLog.list(100);
-  res.send(layout('audit', {
+  res.send(layout(res, 'audit', {
     title: 'Audit Log',
     user: req.user,
     userId: req.user.id,
@@ -958,7 +963,7 @@ router.get('/2fa/setup', async (req, res) => {
         else resolve(qrUrl);
       });
     });
-    res.send(layout('2fa-setup', {
+    res.send(layout(res, '2fa-setup', {
       title: '2FA Setup',
       user,
       qr: qrUrl,
@@ -1031,7 +1036,7 @@ router.get('/audit/count', async (req, res) => {
 // GET /admin/changelog
 router.get('/changelog', async (req, res) => {
   if (req.user.role !== 'admin') return res.redirect('/admin?msg=admin&type=error');
-  res.send(layout('changelog', {
+  res.send(layout(res, 'changelog', {
     title: 'Changelog',
     user: req.user,
     message: res.locals.message,

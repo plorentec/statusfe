@@ -20,10 +20,17 @@ const pgPath = require.resolve('pg');
 require.cache[pgPath] = { id: pgPath, filename: pgPath, loaded: true, exports: fakePg };
 
 const ROOT = path.join(__dirname, '..');
+const queryOneRaw = (...args) => require(path.join(ROOT, 'src', 'db', 'database')).queryOne(...args);
 async function main() {
   // Create schema via the real init.js (tables + seed)
   const { init } = require(path.join(ROOT, 'src', 'db', 'init'));
   await init();
+  // sessions table lives outside init.js (created by initSessionTable at boot)
+  await require(path.join(ROOT, 'src', 'db', 'database')).run(`
+    CREATE TABLE IF NOT EXISTS sessions (
+      id TEXT PRIMARY KEY, data TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 
   const { components, componentGroups, pages } = require(path.join(ROOT, 'src', 'db', 'models'));
   let failures = 0;
@@ -107,6 +114,36 @@ async function main() {
 
   const p1u = await pages.update(p1.id, { custom_css: '.a{font-family:"Segoe UI"}' });
   check('sanitizeCss conserva comillas', p1u.custom_css.includes('"Segoe UI"'), p1u.custom_css);
+
+  // ===== 6. Seguridad v2.2.1 =====
+  const { verifySignedCookie } = require(path.join(ROOT, 'src', 'middleware', 'session'));
+  const { createSession } = require(path.join(ROOT, 'src', 'middleware', 'session'));
+  const signed = await createSession({ id: 'u1', name: 'T', email: 't@t', role: 'admin' });
+  check('verifySignedCookie acepta cookie válida', verifySignedCookie(signed) !== null);
+  const badCookies = ['basura', 'abc.def', signed + 'x', signed.slice(0, -2), '', null, '{"a":1}.0000000000000000'];
+  let threw = false; let allNull = true;
+  for (const c of badCookies) {
+    try { if (verifySignedCookie(c) !== null) allNull = false; } catch(e) { threw = true; }
+  }
+  check('verifySignedCookie: cookies malformadas => null sin throw', !threw && allNull);
+
+  const { isPrivateIp } = require(path.join(ROOT, 'src', 'utils', 'webhooks'));
+  const priv = ['127.0.0.1','10.1.2.3','172.16.0.1','172.31.9.9','192.168.1.4','169.254.169.254','0.0.0.0','::1','fe80::1','fc00::1','fd12::1','::ffff:192.168.0.5'];
+  const pub = ['8.8.8.8','1.1.1.1','172.32.0.1','2606:4700::1111'];
+  check('isPrivateIp: rangos privados detectados', priv.every(ip => isPrivateIp(ip)));
+  check('isPrivateIp: públicas NO marcadas', pub.every(ip => !isPrivateIp(ip)));
+
+  // authenticate por prefijo
+  const created = await require(path.join(ROOT, 'src', 'db', 'models')).apiKeys.create({ name: 'TestAuth', permissions: ['read'] });
+  const wrongPrefix = await require(path.join(ROOT, 'src', 'db', 'models')).apiKeys.authenticate('ffffffff-ffff-ffff-ffff-ffffffffffff');
+  const authed = await require(path.join(ROOT, 'src', 'db', 'models')).apiKeys.authenticate(created.key);
+  check('authenticate: key incorrecta => null', wrongPrefix === null);
+  check('authenticate: key correcta por prefijo => user', !!authed && authed.name === 'TestAuth', authed && authed.name);
+  // Segunda llamada inmediata: last_used_at NO debe reescribirse (throttle 60s)
+  const before = await queryOneRaw('SELECT last_used_at FROM api_keys WHERE id=$1', [created.id]);
+  await require(path.join(ROOT, 'src', 'db', 'models')).apiKeys.authenticate(created.key);
+  const after = await queryOneRaw('SELECT last_used_at FROM api_keys WHERE id=$1', [created.id]);
+  check('authenticate: last_used_at con throttle (60s)', String(before.last_used_at) === String(after.last_used_at), before.last_used_at + ' vs ' + after.last_used_at);
 
   console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TESTS FAILED`);
   process.exit(failures === 0 ? 0 : 1);
