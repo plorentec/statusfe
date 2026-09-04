@@ -1,7 +1,15 @@
 # StatusFe — Roadmap / Backlog
 
 Ideas y mejoras pendientes para continuar en futuras sesiones. Ninguna está
-empezada; están ordenadas por valor/esfuerzo. Última revisión: v2.2.0 (2026-09-02).
+empezada; están ordenadas por valor/esfuerzo. Última revisión: v2.2.2 (2026-09-03).
+
+## Hecho hasta v2.2.2 (contexto)
+- ✅ v2.2.1: seguridad (docs solo admin, cookies/CSRF sin 500, 2FA rate-limit, SSRF webhooks, anti-enumeración, flash server-side, transporter SMTP por fingerprint).
+- ✅ v2.2.2: **componentes en VARIOS grupos** (`component_group_members` + backfill desde `components.group_id` en cada boot), selección múltiple por checkboxes + `group_ids` en API (array o string con comas), `?group=` matchea cualquier grupo del componente.
+- ✅ v2.2.2: **miembros desde el formulario del grupo** (`member_component_ids` → `setMembers`, conserva otros grupos del miembro, re-apunta su grupo primario) en admin y API.
+- ✅ v2.2.2: **buscador** en las listas largas de componentes/grupos/miembros (`sfBindFilter` en admin.js, sin dependencias) + listas scrollables (`.component-checkboxes` tenía cero CSS).
+- ✅ v2.2.2: **estado agregado del grupo** en la página pública (badge con el PEOR estado de sus miembros, 3 plantillas).
+- ✅ v2.2.2: fix CSRF en Configuración → Estados (el form no enviaba `_csrf`) y fix de grupos no pre-marcados al editar página (`getGroupIdsForPage`, antes se consultaba `group_pages` con el id de página en la columna de grupo).
 
 ## Hecho hasta v2.2.0 (contexto)
 - ✅ Grupos con componentes en páginas (`group_pages` + `components.getForPage()`): unión de asignaciones individuales ∪ grupos asignados ∪ grupos globales, orden por posición de grupo.
@@ -41,7 +49,6 @@ empezada; están ordenadas por valor/esfuerzo. Última revisión: v2.2.0 (2026-0
 
 ## Deuda técnica conocida
 - `api_keys` guarda la key en plano (columna `key`) — necesario para mostrarla en Docs, pero valora cifrarla o mostrarla solo una vez en la creación.
-- `components.list()` filtra por `group_name` texto; podría aceptar también `group_id`.
+- `components.list()` ya matchea el filtro `?group=` por membresías (join table); el parámetro sigue siendo el NOMBRE del grupo — valorar aceptar también `group_id`.
 - El contenedor `statusfe-postgres` en producción está en crash-loop (puerto 5432 ocupado por el postgres nativo del host) — decidir: pararlo (`docker stop statusfe-postgres`) o quitarlo del compose.
-- `components.ejs` (lista) aún resuelve el nombre del grupo con `groups.find(...)` en el cliente EJS — ok, pero si los grupos crecen conviene JOIN en SQL.
 - Rate limit admin 60/min puede quedarse corto al guardar páginas con muchos componentes (cada checkbox es una query).

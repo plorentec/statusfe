@@ -6,7 +6,7 @@
 ---
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-**v2.1.0** — 2FA, audit log, multi-page groups, PostgreSQL migration, security hardening, external_id mapping
+**v2.2.2** — multi-group components, searchable lists, group status badge, CSRF fix on statuses, 2FA, audit log, multi-page groups, PostgreSQL migration, security hardening
 
 ---
 
@@ -60,7 +60,8 @@ Access / Accede en: `http://localhost:3000`
 | **Component Health** | Track service health with 5 status levels | Seguimiento de salud de servicios con 5 niveles de estado |
 | **Incidents** | Public incident reports with real-time status tracking | Informes públicos de incidentes con seguimiento de estado en tiempo real |
 | **Maintenance** | Scheduled maintenance windows with auto status transitions and advance notice | Ventanas de mantenimiento programado con transiciones automáticas y aviso anticipado |
-| **Component Groups** | Group components, assign to one or multiple pages | Agrupar componentes, asignar a una o múltiples páginas |
+| **Component Groups** | Group components (a component can belong to SEVERAL groups), assign groups to one or multiple pages, aggregated group status = worst of its members | Agrupar componentes (un componente puede pertenecer a VARIOS grupos), asignar grupos a una o múltiples páginas, estado agregado del grupo = el peor de sus miembros |
+| **Group Members & Search** | Manage group members from the group form, type-to-search on long component/group lists | Gestionar los miembros desde el formulario del grupo, buscador en las listas largas de componentes y grupos |
 | **Component Dependencies** | Cascade status changes across related components | Cascada de cambios de estado entre componentes relacionados |
 | **Embed Widget** | Customizable status badge: `/embed/:slug?style=compact\|detailed\|minimal` | Widget de estado personalizable: `/embed/:slug?style=compact\|detailed\|minimal` |
 | **Custom Layout** | Custom CSS, HTML, logo, and layout per page | CSS personalizado, HTML, logo y diseño por página |
