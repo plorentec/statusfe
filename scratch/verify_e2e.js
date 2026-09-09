@@ -76,17 +76,23 @@ const check = (name, cond, extra) => {
   const savedStatus = await queryOne('SELECT * FROM component_statuses WHERE value=$1', ['test_status']);
   check('estado personalizado creado en DB', !!savedStatus && savedStatus.label === 'Test Status');
 
-  // 3. Create component with a NEW group via the form
+  // 3. Create a page-scoped group explicitly (non-global), then a component in it.
+  const mkGroup = await req('POST', '/admin/groups', {
+    headers: { Cookie: cookieHeader(), 'x-csrf-token': csrf },
+    body: { name: 'Grupo E2E', position: '1' }
+  });
+  check('POST /admin/groups (Grupo E2E) 302', mkGroup.status === 302, mkGroup.status);
+  const grp = await queryOne('SELECT * FROM component_groups WHERE name=$1', ['Grupo E2E']);
+  check('grupo "Grupo E2E" creado y NO global', !!grp && grp.name === 'Grupo E2E' && grp.is_global === 0, grp && (grp.name + ' is_global=' + grp.is_global));
+
   const create = await req('POST', '/admin/components', {
     headers: { Cookie: cookieHeader(), 'x-csrf-token': csrf },
-    body: { name: 'RouterTest', description: 'e2e', status: 'operational', group_id: '', new_group_name: 'Grupo E2E', position: '1' }
+    body: { name: 'RouterTest', description: 'e2e', status: 'operational', group_id: grp.id, position: '1' }
   });
   check('POST /admin/components 302 success', create.status === 302 && String(create.headers.location).includes('msg=success'), create.status + ' -> ' + create.headers.location);
 
   const comp = await queryOne('SELECT * FROM components WHERE name=$1', ['RouterTest']);
   check('componente creado con group_id', !!comp && !!comp.group_id);
-  const grp = comp ? await queryOne('SELECT * FROM component_groups WHERE id=$1', [comp.group_id]) : null;
-  check('grupo "Grupo E2E" creado y vinculado', !!grp && grp.name === 'Grupo E2E', grp && grp.name);
 
   // 4. Create a page selecting the group
   const createPage = await req('POST', '/admin/pages', {

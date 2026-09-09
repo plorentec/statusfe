@@ -64,7 +64,9 @@ async function main() {
   const pageA = await pages.create({ name: 'A', slug: 'page-a', is_public: true });
   const pageB = await pages.create({ name: 'B', slug: 'page-b', is_public: true });
 
-  const gInfra = await componentGroups.findOrCreateByName('Infra');
+  // Infra is page-scoped (added only to pageB) -> explicit non-global.
+  // Global is a true global group (no page binding) -> created via findOrCreateByName.
+  const gInfra = await componentGroups.create({ name: 'Infra' });
   const gGlobal = await componentGroups.findOrCreateByName('Global');
 
   const cRouter = await components.create({ name: 'Router', group_id: gInfra.id });

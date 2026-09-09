@@ -112,7 +112,7 @@ router.get('/pages/new', async (req, res) => {
     page: {},
     components: allComponents,
     assignedComponentIds: assignedIds,
-    groups: await componentGroups.list(),
+    groups: await componentGroups.listPageScoped(),
     selectedGroupIds: []
   });
 });
@@ -184,7 +184,7 @@ router.get('/pages/:id/edit', async (req, res) => {
     page,
     components: allComponents,
     assignedComponentIds: assignedIds,
-    groups: await componentGroups.list(),
+    groups: await componentGroups.listPageScoped(),
     // BUGFIX: was componentGroups.getPageIds(page.id) — that queries WHERE
     // group_id=$1 with the PAGE id, always empty. Groups saved on the page
     // were never pre-checked when re-opening the form.
@@ -500,7 +500,7 @@ router.get('/groups/new', async (req, res) => {
 });
 
 router.post('/groups', async (req, res) => {
-  const { name, page_ids, position } = req.body;
+  const { name, page_ids, position, is_global } = req.body;
   if (!name) {
     return res.redirect('/admin/groups/new?msg=error&type=error');
   }
@@ -511,7 +511,7 @@ router.post('/groups', async (req, res) => {
   } else if (typeof page_ids === 'string' && page_ids) {
     selected = page_ids.split(',').map(s => s.trim()).filter(Boolean);
   }
-  const group = await componentGroups.create({ name, page_ids: selected, position: parseInt(position) || 0 });
+  const group = await componentGroups.create({ name, page_ids: selected, position: parseInt(position) || 0, is_global });
   // Optional member picker: only sync when the field was sent (undefined = untouched)
   if (req.body.member_component_ids !== undefined) {
     await componentGroups.setMembers(group.id, req.body.member_component_ids);
@@ -546,7 +546,7 @@ router.put('/groups/:id', async (req, res) => {
   if (!group) {
     return res.redirect('/admin/groups?msg=error&type=error');
   }
-  const { name, page_ids, position } = req.body;
+  const { name, page_ids, position, is_global } = req.body;
   if (!name) {
     return res.redirect('/admin/groups/' + req.params.id + '/edit?msg=error&type=error');
   }
@@ -556,7 +556,7 @@ router.put('/groups/:id', async (req, res) => {
   } else if (typeof page_ids === 'string' && page_ids) {
     selected = page_ids.split(',').map(s => s.trim()).filter(Boolean);
   }
-  await componentGroups.update(req.params.id, { name, page_ids: selected, position: parseInt(position) || 0 });
+  await componentGroups.update(req.params.id, { name, page_ids: selected, position: parseInt(position) || 0, is_global });
   if (req.body.member_component_ids !== undefined) {
     await componentGroups.setMembers(req.params.id, req.body.member_component_ids);
   }

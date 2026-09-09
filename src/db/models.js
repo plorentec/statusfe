@@ -160,17 +160,18 @@ module.exports.components = {
          OR c.id IN (SELECT cgm.component_id FROM component_group_members cgm
                      JOIN group_pages gp ON gp.group_id = cgm.group_id WHERE gp.page_id = $1)
          OR c.id IN (SELECT cgm.component_id FROM component_group_members cgm
-                     WHERE cgm.group_id IN (SELECT id FROM component_groups WHERE id NOT IN (SELECT group_id FROM group_pages)))
+                     JOIN component_groups cg ON cg.id = cgm.group_id
+                     WHERE cg.is_global = 1)
     `, [pageId]);
 
     const allGroups = await module.exports.componentGroups.list();
     const groupById = new Map(allGroups.map(g => [g.id, g]));
 
     // Groups displayed on this page = groups bound via group_pages + global groups
-    // (groups with no group_pages rows appear on every page).
+    // (groups explicitly marked is_global appear on every page).
     const displayedGroupIds = new Set([
       ...(await queryAll('SELECT group_id FROM group_pages WHERE page_id=$1', [pageId])).map(r => r.group_id),
-      ...(await queryAll('SELECT id FROM component_groups WHERE id NOT IN (SELECT group_id FROM group_pages)', [])).map(r => r.id)
+      ...(await queryAll('SELECT id FROM component_groups WHERE is_global=1', [])).map(r => r.id)
     ]);
 
     // Memberships for the fetched components (component_id -> Set(group_id))
@@ -1245,7 +1246,9 @@ module.exports.componentGroups = {
     let group = await this.findByName(trimmed);
     if (!group) {
       const pos = await queryOne('SELECT COALESCE(MAX(position), -1) + 1 as next FROM component_groups');
-      group = await this.create({ name: trimmed, position: pos ? pos.next : 0 });
+      // Inline-created groups (component form) have no page assignment; preserve
+      // the legacy meaning of "no pages => global" as an explicit is_global.
+      group = await this.create({ name: trimmed, position: pos ? pos.next : 0, is_global: true });
     }
     return group;
   },
@@ -1253,9 +1256,19 @@ module.exports.componentGroups = {
   async list(pageId) {
     let q = 'SELECT * FROM component_groups WHERE 1=1';
     const p = [];
-    if (pageId) { q += ' AND id IN (SELECT group_id FROM group_pages WHERE page_id=$' + (p.length + 1) + ')'; p.push(pageId); }
+    if (pageId) {
+      // Groups shown on a page = those bound to it + global groups.
+      q += ' AND (id IN (SELECT group_id FROM group_pages WHERE page_id=$' + (p.length + 1) + ') OR is_global=1)';
+      p.push(pageId);
+    }
     q += ' ORDER BY position, name';
     return await queryAll(q, p);
+  },
+
+  // Only non-global groups (used for the page form's "groups shown on this page"
+  // checkboxes — global groups are shown by virtue of is_global, not by binding).
+  async listPageScoped() {
+    return await queryAll('SELECT * FROM component_groups WHERE is_global=0 ORDER BY position, name');
   },
 
   async get(id) { return await queryOne('SELECT * FROM component_groups WHERE id=$1', [id]); },
@@ -1326,10 +1339,11 @@ module.exports.componentGroups = {
     return result.c;
   },
 
-  async create({ name, page_ids, position }) {
+  async create({ name, page_ids, position, is_global }) {
     const id = uuidv4();
-    await run('INSERT INTO component_groups (id, name, position) VALUES ($1,$2,$3)', [id, name, parseInt(position) || 0]);
-    const pids = this._normalizeIds(page_ids);
+    await run('INSERT INTO component_groups (id, name, position, is_global) VALUES ($1,$2,$3,$4)', [id, name, parseInt(position) || 0, is_global ? 1 : 0]);
+    // A global group is not bound to specific pages: page_ids are ignored/cleared.
+    const pids = is_global ? [] : this._normalizeIds(page_ids);
     for (const pid of pids) {
       await run('INSERT INTO group_pages (group_id, page_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [id, pid]);
     }
@@ -1339,15 +1353,27 @@ module.exports.componentGroups = {
   async update(id, data) {
     const fields = [];
     const params = [];
-    const allowed = ['name','position'];
+    const allowed = ['name','position','is_global'];
     for (const k of allowed) {
-      if (data[k] !== undefined) { fields.push(k+'=$'+(params.length+1)); params.push(data[k]); }
+      if (data[k] !== undefined) {
+        let val = data[k];
+        if (k === 'is_global') val = (val === 'on' || val === 1 || val === true) ? 1 : 0;
+        fields.push(k+'=$'+(params.length+1)); params.push(val);
+      }
     }
     if (fields.length) {
       params.push(id);
       await run('UPDATE component_groups SET ' + fields.join(',') + ', updated_at=NOW() WHERE id=$' + (params.length), ...params);
     }
-    if (data.page_ids !== undefined) {
+    // A global group is not bound to pages; clear them so the two states can't
+    // coexist (and so removing a page binding never silently re-globalizes).
+    const isNowGlobal = data.is_global !== undefined
+      ? (data.is_global === 'on' || data.is_global === 1 || data.is_global === true)
+      : (await queryOne('SELECT is_global FROM component_groups WHERE id=$1', [id]))?.is_global;
+    if (isNowGlobal) {
+      if (data.page_ids !== undefined) await run('DELETE FROM group_pages WHERE group_id=$1', [id]);
+    } else if (data.page_ids !== undefined) {
+      // Exact sync of the page bindings for a non-global group.
       await run('DELETE FROM group_pages WHERE group_id=$1', [id]);
       const pids = this._normalizeIds(data.page_ids);
       for (const pid of pids) {

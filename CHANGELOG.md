@@ -4,6 +4,9 @@ All notable changes to StatusFe.
 
 ## [2.2.3] — 2026-09-09
 
+### Fixed
+- **Removing a group from a page no longer re-adds it** — "global" was inferred from "no rows in `group_pages`", so removing a group from its only page left it with no rows and it silently became global (showed on every page). Groups are now explicitly global via an `is_global` column: `is_global=1` shows everywhere, `is_global=0` only on its assigned pages. Unchecking a group in the page form keeps it off that page. The page form lists only non-global groups, and a boot-time migration backfills existing page-less groups as global so nothing changes for existing data.
+
 ### Security
 - **API keys are no longer stored in plaintext** — the `key` column was kept readable so `/admin/docs` could auto-inject a key into the curl examples. A DB read (dump, backup, SQLi, etc.) exposed every key. Keys are now persisted only as a bcrypt `key_hash` + `key_prefix`; the plaintext is returned once at creation (via the one-shot flash) and never stored. `getFull()` no longer exposes a key, and `/admin/docs` now relies on a pasted key instead of a stored one (the copy-curl convenience is unchanged). A boot-time migration NULLs any previously stored plaintext.
 - **Private status pages no longer leak via the public API** — `GET /api/v1/pages/:slug` omitted the `is_public` check and returned another page's components/incidents. It now returns `404` like the list and `/status/:slug` endpoints.

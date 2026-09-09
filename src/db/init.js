@@ -260,6 +260,7 @@ async function createTables() {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       position INTEGER DEFAULT 0,
+      is_global INTEGER DEFAULT 0,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
@@ -472,6 +473,20 @@ async function migrate() {
   // Security: never keep API key plaintext at rest. Auth relies on key_hash only;
   // wipe any previously stored readable key (idempotent, safe on every boot).
   await run(`UPDATE api_keys SET key = NULL WHERE key IS NOT NULL`);
+
+  // is_global on component_groups: add the column if the table predates it
+  // (older installs), then backfill existing global groups. "Global" previously
+  // meant "no rows in group_pages"; we keep that meaning for existing data so
+  // groups that were global before remain global after the migration.
+  try {
+    await run(`ALTER TABLE component_groups ADD COLUMN IF NOT EXISTS is_global INTEGER DEFAULT 0`);
+  } catch(e) {
+    // Column already exists or the wording differs — safe to proceed.
+  }
+  await run(`
+    UPDATE component_groups SET is_global = 1
+    WHERE is_global = 0 AND id NOT IN (SELECT DISTINCT group_id FROM group_pages)
+  `);
 }
 
 module.exports = { init, migrate, prepare, run, queryOne, queryAll };

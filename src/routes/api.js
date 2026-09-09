@@ -217,9 +217,9 @@ router.get('/groups/:id', async (req, res) => {
 
 // Create group (write)
 router.post('/groups', requirePerm('write'), async (req, res) => {
-  const { name, page_ids, position } = req.body;
+  const { name, page_ids, position, is_global } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
-  const g = await componentGroups.create({ name, page_ids, position });
+  const g = await componentGroups.create({ name, page_ids, position, is_global });
   // Optional member picker (array or comma-joined string of component ids)
   if (req.body.member_component_ids !== undefined) {
     await componentGroups.setMembers(g.id, req.body.member_component_ids);

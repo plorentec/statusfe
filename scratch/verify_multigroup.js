@@ -37,9 +37,11 @@ async function main() {
   };
 
   // ===== 1. create con group_ids (varios grupos) =====
-  const gA = await componentGroups.findOrCreateByName('Alpha');
-  const gB = await componentGroups.findOrCreateByName('Beta');
-  const gC = await componentGroups.findOrCreateByName('Gamma');
+  // Alpha/Beta/Gamma are page-scoped in this harness, so create them explicit
+  // non-global (findOrCreateByName now creates global groups — covered later).
+  const gA = await componentGroups.create({ name: 'Alpha' });
+  const gB = await componentGroups.create({ name: 'Beta' });
+  const gC = await componentGroups.create({ name: 'Gamma' });
 
   const c1 = await components.create({ name: 'MultiDB', group_ids: [gA.id, gB.id] });
   check('create con group_ids: primary = primero', c1.group_id === gA.id && c1.group_name === 'Alpha', c1.group_id + '/' + c1.group_name);
@@ -151,6 +153,51 @@ async function main() {
   // comma-string
   await componentGroups.setMembers(gMiembros.id, solo.id + ',' + multi.id);
   check('setMembers acepta string con comas', (await componentGroups.getMembers(gMiembros.id)).length === 2);
+
+  // ===== 13. REGRESSION: quitar un grupo de una página NO debe reaparecer =====
+  // Bug reportado: "creo grupo, lo añado a una página; al quitarlo de la página
+  // no se quita". Causa raíz: grupos con 0 filas en group_pages se trataban como
+  // globales. Al desmarcar el grupo de la única página, la fila se borraba y el
+  // grupo pasaba a global (aparecía en TODAS las páginas).
+  const gPage = await componentGroups.create({ name: 'PageScoped' }); // no-global
+  const cPS = await components.create({ name: 'PSComp', group_ids: [gPage.id] });
+  const pOne = await pages.create({ name: 'POne', slug: 'page-one', is_public: true });
+  const pTwo = await pages.create({ name: 'PTwo', slug: 'page-two', is_public: true });
+
+  // Add the group to only pOne.
+  await db().run('INSERT INTO group_pages (group_id, page_id) VALUES ($1,$2)', [gPage.id, pOne.id]);
+  check('regression: grupo en pOne', (await components.getForPage(pOne.id)).some(c => c.name === 'PSComp' && c.group_name === 'PageScoped'));
+  check('regression: grupo NO en pTwo (no global)', !(await components.getForPage(pTwo.id)).some(c => c.name === 'PSComp'));
+  check('regression: is_global es 0', (await componentGroups.get(gPage.id)).is_global === 0);
+
+  // Now REMOVE the group from pOne (simulates unchecking it in the page form).
+  await db().run('DELETE FROM group_pages WHERE group_id=$1 AND page_id=$2', [gPage.id, pOne.id]);
+  const afterRemove = await componentGroups.get(gPage.id);
+  check('regression: tras quitar, is_global sigue 0 (no se vuelve global)', afterRemove.is_global === 0);
+  check('regression: PSComp YA NO aparece en pOne', !(await components.getForPage(pOne.id)).some(c => c.name === 'PSComp'));
+  check('regression: PSComp tampoco aparece en pTwo', !(await components.getForPage(pTwo.id)).some(c => c.name === 'PSComp'));
+
+  // ===== 14. Creatión paths set is_global correctly =====
+  // create() without is_global => non-global (page-scoped); findOrCreateByName
+  // (inline from component form) => global (preserves legacy "no pages => global").
+  const gInline = await componentGroups.findOrCreateByName('InlineGlobal');
+  check('create() sin is_global => no global', (await componentGroups.get(gPage.id)).is_global === 0);
+  check('findOrCreateByName => global', (await componentGroups.get(gInline.id)).is_global === 1);
+  // A global group has no group_pages rows.
+  const tmpPages = await componentGroups.getPageIds(gInline.id);
+  check('grupo global no tiene páginas', tmpPages.length === 0, JSON.stringify(tmpPages));
+
+  // ===== 15. Migration backfill: no-page groups become global, page-bound stay not =====
+  // Simulate an old install: a group with page rows and a group without.
+  const gBack = await componentGroups.create({ name: 'BackfillBound' });
+  const gBackGlobal = await componentGroups.create({ name: 'BackfillGlobal', is_global: 0 }); // old default (no pages => global)
+  await db().run('INSERT INTO group_pages (group_id, page_id) VALUES ($1,$2)', [gBack.id, pOne.id]);
+  // Now run migrate(): groups with no page rows should be flagged global.
+  await require(path.join(ROOT, 'src', 'db', 'init')).migrate();
+  const backBound = await componentGroups.get(gBack.id);
+  const backGlobal = await componentGroups.get(gBackGlobal.id);
+  check('migrate: grupo con páginas NO se vuelve global', backBound.is_global === 0 && backBound.is_global !== 1, 'is_global=' + backBound.is_global);
+  check('migrate: grupo sin páginas pasa a global', backGlobal.is_global === 1, 'is_global=' + backGlobal.is_global);
 
   console.log(failures === 0 ? '\nALL MULTI-GROUP TESTS PASSED' : `\n${failures} TESTS FAILED`);
   process.exit(failures === 0 ? 0 : 1);

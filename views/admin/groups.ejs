@@ -43,7 +43,7 @@
 <% groups.forEach(g => { %>
 <tr>
 <td><strong><%= g.name %></strong></td>
-<td><% const gs = groupPageMap[g.id] || []; if (gs.length === 0) { %><span class="badge badge-success">Global</span><% } else { %>
+<td><% const gs = groupPageMap[g.id] || []; if (g.is_global == 1) { %><span class="badge badge-success">Global</span><% } else if (gs.length === 0) { %><span class="badge badge-warning">No pages</span><% } else { %>
   <% gs.forEach((p, i) => { %>
     <span class="badge badge-info"><%= p.name %><% if (i < gs.length-1) { %>, <% } %></span>
   <% }) %>
@@ -76,8 +76,14 @@
 <label for="name">Group Name</label>
 <input type="text" id="name" name="name" value="<%= group.name || '' %>" required placeholder="Infrastructure, Application, etc.">
 </div>
-<div class="form-group">
-<label>Pages (select one or more, leave empty for global)</label>
+<div class="form-group checkbox-group">
+<label>
+<input type="checkbox" id="is_global" name="is_global" <%= (group.is_global == 1) ? 'checked' : '' %> onchange="document.getElementById('pageList').style.display = this.checked ? 'none' : 'block';">
+Global group (visible on every page)
+</label>
+</div>
+<div class="form-group" id="pageList" style="<%= (group.is_global == 1) ? 'display:none;' : '' %>">
+<label>Pages (select one or more to restrict this group)</label>
 <div class="checkbox-group" style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; padding: 10px;">
 <% pages.forEach(p => { %>
 <label class="checkbox-label" style="display: block; padding: 4px 0;">
@@ -86,7 +92,7 @@
 </label>
 <% }) %>
 </div>
-<small class="text-muted">Leave all unchecked for a global group (visible on all pages). Select specific pages to restrict this group.</small>
+<small class="text-muted">Select the pages this group appears on. Leave the Global checkbox on to show it on all pages.</small>
 </div>
 <div class="form-group">
 <label for="position">Position</label>
