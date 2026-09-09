@@ -2,6 +2,22 @@
 
 All notable changes to StatusFe.
 
+## [2.2.3] — 2026-09-09
+
+### Security
+- **API keys are no longer stored in plaintext** — the `key` column was kept readable so `/admin/docs` could auto-inject a key into the curl examples. A DB read (dump, backup, SQLi, etc.) exposed every key. Keys are now persisted only as a bcrypt `key_hash` + `key_prefix`; the plaintext is returned once at creation (via the one-shot flash) and never stored. `getFull()` no longer exposes a key, and `/admin/docs` now relies on a pasted key instead of a stored one (the copy-curl convenience is unchanged). A boot-time migration NULLs any previously stored plaintext.
+- **Private status pages no longer leak via the public API** — `GET /api/v1/pages/:slug` omitted the `is_public` check and returned another page's components/incidents. It now returns `404` like the list and `/status/:slug` endpoints.
+- **Audit log CSV export neutralizes spreadsheet formula injection** — cells are encoded via `csvCell()` (OWASP): values starting with `=`, `+`, `-`, `@`, tab or CR are prefixed so they can't execute as formulas in Excel/Sheets. Applied to `/admin/audit/download` and the daily audit rotation.
+- **Embed widget escapes user-controlled values** — `/embed/:slug` interpolated `page.name`, slug and status into the reflected HTML without escaping (reflected XSS surface). Values are now HTML-escaped.
+
+### Added
+- **Dependency model supports many dependents on one shared hub** — the schema already allowed it, but the UI now makes it explicit: `/admin/dependencies` groups dependents under the component they rely on, and the form is labelled around a shared hub. Status changes now cascade **transitively** (`A→B→C`) instead of stopping at direct dependents, and a real **circular-dependency check** rejects cycles on create (admin + API). A component can now be declared as depending on a shared hub (e.g. DB, Cache, Auth all depend on Database).
+
+### Fixed
+- **Admin analytics page map was always empty** — the page→components query used the page id as `component_id`. It now queries `status_history` for the page's actual components (with the correct day placeholder offset).
+- **Welcome email was dead** — `sendWelcomeEmail` called `getTransporter()` without SMTP settings, throwing on `smtp.host`. It now loads SMTP via `settings.getSMTP()`.
+- **Malformed API key `permissions` could cause a 500** — `JSON.parse` in `authenticate`/`list`/`getFull` now falls back to a safe default instead of throwing.
+
 ## [2.2.2] — 2026-09-03
 
 ### Fixed

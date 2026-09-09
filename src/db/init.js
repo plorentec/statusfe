@@ -344,12 +344,13 @@ async function seed() {
       [adminId, 'Admin', 'admin', 'Default admin page', 'operational', 'default']
     );
 
-    // Default API key
+    // Default API key — plaintext value is generated, hashed and returned once at
+    // setup; it is NOT persisted readable (security: no plaintext at rest).
     const apiKey = uuidv4() + '-' + uuidv4();
     const hash = bcrypt.hashSync(apiKey, 10);
     await run(
       'INSERT INTO api_keys (id, key_hash, key, key_prefix, name, permissions) VALUES ($1, $2, $3, $4, $5, $6)',
-      [uuidv4(), hash, apiKey, apiKey.substring(0, 8), 'Default Admin Key', JSON.stringify(['read','write','admin'])]
+      [uuidv4(), hash, null, apiKey.substring(0, 8), 'Default Admin Key', JSON.stringify(['read','write','admin'])]
     );
 
     // Default components
@@ -467,6 +468,10 @@ async function migrate() {
     SELECT id, group_id FROM components WHERE group_id IS NOT NULL
     ON CONFLICT DO NOTHING
   `);
+
+  // Security: never keep API key plaintext at rest. Auth relies on key_hash only;
+  // wipe any previously stored readable key (idempotent, safe on every boot).
+  await run(`UPDATE api_keys SET key = NULL WHERE key IS NOT NULL`);
 }
 
 module.exports = { init, migrate, prepare, run, queryOne, queryAll };

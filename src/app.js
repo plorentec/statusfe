@@ -68,9 +68,11 @@ setInterval(async () => {
     
     const logFile = path.join(logDir, `audit-log-${today}.csv`);
     if (!fs.existsSync(logFile)) {
+      const { csvCell } = require('./utils/csv');
       const rows = await queryAll("SELECT * FROM audit_log WHERE DATE(created_at) = CURRENT_DATE");
       const csv = 'Date,User,Action,Target,Details,IP\n' + rows.map(r =>
-        `"${r.created_at}","${(r.user_id||'').substring(0,8)}","${r.action}","${(r.target||'').replace(/"/g,'""')}","${(r.details||'').replace(/"/g,'""')}","${(r.ip||'').substring(0,15)}"`
+        [r.created_at, (r.user_id||'').substring(0,8), r.action, r.target||'', r.details||'', (r.ip||'').substring(0,15)]
+          .map(csvCell).join(',')
       ).join('\n');
       fs.writeFileSync(logFile, csv || 'Date,User,Action,Target,Details,IP\n');
       console.log(`Audit log rotated: ${rows.length} entries saved to audit-log-${today}.csv`);
@@ -286,12 +288,24 @@ app.get('/embed/:slug', async (req, res) => {
     comps.forEach(c => { const s = c.current_status || c.status; if (order[s] > order[status]) status = s; });
     
     const style = req.query.style || 'compact';
-    const color = req.query.color || '#6366f1';
-    
+
+    // Escape user-controlled values interpolated into the reflected HTML so a
+    // crafted page name / slug / status cannot inject markup.
+    const esc = (v) => String(v || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+    const pageName = esc(page.name);
+    const pageSlug = esc(page.slug);
+    const safeStatus = esc(status);
+    const statusLabel = safeStatus.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase());
+
     const widgets = {
-      compact: `<div class="w"><div class="h"><span class="t">${page.name}</span></div><div class="b ${status}"><span class="d ${status}"></span>${status.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())}</div><a href="/status/${page.slug}">View full status &rarr;</a></div><div class="v">StatusFe v${pkg.version}</div>`,
-      detailed: `<div class="w detailed"><div class="h"><span class="t">${page.name}</span><span class="b ${status}">${status.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())}</span></div><div class="cl"><div class="c"><span class="d ${status}"></span> All Systems Operational</div></div><a href="/status/${page.slug}">View full status &rarr;</a></div><div class="v">StatusFe v${pkg.version}</div>`,
-      minimal: `<div class="w minimal"><span class="d ${status}"></span> ${status.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())}</div><div class="v">StatusFe v${pkg.version}</div>`
+      compact: `<div class="w"><div class="h"><span class="t">${pageName}</span></div><div class="b ${status}"><span class="d ${status}"></span>${statusLabel}</div><a href="/status/${pageSlug}">View full status &rarr;</a></div><div class="v">StatusFe v${pkg.version}</div>`,
+      detailed: `<div class="w detailed"><div class="h"><span class="t">${pageName}</span><span class="b ${status}">${statusLabel}</span></div><div class="cl"><div class="c"><span class="d ${status}"></span> All Systems Operational</div></div><a href="/status/${pageSlug}">View full status &rarr;</a></div><div class="v">StatusFe v${pkg.version}</div>`,
+      minimal: `<div class="w minimal"><span class="d ${status}"></span> ${statusLabel}</div><div class="v">StatusFe v${pkg.version}</div>`
     };
     
     const widget = widgets[style] || widgets.compact;

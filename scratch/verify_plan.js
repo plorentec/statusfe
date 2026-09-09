@@ -139,6 +139,12 @@ async function main() {
   const authed = await require(path.join(ROOT, 'src', 'db', 'models')).apiKeys.authenticate(created.key);
   check('authenticate: key incorrecta => null', wrongPrefix === null);
   check('authenticate: key correcta por prefijo => user', !!authed && authed.name === 'TestAuth', authed && authed.name);
+  // Security: the plaintext key must NOT be persisted (auth uses key_hash only).
+  const keyRow = await queryOneRaw('SELECT key, key_hash FROM api_keys WHERE id=$1', [created.id]);
+  check('plaintext key no persistido (columna key NULL)', keyRow.key === null);
+  check('key_hash presente para auth', !!keyRow.key_hash);
+  const authedAfter = await require(path.join(ROOT, 'src', 'db', 'models')).apiKeys.authenticate(created.key);
+  check('auth sigue funcionando sin plaintext at rest', !!authedAfter && authedAfter.id === created.id);
   // Segunda llamada inmediata: last_used_at NO debe reescribirse (throttle 60s)
   const before = await queryOneRaw('SELECT last_used_at FROM api_keys WHERE id=$1', [created.id]);
   await require(path.join(ROOT, 'src', 'db', 'models')).apiKeys.authenticate(created.key);

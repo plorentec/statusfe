@@ -22,21 +22,45 @@ function nowInTZ(tz) {
   return d.toLocaleString('sv-SE', { timeZone: tz || 'UTC' }).replace(/\//g, '-').slice(0, 19).replace('T', ' ');
 }
 
+function safeParsePermissions(raw) {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch(e) {
+    return [];
+  }
+}
+
 async function cascadeStatusChange(upstreamComponentId, newStatus) {
-  const dependents = await queryAll('SELECT * FROM component_dependencies WHERE depends_on=$1', [upstreamComponentId]);
-  if (dependents.length > 0) console.log('Cascading status', newStatus, 'from', upstreamComponentId, 'to', dependents.map(d => d.component_id).join(', '));
-  for (const dep of dependents) {
-    if (dep.cascade_status == 1) {
-      const depComp = await queryOne('SELECT * FROM components WHERE id=$1', [dep.component_id]);
-      if (depComp && depComp.status !== newStatus) {
-        console.log('  Cascade:', depComp.name, depComp.status, '->', newStatus);
-        await run('UPDATE components SET status=$1, updated_at=NOW() WHERE id=$2', [newStatus, dep.component_id]);
-        const dhId = uuidv4();
-        try {
-          await run('INSERT INTO status_history (id,component_id,page_id,old_status,new_status) VALUES ($1,$2,$3,$4,$5)', [dhId, dep.component_id, null, depComp.status, newStatus]);
-        } catch(e) {
-          if (!e.message.includes('FOREIGN KEY')) throw e;
+  // BFS over the dependency graph so a change to an upstream component
+  // propagates transitively (A→B→C) instead of stopping after direct
+  // dependents. The component_dependencies table already allows many
+  // components to depend on one shared hub. A visited set guards against
+  // accidental cycles (which the route-level check also prevents).
+  const queue = [upstreamComponentId];
+  const visited = new Set();
+  while (queue.length > 0) {
+    const currentId = queue.shift();
+    if (visited.has(currentId)) continue;
+    visited.add(currentId);
+
+    const dependents = await queryAll('SELECT * FROM component_dependencies WHERE depends_on=$1', [currentId]);
+    if (dependents.length > 0) console.log('Cascading status', newStatus, 'from', currentId, 'to', dependents.map(d => d.component_id).join(', '));
+    for (const dep of dependents) {
+      if (dep.cascade_status == 1) {
+        const depComp = await queryOne('SELECT * FROM components WHERE id=$1', [dep.component_id]);
+        if (depComp && depComp.status !== newStatus) {
+          console.log('  Cascade:', depComp.name, depComp.status, '->', newStatus);
+          await run('UPDATE components SET status=$1, updated_at=NOW() WHERE id=$2', [newStatus, dep.component_id]);
+          const dhId = uuidv4();
+          try {
+            await run('INSERT INTO status_history (id,component_id,page_id,old_status,new_status) VALUES ($1,$2,$3,$4,$5)', [dhId, dep.component_id, null, depComp.status, newStatus]);
+          } catch(e) {
+            if (!e.message.includes('FOREIGN KEY')) throw e;
+          }
         }
+        queue.push(dep.component_id);
       }
     }
   }
@@ -611,21 +635,25 @@ module.exports.apiKeys = {
     if (pageId) { q += ' AND page_id=$' + (p.length + 1); p.push(pageId); }
     q += ' ORDER BY created_at DESC';
     const rows = await queryAll(q, p);
-    return rows.map(r => ({...r, permissions: r.permissions ? JSON.parse(r.permissions) : []}));
+    return rows.map(r => ({...r, permissions: safeParsePermissions(r.permissions)}));
   },
 
   async getFull(id) {
-    const r = await queryOne('SELECT id,key,name,permissions,page_id,is_active,last_used_at,created_at,expires_at FROM api_keys WHERE id=$1', [id]);
-    return r ? {...r, permissions: r.permissions ? JSON.parse(r.permissions) : []} : null;
+    // Never expose the plaintext key. Auth uses key_hash only; the key is shown
+    // once at creation via the returned value, never stored readable.
+    const r = await queryOne('SELECT id,key_prefix,name,permissions,page_id,is_active,last_used_at,created_at,expires_at FROM api_keys WHERE id=$1', [id]);
+    return r ? {...r, permissions: safeParsePermissions(r.permissions)} : null;
   },
 
   async create({ name, permissions, page_id, rate_limit, expires_at }) {
     const id = uuidv4();
     const key = uuidv4() + '-' + uuidv4();
     const hash = require('bcryptjs').hashSync(key, 10);
+    // key column is NOT persisted (security: no plaintext at rest). The plaintext
+    // `key` is returned once so the caller can surface it at creation time.
     await run(
       'INSERT INTO api_keys (id,key_hash,key,key_prefix,name,permissions,page_id,rate_limit,is_active,expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
-      [id, hash, key, key.substring(0,8), name, JSON.stringify(permissions||['read']), page_id||null, rate_limit||100, 1, expires_at||null]
+      [id, hash, null, key.substring(0,8), name, JSON.stringify(permissions||['read']), page_id||null, rate_limit||100, 1, expires_at||null]
     );
     return { id, key, key_prefix: key.substring(0,8), name, permissions: permissions||['read'], page_id, rate_limit: rate_limit||100, is_active: true, created_at: new Date().toISOString(), expires_at };
   },
@@ -651,7 +679,9 @@ module.exports.apiKeys = {
         const stale = !r.last_used_at || (Date.now() - new Date(r.last_used_at).getTime() > 60 * 1000);
         if (stale) run('UPDATE api_keys SET last_used_at=NOW() WHERE id=$1', [r.id]).catch(() => {});
         const page = await queryOne('SELECT slug FROM pages WHERE id=$1', [r.page_id]);
-        return { id: r.id, name: r.name, permissions: JSON.parse(r.permissions), page_id: r.page_id, page_slug: page?.slug, rate_limit: r.rate_limit };
+        let permissions = ['read'];
+        try { permissions = JSON.parse(r.permissions); } catch(e) { /* malformed → default */ }
+        return { id: r.id, name: r.name, permissions, page_id: r.page_id, page_slug: page?.slug, rate_limit: r.rate_limit };
       }
     }
     return null;
@@ -1041,6 +1071,23 @@ module.exports.dependencies = {
   },
 
   async getById(id) { return await queryOne('SELECT * FROM component_dependencies WHERE id=$1', [id]); },
+
+  // Detect whether adding `dependsOn` as a dependency of `componentId` would
+  // create a cycle. Walks the "depends_on" graph from dependsOn upward; if it
+  // reaches componentId the graph would close a loop.
+  async wouldCreateCycle(componentId, dependsOn) {
+    const stack = [dependsOn];
+    const seen = new Set();
+    while (stack.length > 0) {
+      const cur = stack.pop();
+      if (cur === componentId) return true;
+      if (seen.has(cur)) continue;
+      seen.add(cur);
+      const deps = await queryAll('SELECT depends_on FROM component_dependencies WHERE component_id=$1', [cur]);
+      for (const d of deps) stack.push(d.depends_on);
+    }
+    return false;
+  },
 
   async delete(id) { await run('DELETE FROM component_dependencies WHERE id=$1', [id]); return true; },
 

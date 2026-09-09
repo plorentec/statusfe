@@ -22,7 +22,7 @@
 <form action="/admin/dependencies" method="post">
 <div class="form-row">
 <div class="form-group">
-<label for="component_id">Component</label>
+<label for="component_id">Component (depends on the hub)</label>
 <select id="component_id" name="component_id" required>
 <option value="">Select component...</option>
 <% components.forEach(c => { %>
@@ -31,7 +31,7 @@
 </select>
 </div>
 <div class="form-group">
-<label for="depends_on">Depends On</label>
+<label for="depends_on">Depends On (shared hub)</label>
 <select id="depends_on" name="depends_on" required>
 <option value="">Select component...</option>
 <% components.forEach(c => { %>
@@ -43,29 +43,33 @@
 <div class="form-group checkbox-group">
 <label>
 <input type="checkbox" id="cascade_status" name="cascade_status" checked>
-Cascade status (if dependency is down, mark this component as affected)
+Cascade status (if the hub is down, mark this component as affected)
 </label>
 </div>
 <div class="form-actions">
 <button type="submit" class="btn btn-primary">Add Dependency</button>
 </div>
 </form>
+<p class="text-muted" style="margin-top:8px;">Many components can depend on a single shared hub.<br>Example: API, Database and Cache all depend on <em>Base de datos</em>.</p>
 </div>
 
-<% if (allDeps.length > 0) { %>
+<% if (hubGroups && hubGroups.length > 0) { %>
+<% hubGroups.forEach(group => { %>
 <div class="card" style="margin-top:20px;">
-<h3 style="font-size:16px;font-weight:600;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border);">Existing Dependencies</h3>
+<h3 style="font-size:16px;font-weight:600;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border);">
+<i class="dot dot-operational" style="display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;"></i>
+<strong><%= group.name %></strong> <span class="text-muted" style="font-size:13px;">— <%= group.dependents.length %> dependent<%= group.dependents.length !== 1 ? 's' : '' %></span>
+</h3>
 <div class="table-container">
 <table class="admin-table">
 <thead>
-<tr><th>Component</th><th>Depends On</th><th>Cascade</th><th>Actions</th></tr>
+<tr><th>Dependent Component</th><th>Cascade</th><th>Actions</th></tr>
 </thead>
 <tbody>
-<% allDeps.forEach(d => { %>
+<% group.dependents.forEach(d => { %>
 <tr>
-<td><strong><%= d.componentName %></strong></td>
-<td><%= d.dependsOnName %></td>
-<td><span class="<%= d.cascade_status ? 'yes' : 'no' %>"><%= d.cascade_status ? 'Yes' : 'No' %></span></td>
+<td><strong><%= d.name %></strong></td>
+<td><span class="<%= d.cascade ? 'yes' : 'no' %>"><%= d.cascade ? 'Yes' : 'No' %></span></td>
 <td class="actions">
 <form action="/admin/dependencies/<%= d.id %>?_method=DELETE" method="post" class="delete-form">
 <button type="submit" class="btn btn-sm btn-danger">Remove</button>
@@ -77,6 +81,7 @@ Cascade status (if dependency is down, mark this component as affected)
 </table>
 </div>
 </div>
+<% }) %>
 <% } else { %>
 <div class="card" style="margin-top:20px;"><p class="text-muted">No dependencies configured.</p></div>
 <% } %>

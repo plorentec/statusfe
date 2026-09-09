@@ -80,17 +80,32 @@ router.get('/analytics', async (req, res) => {
     }
   } catch(e) {}
 
-  // Build page->components mapping
+  // Build page->components mapping (status_history for the page's components,
+  // NOT keyed off the page id — the old query used p.id as component_id and
+  // always returned an empty map).
   const pageComponents = {};
   for (const p of pagesList) {
-    const statusHistoryRows = await queryAll(`
-      SELECT new_status, created_at FROM status_history
-      WHERE component_id=$1 AND created_at >= NOW() - ($2 || ' days')::interval
-      ORDER BY created_at DESC LIMIT 30
-    `, [p.id, '30']);
+    const pageCompIds = (await queryAll(`
+      SELECT component_id FROM page_components WHERE page_id=$1
+    `, [p.id])).map(r => r.component_id);
+    let historyRows = [];
+    if (pageCompIds.length > 0) {
+      const dayParam = '$' + (pageCompIds.length + 1);
+      historyRows = await queryAll(`
+        SELECT component_id, new_status, created_at FROM status_history
+        WHERE component_id IN (${pageCompIds.map((_, i) => '$' + (i + 1)).join(',')})
+        AND created_at >= NOW() - (${dayParam} || ' days')::interval
+        ORDER BY created_at DESC LIMIT 30
+      `, [...pageCompIds, '30']);
+    }
+    const historyByComp = {};
+    historyRows.forEach(h => {
+      if (!historyByComp[h.component_id]) historyByComp[h.component_id] = [];
+      historyByComp[h.component_id].push(h);
+    });
     pageComponents[p.id] = allComponents.map(c => ({
       ...c,
-      status_history: statusHistoryRows.filter(sh => sh.component_id === c.id)
+      status_history: historyByComp[c.id] || []
     }));
   }
 
@@ -267,12 +282,24 @@ router.get('/dependencies', async (req, res) => {
     JOIN components c2 ON cd.depends_on = c2.id
     ORDER BY c1.name
   `);
-  
+
+  // Group dependents by the shared hub they depend on, making the many-to-one
+  // relationship explicit: each hub lists every component that relies on it.
+  const byHub = new Map();
+  for (const d of allDeps) {
+    if (!byHub.has(d.depends_on)) {
+      byHub.set(d.depends_on, { id: d.depends_on, name: d.dependsOnName, dependents: [] });
+    }
+    byHub.get(d.depends_on).dependents.push({ id: d.id, name: d.componentName, cascade: d.cascade_status });
+  }
+  const hubGroups = [...byHub.values()].sort((a, b) => a.name.localeCompare(b.name));
+
   res.render('admin/dependencies', {
     title: 'Dependencies',
     user: req.user,
     components: allComponents,
-    allDeps
+    allDeps,
+    hubGroups
   });
 });
 
@@ -284,7 +311,11 @@ router.post('/dependencies', async (req, res) => {
   if (component_id === depends_on) {
     return res.redirect('/admin/dependencies?msg=self_dep&type=error');
   }
-  // Check for circular deps
+  // Reject circular dependencies (a component can't be an ancestor of itself).
+  if (await dependencies.wouldCreateCycle(component_id, depends_on)) {
+    return res.redirect('/admin/dependencies?msg=cycle&type=error');
+  }
+  // Check for existing pair
   const existing = await queryOne('SELECT id FROM component_dependencies WHERE component_id=$1 AND depends_on=$2', [component_id, depends_on]);
   if (existing) {
     return res.redirect('/admin/dependencies?msg=exists&type=error');

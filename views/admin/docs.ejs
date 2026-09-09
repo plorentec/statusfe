@@ -1,15 +1,17 @@
 <!-- API Key Selector (admin only) -->
-<% if (user.role === 'admin' && keys && keys.length > 0) { %>
+<% if (user.role === 'admin') { %>
 <div class="doc-key-selector">
-<label>API Key (selecciona una para los ejemplos):</label>
+<label>API Key:</label>
+<% if (keys && keys.length > 0) { %>
 <select id="apiKeySelect" onchange="onKeyChange()">
-<option value="__custom__">-- Custom key --</option>
+<option value="__custom__">-- Paste your key below --</option>
 <% keys.forEach(function(k) { %>
-<option data-key="<%= k.key %>"><%= k.name %> (<%= k.key_prefix %>...)</option>
+<option value="__custom__"><%= k.name %> (<%= k.key_prefix %>...) — paste below</option>
 <% }); %>
 </select>
-<input type="text" id="customApiKey" placeholder="Pega tu API key aqu\u00ed..." style="display:none;" oninput="onCustomKeyChange()">
-<div class="doc-key-hint">El curl copiado incluir\u00e1 esta key autom\u00e1ticamente.</div>
+<% } %>
+<input type="text" id="customApiKey" placeholder="Pega tu API key aqu\u00ed..." oninput="onCustomKeyChange()">
+<div class="doc-key-hint">Por seguridad la key se muestra s\u00f3lo al crearla. Pega la tuya para completar los curls autom\u00e1ticamente.</div>
 </div>
 <% } %>
 
@@ -298,28 +300,14 @@ function showTab(tabName, btn) {
 }
 
 function onKeyChange() {
-  var sel = document.getElementById('apiKeySelect');
   var customInput = document.getElementById('customApiKey');
-  if (sel.value === '__custom__') {
-    customInput.style.display = 'block';
-    customInput.focus();
-  } else {
-    customInput.style.display = 'none';
-    currentKey = sel.options[sel.selectedIndex].getAttribute('data-key') || '';
-    refreshDisplay();
-  }
+  // Keys are never stored readable; always rely on the pasted value.
+  if (customInput) customInput.focus();
 }
 
 function initApiKey() {
-  var sel = document.getElementById('apiKeySelect');
   var customInput = document.getElementById('customApiKey');
-  <% if (keys && keys.length > 0) { %>
-  sel.selectedIndex = 1;
-  currentKey = sel.options[sel.selectedIndex].getAttribute('data-key') || '';
-  refreshDisplay();
-  <% } else { %>
-  customInput.style.display = 'block';
-  <% } %>
+  if (customInput) customInput.focus(); // auto-complete uses the pasted key
 }
 
 function onCustomKeyChange() {

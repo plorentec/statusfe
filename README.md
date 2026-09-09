@@ -6,7 +6,7 @@
 ---
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-**v2.2.2** — multi-group components, searchable lists, group status badge, CSRF fix on statuses, 2FA, audit log, multi-page groups, PostgreSQL migration, security hardening
+**v2.2.3** — API keys hashed at rest (no plaintext), private-page leak fixed, transitive dependency cascade, CSV injection & embed XSS hardening, hub→dependents UI
 
 ---
 
@@ -97,7 +97,7 @@ Access / Accede en: `http://localhost:3000`
 | **Audit Log** | All admin actions logged with IP, user-agent, CSV export | Todas las acciones de admin registradas con IP, user-agent y exportación CSV |
 | **CSRF Protection** | Cookie-based tokens, auto-injected into all forms, timing-safe validation | Tokens basados en cookies, inyectados automáticamente en todos los formularios |
 | **Rate Limiting** | Global: 200/min, Auth: 10/15min, API: 60/min, Admin: 60/min | Global: 200/min, Auth: 10/15min, API: 60/min, Admin: 60/min |
-| **API Key Security** | bcrypt hashed (cost 10), expiration enforcement, scoped permissions (read, write, admin) | Hash bcrypt (coste 10), verificación de expiración, permisos por alcance |
+| **API Key Security** | bcrypt hashed (cost 10), expiration enforcement, scoped permissions (read, write, admin). Keys are stored hashed only — the plaintext is shown once at creation and never persisted or recovered | Hash bcrypt (coste 10), verificación de expiración, permisos por alcance (read, write, admin). Las claves se guardan solo con hash: el texto plano se muestra una vez al crearse y nunca se persiste ni se recupera |
 | **XSS Prevention** | Sanitized custom CSS/HTML, escaped textarea tags, logo URL escaping | CSS/HTML sanitizado, etiquetas textarea escapadas, URLs de logo sanitizadas |
 | **SSRF Protection** | Webhook URLs validated against localhost, private IPs, IP addresses | URLs de webhook validadas contra localhost, IPs privadas y direcciones IP |
 | **HTTPS** | Self-signed cert auto-generation via openssl (`HTTPS=true`) | Generación automática de certificado auto-firmado vía openssl |

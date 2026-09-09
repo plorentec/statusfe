@@ -23,6 +23,7 @@ router.get('/pages', async (req, res) => {
 router.get('/pages/:slug', async (req, res) => {
   const page = await pages.getBySlug(req.params.slug);
   if (!page) return res.status(404).json({ error: 'Not found' });
+  if (page.is_public !== 1) return res.status(404).json({ error: 'Not found' });
   const comps = await components.getForPage(page.id);
   const incs = await incidents.list({ page_id: page.id, visible: 1 });
   const incidentsByComponent = {};
@@ -481,6 +482,7 @@ router.post('/dependencies', requirePerm('write'), async (req, res) => {
   const { component_id, depends_on, cascade_status } = req.body;
   if (!component_id || !depends_on) return res.status(400).json({ error: 'component_id and depends_on required' });
   if (component_id === depends_on) return res.status(400).json({ error: 'Cannot depend on itself' });
+  if (await dependencies.wouldCreateCycle(component_id, depends_on)) return res.status(400).json({ error: 'Circular dependency detected' });
   const existing = await queryOne('SELECT id FROM component_dependencies WHERE component_id=$1 AND depends_on=$2', [component_id, depends_on]);
   if (existing) return res.status(409).json({ error: 'Dependency already exists' });
   const dep = await dependencies.create({ component_id, depends_on, cascade_status });

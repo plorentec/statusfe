@@ -111,16 +111,17 @@ async function notifyIncident(created, incidentName, status, description, pageTi
 
 async function sendWelcomeEmail(email, name, resetUrl) {
   const settings = require('../db/models').settings;
-  const from = await settings.get('smtp_from');
-  const nameFrom = (await settings.get('smtp_from_name')) || 'StatusFe';
+  const smtp = await settings.getSMTP();
+  const from = smtp.from;
+  const nameFrom = smtp.from_name || 'StatusFe';
 
   if (!from) {
     return { ok: false, error: 'No SMTP from address configured' };
   }
 
-  const transporter = await getTransporter();
+  const transporter = await getTransporter(smtp);
   if (!transporter) {
-    return { ok: false, error: 'SMTP not configured' };
+    return { ok: false, error: 'SMTP not configured (missing host or from address)' };
   }
 
   const html = `

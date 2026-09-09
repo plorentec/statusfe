@@ -677,18 +677,13 @@ router.get('/docs', async (req, res) => {
     return res.redirect('/admin?msg=admin&type=error');
   }
   const allKeys = await apiKeys.list();
-  // For docs page, include full keys for the dropdown selector
-  const keysWithFull = (await Promise.all(allKeys.map(async k => {
-    const full = await apiKeys.getFull(k.id);
-    return full ? {...k, key: full.key} : k;
-  })));
   console.log('RENDERING docs.ejs from:', res.app.get('views'));
   res.send(layout(res, 'docs', {
     title: 'API Docs',
     user: req.user,
     message: res.locals.message,
     messageType: res.locals.messageType,
-    keys: keysWithFull
+    keys: allKeys
   }));
 });
 
@@ -1036,9 +1031,11 @@ router.post('/2fa/setup', async (req, res) => {
 // GET /admin/audit/download — download audit log as CSV
 router.get('/audit/download', async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin required' });
+  const { csvCell } = require('../utils/csv');
   const logs = await auditLog.list(10000);
   const csv = 'Date,User,Action,Target,Details,IP\n' + logs.map(l =>
-    `"${l.created_at}","${(l.user_id||'').substring(0,8)}","${l.action}","${(l.target||'').replace(/"/g,'""')}","${(l.details||'').replace(/"/g,'""')}","${(l.ip||'').substring(0,15)}"`
+    [l.created_at, (l.user_id||'').substring(0,8), l.action, l.target||'', l.details||'', (l.ip||'').substring(0,15)]
+      .map(csvCell).join(',')
   ).join('\n');
   const today = new Date().toISOString().split('T')[0];
   res.setHeader('Content-Type', 'text/csv');
