@@ -77,6 +77,12 @@ if (!peHtml.includes('pageCompFilter') || !peHtml.includes('data-filter-row')) {
 const geHtml = render('groups/edit/members', path.join(__dirname, '../views/admin/groups.ejs'), { title: 'Edit Group', user: { name: 'u', role: 'admin' }, message: null, messageType: null, groups: [], pages: [], components: comps, groupMode: 'edit', group: { id: 'g1', name: 'Infra', position: 0 }, selectedPageIds: [], selectedMemberIds: ['c1'] });
 if (!geHtml.includes('name="member_component_ids" value="c1" checked')) { console.log('FAIL groups/edit: miembro no pre-marcado'); failures++; }
 if (!geHtml.includes('memberFilter')) { console.log('FAIL groups/edit: falta filtro de miembros'); failures++; }
+
+// changelog: la versión debe salir dinámica (no hardcodeada 2.0.0)
+const chLogHtml = render('changelog/version', path.join(__dirname, '../views/admin/changelog.ejs'), { title: 'Changelog', user: { name: 'u', role: 'admin' }, message: null, messageType: null, version: V });
+if (chLogHtml.includes('Version 2.0.0')) { console.log('FAIL changelog: versión hardcodeada 2.0.0'); failures++; }
+if (!chLogHtml.includes(V)) { console.log('FAIL changelog: versión dinámica no presente'); failures++; }
+if (!chLogHtml.includes('checkUpdate')) { console.log('FAIL changelog: falta check-update'); failures++; }
 // status-page: badge de grupo = PEOR estado de sus componentes
 const badgeComps = [
   { id: 'c1', name: 'R1', status: 'operational', current_status: 'operational', description: '', group_name: 'Red Casa', group_id: 'g1' },

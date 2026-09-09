@@ -1056,7 +1056,8 @@ router.get('/changelog', async (req, res) => {
     title: 'Changelog',
     user: req.user,
     message: res.locals.message,
-    messageType: res.locals.messageType
+    messageType: res.locals.messageType,
+    version: pkg.version
   }));
 });
 

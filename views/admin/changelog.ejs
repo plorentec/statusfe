@@ -1,44 +1,39 @@
 <div class="card">
-<h3>🚀 Version 2.0.0</h3>
-<p class="text-muted">Released <%= new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) %></p>
+<h3>🚀 <%= version %></h3>
+<p class="text-muted">Current installed version. The release notes below are synced with the repository changelog.</p>
 
-<h4 style="margin-top: 20px; color: var(--success);">✨ New Features</h4>
+<h4 style="margin-top: 20px; color: var(--success);">✨ What's new</h4>
 <ul>
-<li><strong>Two-Factor Authentication (TOTP)</strong> — Mandatory for admin and write roles. Setup via authenticator apps (Google Authenticator, Authy, etc.)</li>
-<li><strong>Audit Log</strong> — Complete log of all admin actions with CSV export. Daily rotation to dated files.</li>
-<li><strong>Component Groups</strong> — Group components for better organization, with global or page-specific groups.</li>
-<li><strong>Custom Layout Mode</strong> — Full HTML/CSS customization for status pages with placeholder system.</li>
-<li><strong>Self-signed SSL</strong> — Auto-generated HTTPS certificates (enable with HTTPS=true).</li>
-<li><strong>Auto Session Secret</strong> — Random session secret generated on first run, persisted in data/.</li>
-<li><strong>Auto Backup</strong> — SQLite database backed up every hour (7 rolling copies).</li>
-<li><strong>Rate Limiting</strong> — Login (10/15min), API (60/min), Admin (60/min).</li>
+<li><strong>PostgreSQL backend</strong> — Production-grade relational database via <code>pg</code> pool (replaces SQLite).</li>
+<li><strong>Multi-group components</strong> — A component can belong to SEVERAL groups; groups can span multiple pages, with an aggregated group status showing the worst member status.</li>
+<li><strong>Dependency hub model</strong> — Many components can depend on one shared hub; status changes cascade transitively and circular dependencies are rejected.</li>
+<li><strong>Component Groups &amp; Group Members</strong> — Group components for organization, manage members from the group form, and type-to-search long lists.</li>
+<li><strong>Two-Factor Authentication (TOTP)</strong> — Mandatory for admin and write roles; optional for users (Google Authenticator, Authy compatible).</li>
+<li><strong>Audit Log</strong> — Complete log of all admin actions with CSV export and daily rotation.</li>
+<li><strong>Custom Layout Mode</strong> — Full HTML/CSS customization for status pages with a placeholder system.</li>
+<li><strong>Custom Component/Incident Statuses</strong> — Define your own status labels and colors, and map incident statuses to component statuses.</li>
+<li><strong>Self-signed SSL &amp; Auto Session Secret</strong> — Optional HTTPS with auto-generated certs, and a random session secret generated on first run.</li>
 </ul>
 
-<h4 style="margin-top: 20px; color: var(--warning);">🔒 Security Improvements</h4>
+<h4 style="margin-top: 20px; color: var(--warning);">🔒 Security</h4>
 <ul>
-<li>CSRF protection on all admin forms</li>
-<li>XSS sanitization in custom CSS/HTML/logo rendering</li>
-<li>API key expiration enforcement</li>
-<li>Webhook URL validation (SSRF protection)</li>
-<li>Admin-only guards on user creation and component status changes</li>
-<li>CORS restricted to status pages and API only</li>
+<li>API keys stored as a bcrypt hash + prefix only — shown once at creation, never persisted readable.</li>
+<li>CSRF protection on all admin forms (timing-safe validation).</li>
+<li>XSS sanitization in custom CSS/HTML/logo rendering.</li>
+<li>API key expiration enforcement, scoped permissions (read/write/admin).</li>
+<li>Webhook URL validation (SSRF protection, DNS re-resolution on delivery).</li>
+<li>Admin-only guards on user creation, docs, and status changes.</li>
+<li>CORS restricted to status pages and API only.</li>
+<li>CSV export neutralizes spreadsheet formula injection.</li>
 </ul>
 
-<h4 style="margin-top: 20px; color: var(--info);">🐛 Bug Fixes</h4>
+<h4 style="margin-top: 20px; color: var(--info);">🐛 Recent fixes</h4>
 <ul>
-<li>Fixed session persistence (SQLite backend)</li>
-<li>Fixed uptime calculation logic</li>
-<li>Fixed duplicate route conflicts</li>
-<li>Fixed component status change notifications</li>
-<li>Fixed notification rendering (emoji icons)</li>
-</ul>
-
-<h4 style="margin-top: 20px;">⚙️ Technical</h4>
-<ul>
-<li>SQLite WAL mode + busy_timeout for better concurrency</li>
-<li>API key auth optimized with hash prefix indexing</li>
-<li>All admin views include CSRF tokens via auto-inject</li>
-<li>Daily analytics and audit log cleanup cron</li>
+<li>Private status pages no longer leak via the public API.</li>
+<li>Admin analytics page map keyed by the page's actual components.</li>
+<li>Welcome email now loads SMTP settings correctly.</li>
+<li>Malformed API key permissions no longer cause a 500.</li>
+<li>Embed widget escapes user-controlled values (reflected XSS).</li>
 </ul>
 
 <div class="card" style="margin-top: 20px; border: 1px solid var(--border);">
