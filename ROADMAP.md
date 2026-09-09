@@ -1,7 +1,14 @@
 # StatusFe — Roadmap / Backlog
 
 Ideas y mejoras pendientes para continuar en futuras sesiones. Ninguna está
-empezada; están ordenadas por valor/esfuerzo. Última revisión: v2.2.2 (2026-09-03).
+empezada; están ordenadas por valor/esfuerzo. Última revisión: v2.2.3 (2026-09-09).
+
+## Hecho hasta v2.2.3 (contexto)
+- ✅ v2.2.3: **API keys sin texto plano** — se guarda solo `key_hash` (bcrypt) + `key_prefix`; el texto plano se muestra una vez al crear y nunca se persiste. Migración boot que nulea claves previas. `/admin/docs` usa clave pegada (sin auto-inyectar la guardada).
+- ✅ v2.2.3: **dependencias muchos-a-uno (hub compartido)** — varios componentes dependen de un hub; la UI los agrupa bajo el hub; la cascada de estado es **transitiva** (`A→B→C`) y se rechazan **ciclos** al crear (admin + API).
+- ✅ v2.2.3: **quitar un grupo de una página ya no lo re-suma** — "global" pasó a ser explícito vía columna `is_global` (`1` en todas las páginas, `0` solo en sus `group_pages`). Desmarcar un grupo en el form de página no lo re-globaliza. Backfill en boot para los grupos sin páginas existentes.
+- ✅ v2.2.3: fixes de seguridad — fuga de páginas privadas en `GET /api/v1/pages/:slug`, CSV/formula injection en export de audit + rotación diaria, XSS reflejado en `/embed`, JSON malformado de `permissions` (500).
+- ✅ v2.2.3: `sendWelcomeEmail` arreglado (cargaba SMTP con `getTransporter()` vacío → throw). Admin analytics page→components keyed por componentes reales de la página. Changelog admin con versión dinámica (antes hardcodeaba `2.0.0`).
 
 ## Hecho hasta v2.2.2 (contexto)
 - ✅ v2.2.1: seguridad (docs solo admin, cookies/CSRF sin 500, 2FA rate-limit, SSRF webhooks, anti-enumeración, flash server-side, transporter SMTP por fingerprint).
@@ -48,7 +55,8 @@ empezada; están ordenadas por valor/esfuerzo. Última revisión: v2.2.2 (2026-0
 - Endpoint admin `GET /admin/pages/:id/export` + `POST /admin/pages/import`.
 
 ## Deuda técnica conocida
-- `api_keys` guarda la key en plano (columna `key`) — necesario para mostrarla en Docs, pero valora cifrarla o mostrarla solo una vez en la creación.
+- ~~`api_keys` guarda la key en plano~~ → **resuelto en v2.2.3**: solo `key_hash` + `key_prefix`; el texto plano se muestra una vez al crear. `/admin/docs` ya no necesita el plaintext (usa clave pegada).
 - `components.list()` ya matchea el filtro `?group=` por membresías (join table); el parámetro sigue siendo el NOMBRE del grupo — valorar aceptar también `group_id`.
 - El contenedor `statusfe-postgres` en producción está en crash-loop (puerto 5432 ocupado por el postgres nativo del host) — decidir: pararlo (`docker stop statusfe-postgres`) o quitarlo del compose.
 - Rate limit admin 60/min puede quedarse corto al guardar páginas con muchos componentes (cada checkbox es una query).
+- La cascada de dependencias ahora es transitiva (v2.2.3) pero recorre el grafo con queries por nodo (una SELECT por componente). Con un grafo grande podría ser N+1 — valorar resolverlo en una sola query/recorrido. <— *nuevo*

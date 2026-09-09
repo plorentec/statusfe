@@ -1,15 +1,16 @@
 # Scripts de verificación (sin framework de tests)
 
 El proyecto no tiene framework de tests. Estos scripts verifican la lógica del
-plan v2.2.2 contra una **PostgreSQL en memoria** (`pg-mem`, no es dependencia del
+plan v2.2.3 contra una **PostgreSQL en memoria** (`pg-mem`, no es dependencia del
 proyecto — se instala temporalmente):
 
 ```bash
 npm install --no-save pg-mem
 
 node scratch/verify_plan.js       # modelos: grupos, resolveGroup, getForPage, sanitización, seguridad v2.2.1
-node scratch/verify_multigroup.js # multi-grupo: setGroups/setMembers/resolveGroup, expansión en getForPage, backfill, getGroupIdsForPage
-node scratch/verify_render.js     # render de todas las plantillas tocadas (+ CSRF, badges de grupo, pre-marcado)
+node scratch/verify_multigroup.js # multi-grupo: setGroups/setMembers/resolveGroup, expansión en getForPage, backfill, getGroupIdsForPage, is_global, regression "quitar grupo de página"
+node scratch/verify_deps.js       # dependencias: hub muchos-a-uno, cascada transitiva, ciclos, CSV safety, admin analytics page→components
+node scratch/verify_render.js     # render de todas las plantillas tocadas (+ CSRF, badges de grupo, pre-marcado, changelog dinámico)
 node scratch/verify_smoke.js      # app completa arrancada + HTTP (health, status, embed, audit, cookies basura, 403 CSRF)
 node scratch/verify_e2e.js        # E2E: login → CSRF → componente con grupo nuevo → página → pública; estados; multi-grupo; miembros; API keys; 2FA
 ```
