@@ -7,11 +7,11 @@ proyecto — se instala temporalmente):
 ```bash
 npm install --no-save pg-mem
 
-node scratch/verify_plan.js       # modelos: grupos, resolveGroup, getForPage, sanitización, seguridad v2.2.1
-node scratch/verify_multigroup.js # multi-grupo: setGroups/setMembers/resolveGroup, expansión en getForPage, backfill, getGroupIdsForPage, is_global, regression "quitar grupo de página"
+node scratch/verify_plan.js       # modelos: grupos, resolveGroup, getForPage, sanitización, seguridad v2.2.1, regresiones v2.2.4
+node scratch/verify_multigroup.js # multi-grupo: setGroups/setMembers/resolveGroup, expansión en getForPage, backfill, getGroupIdsForPage, is_global, regression "quitar grupo de página", migrate idempotente
 node scratch/verify_deps.js       # dependencias: hub muchos-a-uno, cascada transitiva, ciclos, CSV safety, admin analytics page→components
 node scratch/verify_render.js     # render de todas las plantillas tocadas (+ CSRF, badges de grupo, pre-marcado, changelog dinámico)
-node scratch/verify_smoke.js      # app completa arrancada + HTTP (health, status, embed, audit, cookies basura, 403 CSRF)
+node scratch/verify_smoke.js      # app completa arrancada + HTTP (health, status, embed, audit, cookies basura, 403 CSRF, guards de crash v2.2.4, redirect loop 2FA, role=user)
 node scratch/verify_e2e.js        # E2E: login → CSRF → componente con grupo nuevo → página → pública; estados; multi-grupo; miembros; API keys; 2FA
 ```
 

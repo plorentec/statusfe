@@ -199,6 +199,15 @@ body.template-dark {
 .component-dot.identified { background: #f97316; }
 .component-dot.monitoring { background: #eab308; }
 .component-dot.resolved { background: var(--operational); }
+/* The markup emits `component-dot dot-<status>`; alias the dot-prefixed
+   classes so the default template actually shows colored dots. */
+.component-dot.dot-operational, .component-dot.dot-resolved { background: var(--operational); }
+.component-dot.dot-under_maintenance { background: #eab308; }
+.component-dot.dot-degraded_performance { background: #f59e0b; }
+.component-dot.dot-partial_outage { background: #f97316; }
+.component-dot.dot-major_outage, .component-dot.dot-investigating { background: #ef4444; }
+.component-dot.dot-identified { background: #f97316; }
+.component-dot.dot-monitoring { background: #eab308; }
 .component-name { font-size: 15px; font-weight: 600; color: var(--text); }
 .component-desc { font-size: 13px; color: var(--light); margin-top: 1px; }
 .component-badge {

@@ -51,6 +51,14 @@ const { csrfMiddleware, csrfProtection } = require('./middleware/csrf');
 const { globalLimiter, authLimiter, apiLimiter, rateLimit } = require('./middleware/rate-limit');
 const { generateSelfSignedCert } = require('./utils/ssl');
 
+// Express 4 does not forward rejected promises from async middleware/handlers
+// to the error handler. Without this, a single transient DB error or malformed
+// input would terminate the whole process (Node >=15 default) — unacceptable
+// for a status page. Log and keep serving; the request itself still fails.
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled promise rejection:', reason);
+});
+
 // Daily cleanup of old analytics data and audit log rotation
 setInterval(async () => {
   try {
@@ -210,6 +218,15 @@ app.set('view cache', false);
 const { sanitizeCss, sanitizeHtml } = require('./utils/sanitize');
 app.locals.sanitizeCss = sanitizeCss;
 app.locals.sanitizeHtml = sanitizeHtml;
+// Escape user text, then convert newlines to <br>. Applying .replace(/\n/,'<br>')
+// inside <%= %> escaped the <br> and showed it literally.
+app.locals.escapeHtml = (s) => String(s == null ? '' : s)
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
+app.locals.nl2br = (s) => app.locals.escapeHtml(s).replace(/\n/g, '<br>');
 app.locals.version = pkg.version;
 
 // Disable all caching

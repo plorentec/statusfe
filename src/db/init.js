@@ -483,10 +483,17 @@ async function migrate() {
   } catch(e) {
     // Column already exists or the wording differs — safe to proceed.
   }
-  await run(`
-    UPDATE component_groups SET is_global = 1
-    WHERE is_global = 0 AND id NOT IN (SELECT DISTINCT group_id FROM group_pages)
-  `);
+  // Run the legacy backfill exactly once. Running it on every boot would
+  // silently re-globalize any non-global group whose last page binding was
+  // removed (the UI intentionally keeps is_global=0 in that case).
+  const backfilled = await queryOne("SELECT value FROM settings WHERE key='migration_is_global_backfilled'");
+  if (!backfilled) {
+    await run(`
+      UPDATE component_groups SET is_global = 1
+      WHERE is_global = 0 AND id NOT IN (SELECT DISTINCT group_id FROM group_pages)
+    `);
+    await run("INSERT INTO settings (key,value) VALUES ('migration_is_global_backfilled','1') ON CONFLICT (key) DO NOTHING");
+  }
 }
 
 module.exports = { init, migrate, prepare, run, queryOne, queryAll };

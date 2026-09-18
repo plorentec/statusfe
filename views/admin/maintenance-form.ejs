@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><%= title %> - StatusFe Admin</title>
 <link rel="stylesheet" href="/css/admin.css">
-<script>document.body.classList.add('dark');</script>
+<script>document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('dark');});</script>
 <style>
 .notice-btn.active { background:#6366f1 !important; color:#fff !important; }
 </style>
@@ -64,14 +64,14 @@
 <label>Advance Notice (minutes before maintenance)</label>
 <input type="hidden" id="advance_notice_minutes" name="advance_notice_minutes" value="<%= window.advance_notice_minutes || 0 %>">
 <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">
-<button type="button" class="btn btn-sm notice-btn" data-value="0" <%= (!window.advance_notice_minutes || window.advance_notice_minutes === 0) ? 'class="btn btn-sm notice-btn active"' : '' %>>None</button>
-<button type="button" class="btn btn-sm notice-btn" data-value="10" <%= window.advance_notice_minutes === 10 ? 'class="btn btn-sm notice-btn active"' : '' %>>10 min</button>
-<button type="button" class="btn btn-sm notice-btn" data-value="30" <%= window.advance_notice_minutes === 30 ? 'class="btn btn-sm notice-btn active"' : '' %>>30 min</button>
-<button type="button" class="btn btn-sm notice-btn" data-value="60" <%= window.advance_notice_minutes === 60 ? 'class="btn btn-sm notice-btn active"' : '' %>>1 hour</button>
-<button type="button" class="btn btn-sm notice-btn" data-value="120" <%= window.advance_notice_minutes === 120 ? 'class="btn btn-sm notice-btn active"' : '' %>>2 hours</button>
-<button type="button" class="btn btn-sm notice-btn" data-value="240" <%= window.advance_notice_minutes === 240 ? 'class="btn btn-sm notice-btn active"' : '' %>>4 hours</button>
-<button type="button" class="btn btn-sm notice-btn" data-value="360" <%= window.advance_notice_minutes === 360 ? 'class="btn btn-sm notice-btn active"' : '' %>>6 hours</button>
-<button type="button" class="btn btn-sm notice-btn" data-value="480" <%= window.advance_notice_minutes === 480 ? 'class="btn btn-sm notice-btn active"' : '' %>>8 hours</button>
+<button type="button" class="btn btn-sm notice-btn<%= (!window.advance_notice_minutes || window.advance_notice_minutes === 0) ? ' active' : '' %>" data-value="0">None</button>
+<button type="button" class="btn btn-sm notice-btn<%= window.advance_notice_minutes === 10 ? ' active' : '' %>" data-value="10">10 min</button>
+<button type="button" class="btn btn-sm notice-btn<%= window.advance_notice_minutes === 30 ? ' active' : '' %>" data-value="30">30 min</button>
+<button type="button" class="btn btn-sm notice-btn<%= window.advance_notice_minutes === 60 ? ' active' : '' %>" data-value="60">1 hour</button>
+<button type="button" class="btn btn-sm notice-btn<%= window.advance_notice_minutes === 120 ? ' active' : '' %>" data-value="120">2 hours</button>
+<button type="button" class="btn btn-sm notice-btn<%= window.advance_notice_minutes === 240 ? ' active' : '' %>" data-value="240">4 hours</button>
+<button type="button" class="btn btn-sm notice-btn<%= window.advance_notice_minutes === 360 ? ' active' : '' %>" data-value="360">6 hours</button>
+<button type="button" class="btn btn-sm notice-btn<%= window.advance_notice_minutes === 480 ? ' active' : '' %>" data-value="480">8 hours</button>
 </div>
 </div>
 <div class="form-group">

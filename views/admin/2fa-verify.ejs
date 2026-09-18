@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>2FA Verification - StatusFe</title>
 <link rel="stylesheet" href="/css/admin.css">
-<script>document.body.classList.add('dark');</script>
+<script>document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('dark');});</script>
 </head>
 <body>
 <div class="auth-container">
@@ -26,7 +26,7 @@
 </div>
 <button type="submit" class="btn btn-primary btn-full">Verify</button>
 </form>
-<p class="auth-footer"><a href="/auth/logout">Logout</a></p>
+<form action="/auth/logout" method="post" class="auth-footer"><button type="submit" class="link-button">Logout</button></form>
 </div>
 </div>
 </body>

@@ -32,7 +32,7 @@ async function main() {
     )
   `);
 
-  const { components, componentGroups, pages } = require(path.join(ROOT, 'src', 'db', 'models'));
+  const { components, componentGroups, pages, incidents, statusMappings, maintenance } = require(path.join(ROOT, 'src', 'db', 'models'));
   let failures = 0;
   const check = (name, cond, extra) => {
     console.log((cond ? 'PASS' : 'FAIL') + ' — ' + name + (extra ? ' | ' + extra : ''));
@@ -152,6 +152,54 @@ async function main() {
   await require(path.join(ROOT, 'src', 'db', 'models')).apiKeys.authenticate(created.key);
   const after = await queryOneRaw('SELECT last_used_at FROM api_keys WHERE id=$1', [created.id]);
   check('authenticate: last_used_at con throttle (60s)', String(before.last_used_at) === String(after.last_used_at), before.last_used_at + ' vs ' + after.last_used_at);
+
+  // ===== 7. Regresiones v2.2.4 =====
+  // 7a. statusMappings.update: must update the intended row (placeholder bug).
+  await statusMappings.update('monitoring', 'degraded_performance', { component_status: 'major_outage' });
+  const movedTo = await statusMappings.get('monitoring', 'major_outage');
+  const movedFrom = await statusMappings.get('monitoring', 'degraded_performance');
+  check('statusMappings.update mueve la fila correcta', !!movedTo && movedFrom === null, JSON.stringify(movedTo));
+
+  // 7b. override_status is cleared by a normal status change (no permanent pin).
+  const cPin = await components.create({ name: 'Pin' });
+  await components.assignToPage(pageA.id, cPin.id, 1);
+  await components.updateStatus(cPin.id, 'major_outage', null, true);
+  const pinned = await components.get(cPin.id);
+  check('updateStatus(override) fija override_status', pinned.override_status === 'major_outage', pinned.override_status);
+  await components.updateStatus(cPin.id, 'operational');
+  const unpinned = await components.get(cPin.id);
+  check('updateStatus normal limpia override_status', unpinned.override_status === null && unpinned.status === 'operational', JSON.stringify({ status: unpinned.status, override: unpinned.override_status }));
+
+  // 7c. incidents.create with an unknown status must not corrupt the component.
+  check('incidents.VALID_STATUSES expuesto', Array.isArray(incidents.VALID_STATUSES) && incidents.VALID_STATUSES.includes('resolved'));
+  const badInc = await incidents.create({ component_id: cApi.id, name: 'Bad', message: 'm', status: 'banana', visible: 1 });
+  const cApiAfter = await components.get(cApi.id);
+  check('incident status inválido => investigating', badInc && badInc.status === 'investigating', badInc && badInc.status);
+  check('incident status inválido NO contamina el componente', cApiAfter.status !== 'banana', cApiAfter.status);
+
+  // 7d. maintenance.accepta notice_page_ids como string con comas.
+  const win = await maintenance.create({ page_id: pageA.id, title: 'Win', description: 'd', starts_at: '2026-09-01 10:00:00', ends_at: '2026-09-01 12:00:00', notice_page_ids: pageA.id + ',' + pageB.id });
+  check('maintenance notice_page_ids string => 2 páginas', win.notice_pages.length === 2, JSON.stringify(win.notice_pages));
+
+  // 7e. Borrar un grupo limpia group_id Y group_name de sus componentes.
+  const gDel = await componentGroups.create({ name: 'ToDelete' });
+  const cDel = await components.create({ name: 'DelComp', group_id: gDel.id });
+  await componentGroups.delete(gDel.id);
+  const cDelAfter = await components.get(cDel.id);
+  check('delete grupo limpia group_id/group_name', cDelAfter.group_id === null && cDelAfter.group_name === null, JSON.stringify({ g: cDelAfter.group_id, n: cDelAfter.group_name }));
+
+  // 7f. PUT con el mismo group_id NO borra las demás membresías.
+  const gKeep1 = await componentGroups.create({ name: 'Keep1' });
+  const gKeep2 = await componentGroups.create({ name: 'Keep2' });
+  const cKeep = await components.create({ name: 'KeepComp', group_ids: [gKeep1.id, gKeep2.id] });
+  await components.update(cKeep.id, { group_id: gKeep1.id, group_name: 'Keep1' });
+  const keepMem = await require(path.join(ROOT, 'src', 'db', 'database')).queryAll('SELECT group_id FROM component_group_members WHERE component_id=$1', [cKeep.id]);
+  check('update con mismo group_id conserva membresías', keepMem.length === 2, keepMem.length + ' membresías');
+
+  // 7g. is_public como string "0" => privada (no truthy string).
+  const pPriv = await pages.create({ name: 'Priv', slug: 'page-priv', is_public: '0' });
+  const pPub = await pages.create({ name: 'Pub', slug: 'page-pub', is_public: '1' });
+  check('is_public "0" => 0 y "1" => 1', pPriv.is_public === 0 && pPub.is_public === 1, pPriv.is_public + '/' + pPub.is_public);
 
   console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TESTS FAILED`);
   process.exit(failures === 0 ? 0 : 1);

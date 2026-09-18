@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const { pages, components, componentGroups, apiKeys, incidents, maintenance, notifications, settings, auditLog } = require('../db/models');
 const pkg = require('../../package.json');
-const { requireAuth } = require('../middleware/session');
+const { requireAuth, requireAdmin, destroyUserSessions } = require('../middleware/session');
 const { layout } = require('../middleware/layout');
 
 router.use(requireAuth);
@@ -118,7 +118,7 @@ router.get('/pages/new', async (req, res) => {
 });
 
 router.post('/pages', async (req, res) => {
-  const { name, slug, description, status, template, is_public, refresh_interval, custom_layout, custom_layout_css, custom_layout_html, external_id } = req.body;
+  const { name, slug, description, status, template, is_public, refresh_interval, custom_layout, custom_layout_css, custom_layout_html, custom_css, custom_html, external_id } = req.body;
   if (!name || !slug) {
     return res.redirect('/admin/pages/new?msg=error&type=error');
   }
@@ -129,7 +129,7 @@ router.post('/pages', async (req, res) => {
     return res.redirect('/admin/pages/new?msg=error&type=error');
   }
   const ri = Math.max(15, parseInt(refresh_interval) || 15);
-  const page = await pages.create({ name, slug, description, status, template, is_public, refresh_interval: ri, custom_layout: req.body.custom_layout ? 1 : 0, custom_layout_css, custom_layout_html, external_id });
+  const page = await pages.create({ name, slug, description, status, template, is_public: req.body.is_public ? 1 : 0, refresh_interval: ri, custom_layout: req.body.custom_layout ? 1 : 0, custom_layout_css, custom_layout_html, custom_css, custom_html, external_id });
   const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
   for (const a of admins) {
     await notifications.create({
@@ -197,7 +197,7 @@ router.put('/pages/:id', async (req, res) => {
   if (!page) {
     return res.redirect('/admin/pages?msg=error&type=error');
   }
-  const { name, slug, description, status, template, is_public, refresh_interval, custom_layout, custom_layout_css, custom_layout_html, external_id } = req.body;
+  const { name, slug, description, status, template, is_public, refresh_interval, custom_layout, custom_layout_css, custom_layout_html, custom_css, custom_html, external_id } = req.body;
   if (!name || !slug) {
     return res.redirect('/admin/pages/' + req.params.id + '/edit?msg=error&type=error');
   }
@@ -209,7 +209,7 @@ router.put('/pages/:id', async (req, res) => {
     return res.redirect('/admin/pages/' + req.params.id + '/edit?msg=error&type=error');
   }
   const ri = Math.max(15, parseInt(refresh_interval) || 15);
-  await pages.update(req.params.id, { name, slug, description, status, template, is_public, refresh_interval: ri, custom_layout: req.body.custom_layout ? 1 : 0, custom_layout_css, custom_layout_html, external_id });
+  await pages.update(req.params.id, { name, slug, description, status, template, is_public: req.body.is_public ? 1 : 0, refresh_interval: ri, custom_layout: req.body.custom_layout ? 1 : 0, custom_layout_css, custom_layout_html, custom_css, custom_html, external_id });
   const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
   for (const a of admins) {
     await notifications.create({
@@ -500,7 +500,7 @@ router.get('/groups/new', async (req, res) => {
 });
 
 router.post('/groups', async (req, res) => {
-  const { name, page_ids, position, is_global } = req.body;
+  const { name, page_ids, position } = req.body;
   if (!name) {
     return res.redirect('/admin/groups/new?msg=error&type=error');
   }
@@ -511,11 +511,11 @@ router.post('/groups', async (req, res) => {
   } else if (typeof page_ids === 'string' && page_ids) {
     selected = page_ids.split(',').map(s => s.trim()).filter(Boolean);
   }
-  const group = await componentGroups.create({ name, page_ids: selected, position: parseInt(position) || 0, is_global });
-  // Optional member picker: only sync when the field was sent (undefined = untouched)
-  if (req.body.member_component_ids !== undefined) {
-    await componentGroups.setMembers(group.id, req.body.member_component_ids);
-  }
+  // Checkboxes are absent when unchecked, which for the form means "not global".
+  const isGlobal = (req.body.is_global === 'on' || req.body.is_global === '1' || req.body.is_global === 1 || req.body.is_global === true) ? 1 : 0;
+  const group = await componentGroups.create({ name, page_ids: selected, position: parseInt(position) || 0, is_global: isGlobal });
+  // The picker always renders, so an absent field means "no members selected".
+  await componentGroups.setMembers(group.id, req.body.member_component_ids || []);
   res.redirect('/admin/groups?msg=success&type=success');
 });
 
@@ -546,7 +546,7 @@ router.put('/groups/:id', async (req, res) => {
   if (!group) {
     return res.redirect('/admin/groups?msg=error&type=error');
   }
-  const { name, page_ids, position, is_global } = req.body;
+  const { name, page_ids, position } = req.body;
   if (!name) {
     return res.redirect('/admin/groups/' + req.params.id + '/edit?msg=error&type=error');
   }
@@ -556,10 +556,9 @@ router.put('/groups/:id', async (req, res) => {
   } else if (typeof page_ids === 'string' && page_ids) {
     selected = page_ids.split(',').map(s => s.trim()).filter(Boolean);
   }
-  await componentGroups.update(req.params.id, { name, page_ids: selected, position: parseInt(position) || 0, is_global });
-  if (req.body.member_component_ids !== undefined) {
-    await componentGroups.setMembers(req.params.id, req.body.member_component_ids);
-  }
+  const isGlobal = (req.body.is_global === 'on' || req.body.is_global === '1' || req.body.is_global === 1 || req.body.is_global === true) ? 1 : 0;
+  await componentGroups.update(req.params.id, { name, page_ids: selected, position: parseInt(position) || 0, is_global: isGlobal });
+  await componentGroups.setMembers(req.params.id, req.body.member_component_ids || []);
   res.redirect('/admin/groups?msg=success&type=success');
 });
 
@@ -632,7 +631,7 @@ router.get('/api-keys', async (req, res) => {
   });
 });
 
-router.post('/api-keys', async (req, res) => {
+router.post('/api-keys', requireAdmin, async (req, res) => {
   const { name, permissions } = req.body;
   if (!name) {
     return res.redirect('/admin/api-keys?msg=error&type=error');
@@ -653,17 +652,17 @@ router.post('/api-keys', async (req, res) => {
   res.redirect('/admin/api-keys');
 });
 
-router.delete('/api-keys/:id', async (req, res) => {
+router.delete('/api-keys/:id', requireAdmin, async (req, res) => {
   await apiKeys.revoke(req.params.id);
   res.redirect('/admin/api-keys?msg=revoked&type=success');
 });
 
-router.post('/api-keys/:id/reactivate', async (req, res) => {
+router.post('/api-keys/:id/reactivate', requireAdmin, async (req, res) => {
   await apiKeys.activate(req.params.id);
   res.redirect('/admin/api-keys?msg=reactivated&type=success');
 });
 
-router.delete('/api-keys/:id/permanent', async (req, res) => {
+router.delete('/api-keys/:id/permanent', requireAdmin, async (req, res) => {
   await apiKeys.permanentDelete(req.params.id);
   res.redirect('/admin/api-keys?msg=key_deleted&type=success');
 });
@@ -823,6 +822,9 @@ router.post('/users', async (req, res) => {
   if (!email || !password || !name) {
     return res.redirect('/admin/users?msg=error&type=error');
   }
+  if (role !== undefined && !['admin', 'user'].includes(role)) {
+    return res.redirect('/admin/users?msg=error&type=error');
+  }
   if (password.length < 6) {
     return res.redirect('/admin/users?msg=error&type=error');
   }
@@ -850,7 +852,7 @@ router.post('/users', async (req, res) => {
   res.redirect('/admin/users?msg=created&type=success');
 });
 
-router.delete('/users/:id', async (req, res) => {
+router.delete('/users/:id', requireAdmin, async (req, res) => {
   const adminCount = (await queryOne("SELECT COUNT(*) as count FROM users WHERE role='admin'", [])).count;
   if (req.user.id === req.params.id && adminCount <= 1) {
     return res.redirect('/admin/users?msg=last_admin&type=error');
@@ -859,6 +861,7 @@ router.delete('/users/:id', async (req, res) => {
   if (!user) {
     return res.redirect('/admin/users?msg=error&type=error');
   }
+  await destroyUserSessions(req.params.id);
   await run('DELETE FROM users WHERE id=$1', [req.params.id]);
   res.redirect('/admin/users?msg=deleted&type=success');
 });
@@ -876,13 +879,17 @@ router.get('/email-settings', async (req, res) => {
 });
 
 // Email settings save (POST to /admin/email-settings)
-router.post('/email-settings', async (req, res) => {
-  const { smtp_host, smtp_port, smtp_user, smtp_pass, smtp_secure, smtp_from, smtp_from_name } = req.body;
+router.post('/email-settings', requireAdmin, async (req, res) => {
+  const { smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from, smtp_from_name } = req.body;
+  // Checkboxes only submit a value when checked. Store the canonical
+  // 'true'/'' so email.js and the settings form read the state back reliably
+  // (previously '1' was stored and compared against 'true' — TLS never enabled).
+  const smtp_secure = req.body.smtp_secure ? 'true' : '';
   await settings.setSMTP({ smtp_host, smtp_port, smtp_user, smtp_pass, smtp_secure, smtp_from, smtp_from_name });
   res.redirect('/admin/email-settings?msg=success&type=success');
 });
 
-router.post('/email-settings/test', async (req, res) => {
+router.post('/email-settings/test', requireAdmin, async (req, res) => {
   const { to } = req.body;
   if (!to) return res.json({ ok: false, error: 'No recipient specified' });
   const email = require('../utils/email');

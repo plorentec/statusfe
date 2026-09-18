@@ -3,7 +3,20 @@ const router = express.Router();
 const { queryOne, queryAll, run } = require('../db/database');
 const { pages, components, componentGroups, incidents, apiKeys, webhooks, maintenance, notifications, analytics, dependencies, settings } = require('../db/models');
 const { auth, requirePerm } = require('../middleware/auth');
+const { destroyUserSessions } = require('../middleware/session');
 const { deliver: triggerWebhook } = require('../utils/webhooks');
+
+// Optional auth for the public page endpoints: a valid API key unlocks private
+// pages and the full (unfiltered) listing, while anonymous callers keep the
+// public-only view. Previously the authenticated variants were registered
+// after the public handlers and were therefore unreachable (route shadowing).
+async function optionalAuth(req) {
+  const authHeader = req.headers.authorization;
+  const apiKey = req.query.api_key || req.headers['x-api-key'];
+  const key = (authHeader && authHeader.startsWith('Bearer ')) ? authHeader.slice(7) : apiKey;
+  if (!key) return null;
+  try { return await apiKeys.authenticate(key); } catch { return null; }
+}
 
 // ===== PUBLIC (no auth) =====
 
@@ -12,18 +25,34 @@ router.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Public: list pages (only public ones)
-router.get('/pages', async (req, res) => {
+// Authenticated: full list of pages. Registered before /pages/:slug so the
+// literal path wins; `auth` still 401s anonymous callers.
+router.get('/pages/admin', auth, async (req, res) => {
   if (req.query.external_id) { const p = await pages.getByExternalId(req.query.external_id); return res.json({ page: p || null }); }
-  const list = await pages.list({ is_public: 1 });
+  const list = await pages.list();
   res.json({ pages: list, total: list.length });
 });
 
-// Public: get page by slug with components and incidents
+// Public: list pages (public only unless authenticated)
+router.get('/pages', async (req, res) => {
+  const user = await optionalAuth(req);
+  if (req.query.external_id) {
+    const p = await pages.getByExternalId(req.query.external_id);
+    // Never expose a private page (custom_css/custom_html included) anonymously.
+    return res.json({ page: (p && (user || p.is_public === 1)) ? p : null });
+  }
+  const list = await pages.list(user ? {} : { is_public: 1 });
+  res.json({ pages: list, total: list.length });
+});
+
+// Public: get page by slug with components and incidents (private pages require
+// a valid API key; accepts a UUID id as well)
 router.get('/pages/:slug', async (req, res) => {
-  const page = await pages.getBySlug(req.params.slug);
+  const user = await optionalAuth(req);
+  let page = await pages.getBySlug(req.params.slug);
+  if (!page && user) page = await pages.getById(req.params.slug);
   if (!page) return res.status(404).json({ error: 'Not found' });
-  if (page.is_public !== 1) return res.status(404).json({ error: 'Not found' });
+  if (page.is_public !== 1 && !user) return res.status(404).json({ error: 'Not found' });
   const comps = await components.getForPage(page.id);
   const incs = await incidents.list({ page_id: page.id, visible: 1 });
   const incidentsByComponent = {};
@@ -80,18 +109,7 @@ router.use(auth);
 
 router.get('/info', (req, res) => res.json({ name: 'StatusFe API', version: '1.0', user: req.user.name, permissions: req.user.permissions }));
 
-// Pages (admin - requires auth)
-router.get('/pages/admin', async (req, res) => {
-  if (req.query.external_id) { const p = await pages.getByExternalId(req.query.external_id); return res.json({ page: p || null }); }
-  const list = await pages.list();
-  res.json({ pages: list, total: list.length });
-});
-router.get('/pages/:id', async (req, res) => { const p = await pages.getById(req.params.id) || await pages.getBySlug(req.params.id); if (!p) return res.status(404).json({ error: 'Not found' }); res.json({ page: p }); });
-router.get('/pages', async (req, res) => {
-  if (req.query.external_id) { const p = await pages.getByExternalId(req.query.external_id); return res.json({ page: p || null }); }
-  const list = await pages.list();
-  res.json({ pages: list, total: list.length });
-});
+// Pages (write/admin). Listing is handled by the auth-aware public routes above.
 router.post('/pages', requirePerm('write'), async (req, res) => {
   const { name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public, external_id } = req.body;
   if (!name || !slug) return res.status(400).json({ error: 'name and slug required' });
@@ -138,12 +156,13 @@ router.post('/components', requirePerm('write'), async (req, res) => {
       type: 'component_created',
       title: 'Component created: ' + name,
       message: name + ' added to system'
-    });
+    }).catch(() => {});
   });
   res.status(201).json({ component: c });
 });
 router.put('/components/:id', requirePerm('write'), async (req, res) => {
   const oldComp = await components.get(req.params.id);
+  if (!oldComp) return res.status(404).json({ error: 'Not found' });
   const body = { ...req.body };
   if (body.group_id !== undefined || body.group_ids !== undefined || body.group_name !== undefined || body.new_group_name !== undefined) {
     const group = await components.resolveGroup(body);
@@ -161,7 +180,7 @@ router.put('/components/:id', requirePerm('write'), async (req, res) => {
         type: 'component_updated',
         title: 'Component updated: ' + c.name,
         message: c.name + ' changed'
-      });
+      }).catch(() => {});
     });
   }
   res.json({ component: c });
@@ -177,7 +196,7 @@ router.delete('/components/:id', requirePerm('admin'), async (req, res) => {
         type: 'component_deleted',
         title: 'Component deleted: ' + comp.name,
         message: comp.name + ' has been permanently deleted'
-      });
+      }).catch(() => {});
     });
   }
   await components.delete(req.params.id);
@@ -296,23 +315,23 @@ router.get('/incidents/:id', async (req, res) => { const i = await incidents.get
 router.post('/incidents', requirePerm('write'), async (req, res) => {
   const { component_id, page_id, name, status, impact, starts_at, resolved_at, message, visible } = req.body;
   if (!name || !message) return res.status(400).json({ error: 'name and message required' });
+  if (status !== undefined && !incidents.VALID_STATUSES.includes(status)) return res.status(400).json({ error: 'invalid status' });
   const cleanStartsAt = starts_at && starts_at.trim() !== '' ? starts_at : null;
   const cleanResolvedAt = resolved_at && resolved_at.trim() !== '' ? resolved_at : null;
   const incident = await incidents.create({ component_id, page_id, name, status, impact, starts_at: cleanStartsAt, resolved_at: cleanResolvedAt, message, visible });
+  if (!incident) return res.status(400).json({ error: 'a page_id is required, or the component must belong to a page' });
   const pid = incident.page_id || page_id;
   if (pid) await triggerWebhook(pid, 'incident.created', { incident_id: incident.id, name: incident.name, status: incident.status });
-  if (incident) {
-    const admins = await queryAll("SELECT id FROM users WHERE role=$1", ['admin']);
-    admins.forEach(a => {
-      notifications.create({
-        user_id: a.id,
-        component_id: component_id,
-        type: 'incident_created',
-        title: 'New incident: ' + name,
-        message: name + ' — ' + status + ': ' + message
-      });
-    });
-  }
+  const admins = await queryAll("SELECT id FROM users WHERE role=$1", ['admin']);
+  admins.forEach(a => {
+    notifications.create({
+      user_id: a.id,
+      component_id: component_id,
+      type: 'incident_created',
+      title: 'New incident: ' + name,
+      message: name + ' — ' + status + ': ' + message
+    }).catch(() => {});
+  });
   res.status(201).json({ incident });
 });
 router.put('/incidents/:id', requirePerm('write'), async (req, res) => {
@@ -320,6 +339,7 @@ router.put('/incidents/:id', requirePerm('write'), async (req, res) => {
   if (!incident) return res.status(404).json({ error: 'Not found' });
   const oldStatus = incident.status;
   const body = { ...req.body };
+  if (body.status !== undefined && !incidents.VALID_STATUSES.includes(body.status)) return res.status(400).json({ error: 'invalid status' });
   if (body.starts_at && body.starts_at.trim() === '') body.starts_at = null;
   if (body.resolved_at && body.resolved_at.trim() === '') body.resolved_at = null;
   const updated = await incidents.update(req.params.id, body);
@@ -332,7 +352,7 @@ router.put('/incidents/:id', requirePerm('write'), async (req, res) => {
         type: 'incident_updated',
         title: 'Incident updated: ' + updated.name,
         message: updated.name + ': ' + oldStatus + ' → ' + updated.status
-      });
+      }).catch(() => {});
     });
   }
   await triggerWebhook(updated.page_id, 'incident.updated', { incident_id: updated.id, status: updated.status });
@@ -359,11 +379,13 @@ router.post('/api-keys', requirePerm('admin'), async (req, res) => {
 });
 router.delete('/api-keys/:id', requirePerm('admin'), async (req, res) => { await apiKeys.revoke(req.params.id); res.json({ message: 'Revoked' }); });
 
-// Webhooks
-router.get('/pages/:pageId/webhooks', async (req, res) => {
+// Webhooks (secrets are only returned to admin-permission keys)
+router.get('/pages/:pageId/webhooks', requirePerm('read'), async (req, res) => {
   const page = await pages.getById(req.params.pageId) || await pages.getBySlug(req.params.pageId);
   if (!page) return res.status(404).json({ error: 'Not found' });
-  const list = await webhooks.list(page.id);
+  if (req.user.page_id && req.user.page_id !== page.id) return res.status(403).json({ error: 'Forbidden' });
+  const isAdmin = (req.user.permissions || []).includes('admin');
+  const list = (await webhooks.list(page.id)).map(w => isAdmin ? w : { ...w, secret: undefined });
   res.json({ webhooks: list, total: list.length });
 });
 router.post('/pages/:pageId/webhooks', requirePerm('write'), async (req, res) => {
@@ -506,6 +528,9 @@ router.get('/users/:id', requirePerm('admin'), async (req, res) => {
 router.put('/users/:id', requirePerm('admin'), async (req, res) => {
   const { name, role } = req.body;
   if (!name && !role) return res.status(400).json({ error: 'name or role required' });
+  if (role !== undefined && !['admin', 'user'].includes(role)) return res.status(400).json({ error: 'invalid role' });
+  const before = await queryOne('SELECT role FROM users WHERE id=$1', [req.params.id]);
+  if (!before) return res.status(404).json({ error: 'Not found' });
   const fields = [];
   const params = [];
   let p = 1;
@@ -514,6 +539,8 @@ router.put('/users/:id', requirePerm('admin'), async (req, res) => {
   params.push(req.params.id);
   fields.push('updated_at=NOW()');
   await run(`UPDATE users SET ${fields.join(', ')} WHERE id=$${p}`, params);
+  // A role change must not leave the old privilege cached in live sessions.
+  if (role && role !== before.role) await destroyUserSessions(req.params.id);
   const user = await queryOne("SELECT id, email, name, role, created_at FROM users WHERE id=$1", [req.params.id]);
   res.json({ user });
 });
@@ -524,12 +551,14 @@ router.get('/analytics-detail', requirePerm('read'), async (req, res) => {
   if (!id || !type) return res.status(400).json({ error: 'id and type required' });
   
   const labels = [];
+  const labelKeys = [];
   const datasets = [];
   
-  // Generate 30 days of labels
+  // Generate 30 days of labels (labelKeys are the ISO dates the SQL rows use)
   for (let i = 29; i >= 0; i--) {
     const d = new Date();
     d.setDate(d.getDate() - i);
+    labelKeys.push(d.toISOString().split('T')[0]);
     labels.push(d.toLocaleDateString('en', { month: 'short', day: 'numeric' }));
   }
   
@@ -539,14 +568,14 @@ router.get('/analytics-detail', requirePerm('read'), async (req, res) => {
     
     // Get page views
     const views = (await queryAll(`
-      SELECT DATE(created_at) as date, COUNT(*) as cnt
+      SELECT TO_CHAR(DATE(created_at), 'YYYY-MM-DD') as date, COUNT(*) as cnt
       FROM page_views WHERE page_id=$1 AND created_at >= NOW() - INTERVAL '30 days'
       GROUP BY DATE(created_at) ORDER BY date
     `, [id])).map(v => ({ date: v.date, cnt: v.cnt }));
     
     const viewData = new Array(30).fill(0);
     views.forEach(v => {
-      const idx = labels.indexOf(v.date);
+      const idx = labelKeys.indexOf(v.date);
       if (idx >= 0) viewData[idx] = v.cnt;
     });
     
@@ -570,7 +599,7 @@ router.get('/analytics-detail', requirePerm('read'), async (req, res) => {
     const colors = ['rgb(16,185,129)','rgb(245,158,11)','rgb(239,68,68)','rgb(139,92,246)','rgb(14,165,233)','rgb(236,72,153)'];
     for (const [ci, c] of pageComps.entries()) {
       const history = await queryAll(`
-        SELECT new_status, DATE(created_at) as date
+        SELECT new_status, TO_CHAR(DATE(created_at), 'YYYY-MM-DD') as date
         FROM status_history WHERE component_id=$1 AND created_at >= NOW() - INTERVAL '30 days'
         ORDER BY created_at DESC
       `, [c.id]);
@@ -606,7 +635,7 @@ router.get('/analytics-detail', requirePerm('read'), async (req, res) => {
     
     // Get status history for chart
     const history = await queryAll(`
-      SELECT new_status, DATE(created_at) as date
+      SELECT new_status, TO_CHAR(DATE(created_at), 'YYYY-MM-DD') as date
       FROM status_history WHERE component_id=$1 AND created_at >= NOW() - INTERVAL '30 days'
       ORDER BY created_at DESC
     `, [id]);

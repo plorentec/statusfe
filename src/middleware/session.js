@@ -3,6 +3,16 @@ const { queryOne, queryAll, run, getPool } = require('../db/database');
 
 const SESSION_SECRET = process.env.SESSION_SECRET || 'statusfe-session-secret-change-in-production';
 
+// A malformed percent-encoding in a cookie must never throw: degrade to
+// "anonymous" instead of crashing the (async) middleware.
+function safeDecode(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return null;
+  }
+}
+
 function signCookie(value) {
   const hmac = crypto.createHmac('sha256', SESSION_SECRET);
   hmac.update(value);
@@ -72,6 +82,20 @@ async function destroySession(cookie) {
   }
 }
 
+// Drop every real session belonging to a user (on delete / role change).
+// Session rows are opaque JSON, so filter in JS instead of casting the column.
+async function destroyUserSessions(userId) {
+  if (!userId) return;
+  const rows = await queryAll("SELECT id, data FROM sessions WHERE LEFT(id, 1) <> '_'");
+  for (const r of rows) {
+    try {
+      if (JSON.parse(r.data).userId === userId) {
+        await run('DELETE FROM sessions WHERE id=$1', [r.id]);
+      }
+    } catch { /* ignore malformed rows */ }
+  }
+}
+
 // Clean expired sessions every hour (also temp 2FA-login sessions, dead in 10 min)
 setInterval(async () => {
   try {
@@ -120,7 +144,7 @@ async function session(req, res, next) {
     for (const c of cookies) {
       const [name, ...parts] = c.trim().split('=');
       if (name === 'session_id') {
-        sessionId = decodeURIComponent(parts.join('='));
+        sessionId = safeDecode(parts.join('='));
       }
     }
   }
@@ -143,7 +167,7 @@ async function session(req, res, next) {
   if (req.headers && req.headers.cookie) {
     for (const c of req.headers.cookie.split(';')) {
       const [name, ...parts] = c.trim().split('=');
-      if (name === '_flash_key') flashKey = decodeURIComponent(parts.join('='));
+      if (name === '_flash_key') flashKey = safeDecode(parts.join('='));
     }
   }
   if (flashKey) {
@@ -179,6 +203,18 @@ function requireAuth(req, res, next) {
   next();
 }
 
+// Admin-only gate for write routes. require2FA deliberately lets role=user
+// through to the dashboard, so every privileged mutation must re-check the role.
+function requireAdmin(req, res, next) {
+  if (!req.user) {
+    return res.redirect('/login?msg=error&type=error');
+  }
+  if (req.user.role !== 'admin') {
+    return res.redirect('/admin?msg=admin&type=error');
+  }
+  next();
+}
+
 function optionalAuth(req, res, next) {
   next();
 }
@@ -200,4 +236,4 @@ async function initSessionTable() {
   }
 }
 
-module.exports = { session, requireAuth, optionalAuth, createSession, getSession, destroySession, initSessionTable, verifySignedCookie };
+module.exports = { session, requireAuth, optionalAuth, requireAdmin, createSession, getSession, destroySession, destroyUserSessions, initSessionTable, verifySignedCookie };

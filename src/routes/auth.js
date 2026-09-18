@@ -74,11 +74,9 @@ router.post('/2fa', async (req, res) => {
   }
 
   await run('DELETE FROM sessions WHERE id=$1', ['_2fa_' + token]);
-  res.clearCookie('_2fa_token', { path: '/' });
 
   await auditLog.create({ user_id: user.id, action: 'login', details: 'Login with 2FA', ip: req.ip, user_agent: req.get('User-Agent') || '' });
   const signedValue = await createSession(user);
-  res.setHeader('Set-Cookie', `session_id=${signedValue}; HttpOnly; Max-Age=${24*60*60}; SameSite=Lax; Path=/`);
   // Parse the new session ID from the signed cookie to update it in the DB
   const cookieVal = signedValue;
   const dotIdx = cookieVal.lastIndexOf('.');
@@ -87,10 +85,17 @@ router.post('/2fa', async (req, res) => {
   try { newSession = JSON.parse(sessionDataStr); } catch(e) { newSession = null; }
   if (newSession && newSession.id) {
     try {
-      const store = { userId: user.id, name: user.name, email: user.email, role: user.role, createdAt: Date.now(), _2fa_verified: true };
+      // Keep `id` so updateSession()/req.session.id keep working for this session.
+      const store = { id: newSession.id, userId: user.id, name: user.name, email: user.email, role: user.role, createdAt: Date.now(), _2fa_verified: true };
       await run('UPDATE sessions SET data=$1, created_at=NOW() WHERE id=$2', [JSON.stringify(store), newSession.id]);
     } catch(e) {}
   }
+  // Single Set-Cookie header carrying both the new session and the temp-token
+  // deletion (setHeader would otherwise overwrite the clearCookie above).
+  res.setHeader('Set-Cookie', [
+    `session_id=${signedValue}; HttpOnly; Max-Age=${24*60*60}; SameSite=Lax; Path=/`,
+    '_2fa_token=; HttpOnly; Path=/; Max-Age=0'
+  ]);
   if (!req.session) req.session = {};
   req.session._2fa_verified = true;
   res.cookie('_2fa_verified', '1', { httpOnly: true, maxAge: 8 * 60 * 60 * 1000, sameSite: 'lax', signed: true });
@@ -105,7 +110,7 @@ router.post('/logout', async (req, res) => {
     for (const c of cookies) {
       const [name, ...parts] = c.trim().split('=');
       if (name === 'session_id') {
-        cookie = decodeURIComponent(parts.join('='));
+        try { cookie = decodeURIComponent(parts.join('=')); } catch { cookie = null; }
       }
     }
   }

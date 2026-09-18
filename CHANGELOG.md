@@ -2,6 +2,44 @@
 
 All notable changes to StatusFe.
 
+## [2.2.4] — 2026-09-18
+
+### Fixed (crashes / availability)
+- **DoS via a malformed session cookie** — `decodeURIComponent` was called without a guard on the raw `session_id`/`_flash_key`/logout cookies. A value like `%zz` threw a `URIError`; because the session middleware is `async`, Express 4 didn't catch it and the whole process crashed on `unhandledRejection`. Decoding is now guarded (malformed → anonymous). A `process.on('unhandledRejection')` logger was added as a safety net so a single rejected promise can never take the status page down.
+- **`POST /api/v1/incidents` and `PUT /api/v1/components/:id` crashed on missing/unknown resources** — `incidents.create` can return `null` (no page resolvable) and `components.update` dereferenced a missing component. Both now return `400`/`404` instead of a `TypeError`.
+- **CSRF check on unparsed bodies returned 500** — `req.body._csrf` was read unguarded, so requests with e.g. `Content-Type: text/plain` threw a `TypeError` instead of a clean `403`.
+- **2FA redirect loop** — `require2FA` skipped `/admin/2fa/verify` using an absolute path, but `req.path` is relative to the mount (`/2fa/verify`), so the skip never matched. Admins with 2FA enabled but an unverified session were bounced to `/admin/2fa/verify` forever and could not verify or log out. Paths are now relative.
+- **Notification inserts are fire-and-forget again** — the un-awaited `notifications.create` calls in the API now attach `.catch()`, so a failed insert can't reject the request.
+
+### Security
+- **Privilege escalation via admin write routes** — `require2FA` intentionally lets `role=user` into `/admin`, but `POST /admin/api-keys`, key revoke/reactivate/delete, `DELETE /admin/users/:id`, `POST /admin/email-settings` and every mutating route in `admin-extra.js` (analytics, dependencies, customize, config statuses/mappings) had no role check. A `role=user` could mint itself an `admin` API key and self-promote via `PUT /api/v1/users/:id`. All are now admin-only (new `requireAdmin` middleware).
+- **Private pages leaked through the public API** — `GET /api/v1/pages?external_id=` returned private pages (including custom CSS/HTML) without auth. Private pages are now only visible to a valid API key.
+- **Dead API routes un-shadowed** — the public `/pages` and `/pages/:slug` handlers matched before the authenticated `/pages/admin` and `/pages/:id` registrations, so authenticated clients could never list all pages or fetch a private page. The public handlers are now auth-aware (a valid key unlocks private pages / the full listing).
+- **Webhook secrets exposed to read-only keys** — `GET /api/v1/pages/:pageId/webhooks` had no permission check and returned each webhook's HMAC `secret`, ignoring page scope. It now requires `read`, enforces the key's page scope, and only returns secrets to `admin` keys.
+- **Webhook SSRF via DNS rebinding** — the hostname was resolved for validation and then resolved again for the request. Delivery now connects to the validated IP (with the original `Host`/SNI) and additionally rejects CGNAT/benchmarking/multicast ranges.
+- **Webhook timeout actually aborts** — `req.setTimeout()` only emitted an event, so a non-responding endpoint hung the promise (and the API request awaiting it) forever. The socket is now destroyed after 5 s.
+- **Sessions invalidated on user delete / role change** — live sessions cached the old role and survived account deletion for up to 24 h.
+
+### Fixed (data integrity)
+- **`statusMappings.update` corrupted/none the wrong row** — placeholders collided (`SET component_status=$1 WHERE incident_status=$1 AND component_status=$2`), so the target row was matched with the wrong values. Numbering is now explicit.
+- **Uptime was always wrong** — `DATE()` columns come back from `pg` as `Date` objects while the lookups used `'YYYY-MM-DD'` strings, so page uptime was always `0.00%` and component uptime always `100.00%`; the analytics charts were always zero. Queries now return `TO_CHAR(..., 'YYYY-MM-DD')` and the chart labels use matching keys.
+- **Legacy "global group" backfill ran on every boot** — it silently re-globalized any non-global group with no page bindings (including one just removed from its page). It now runs once (settings marker).
+- **`override_status` could never be cleared** — the quick status change pinned it and `getForPage` gave it absolute priority, so the component showed that status forever. A normal status change (API/incident/cascade) now clears it, and `components.update` accepts the field.
+- **Deleting a group left orphan `group_name`** — components kept the deleted group's name (shown as a phantom section and matched by group filters). Both group delete and clearing memberships now null it.
+- **`PUT /api/v1/components/:id` with the same `group_id` wiped other memberships** — the legacy field is now only synced when the primary group actually changes.
+- **Incident status was unvalidated** — with the default `cascade_status='same'`, an arbitrary string was copied straight into `components.status`. Only the four lifecycle statuses are accepted now (unknown → `investigating`, with a `400` at the API edge).
+- **`notice_page_ids` sent as a comma string was iterated character by character** via the API, generating FK-violating inserts. It is normalized to an id list.
+
+### Fixed (functional / UI)
+- **Custom CSS/HTML were silently discarded by the page form** — the admin handlers never read `custom_css`/`custom_html` from the body (only the REST API persisted them).
+- **SMTP "Use SSL/TLS" never worked** — the checkbox stored `'1'` but `email.js` compared against `'true'`, so implicit TLS was always off and the checkbox never re-checked. Values are normalized on save and accepted in both forms.
+- **Group form couldn't uncheck "Global" or clear all members** — an unchecked checkbox is simply absent; the handlers now treat absence as `0` / empty list.
+- **`email_notifications=0` was ignored** — admins who disabled email notifications still received every message.
+- **Line breaks rendered as literal `<br>`** — `message.replace(/\n/g,'<br>')` ran inside `<%= %>` and got escaped. A new `nl2br` helper escapes first, then inserts the breaks.
+- **Dark theme never applied on ~20 pages** — `document.body.classList.add('dark')` ran in `<head>` (body was still `null`); it now waits for `DOMContentLoaded`.
+- **Colored status dots invisible in the default template** — the CSS expected `.component-dot.operational` but the markup emits `.dot-operational`; aliases added.
+- Smaller fixes: logout link on `/admin/2fa/verify` was a GET to a POST-only route, `key_perms` was rendered unescaped, the retention select double-submitted, the page-form inline script crashed in list mode, the advance-notice buttons had a duplicate `class` attribute, `is_public: "0"` was treated as truthy on create, and invalid user roles are rejected.
+
 ## [2.2.3] — 2026-09-09
 
 ### Fixed

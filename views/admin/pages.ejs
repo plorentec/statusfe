@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><%= title %> - StatusFe Admin</title>
 <link rel="stylesheet" href="/css/admin.css">
-<script>document.body.classList.add('dark');</script>
+<script>document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('dark');});</script>
 </head>
 <body>
 <div class="admin-layout">
@@ -282,25 +282,27 @@ Use custom layout (replace entire page design with custom CSS/HTML below)
 const nameInput = document.getElementById('name');
 const slugInput = document.getElementById('slug');
 
-if (nameInput && slugInput && (!slugInput.value || nameInput.value)) {
-  if (nameInput.value && !slugInput.value) {
-    slugInput.value = generateSlug(nameInput.value);
+if (nameInput && slugInput) {
+  if (!slugInput.value || nameInput.value) {
+    if (nameInput.value && !slugInput.value) {
+      slugInput.value = generateSlug(nameInput.value);
+    }
   }
+
+  nameInput.addEventListener('input', function() {
+    if (!this.dataset.manual) {
+      slugInput.value = generateSlug(this.value);
+    }
+  });
+
+  slugInput.addEventListener('blur', function() {
+    this.dataset.manual = 'true';
+  });
+
+  slugInput.addEventListener('focus', function() {
+    delete this.dataset.manual;
+  });
 }
-
-nameInput.addEventListener('input', function() {
-  if (!this.dataset.manual) {
-    slugInput.value = generateSlug(this.value);
-  }
-});
-
-slugInput.addEventListener('blur', function() {
-  this.dataset.manual = 'true';
-});
-
-slugInput.addEventListener('focus', function() {
-  delete this.dataset.manual;
-});
 
 function generateSlug(name) {
   return name

@@ -6,7 +6,7 @@
 ---
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-**v2.2.3** — API keys hashed at rest (no plaintext), private-page leak fixed, transitive dependency cascade, CSV injection & embed XSS hardening, hub→dependents UI
+**v2.2.4** — crash/DoS hardening (malformed cookies, null API resources), admin role checks (privilege escalation fix), 2FA redirect-loop fix, correct uptime/analytics, custom CSS/HTML persisted, SMTP TLS fixed
 
 ---
 

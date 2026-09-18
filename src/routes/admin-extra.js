@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
-const { requireAuth } = require('../middleware/session');
+const { requireAuth, requireAdmin } = require('../middleware/session');
 const { notifications, analytics, dependencies, settings, pages, components, componentStatuses, incidentStatuses, statusMappings } = require('../db/models');
 const { queryOne, queryAll, run } = require('../db/database');
 
@@ -127,7 +127,7 @@ router.get('/analytics', async (req, res) => {
 });
 
 // POST /admin/analytics/retention
-router.post('/analytics/retention', async (req, res) => {
+router.post('/analytics/retention', requireAdmin, async (req, res) => {
   const { retention_days } = req.body;
   const val = parseInt(retention_days);
   if (!val || val < 30 || val > 3650) {
@@ -138,7 +138,7 @@ router.post('/analytics/retention', async (req, res) => {
 });
 
 // POST /admin/analytics/cleanup
-router.post('/analytics/cleanup', async (req, res) => {
+router.post('/analytics/cleanup', requireAdmin, async (req, res) => {
   const deleted = await analytics.cleanOldData();
   res.json({ ok: true, deleted });
 });
@@ -303,7 +303,7 @@ router.get('/dependencies', async (req, res) => {
   });
 });
 
-router.post('/dependencies', async (req, res) => {
+router.post('/dependencies', requireAdmin, async (req, res) => {
   const { component_id, depends_on, cascade_status } = req.body;
   if (!component_id || !depends_on) {
     return res.redirect('/admin/dependencies?msg=error&type=error');
@@ -324,7 +324,7 @@ router.post('/dependencies', async (req, res) => {
   res.redirect('/admin/dependencies?msg=success&type=success');
 });
 
-router.delete('/dependencies/:id', async (req, res) => {
+router.delete('/dependencies/:id', requireAdmin, async (req, res) => {
   await dependencies.delete(req.params.id);
   res.redirect('/admin/dependencies?msg=deleted&type=success');
 });
@@ -341,7 +341,7 @@ router.get('/customize', async (req, res) => {
   });
 });
 
-router.post('/customize', async (req, res) => {
+router.post('/customize', requireAdmin, async (req, res) => {
   await settings.setCustomization(req.body);
   res.redirect('/admin/customize?msg=success&type=success');
 });
@@ -359,7 +359,7 @@ router.get('/config/component-statuses', async (req, res) => {
   });
 });
 
-router.post('/config/component-statuses', async (req, res) => {
+router.post('/config/component-statuses', requireAdmin, async (req, res) => {
   const { value, label, color, position } = req.body;
   if (!value || !label) {
     return res.redirect('/admin/config/component-statuses?msg=error&type=error');
@@ -373,7 +373,7 @@ router.post('/config/component-statuses', async (req, res) => {
   res.redirect('/admin/config/component-statuses?msg=success&type=success');
 });
 
-router.delete('/config/component-statuses/:value', async (req, res) => {
+router.delete('/config/component-statuses/:value', requireAdmin, async (req, res) => {
   const ok = await componentStatuses.delete(req.params.value);
   if (!ok) return res.redirect('/admin/config/component-statuses?msg=system&type=error');
   res.redirect('/admin/config/component-statuses?msg=deleted&type=success');
@@ -392,7 +392,7 @@ router.get('/config/incident-statuses', async (req, res) => {
   });
 });
 
-router.post('/config/incident-statuses', async (req, res) => {
+router.post('/config/incident-statuses', requireAdmin, async (req, res) => {
   const { value, label, color, position } = req.body;
   if (!value || !label) {
     return res.redirect('/admin/config/incident-statuses?msg=error&type=error');
@@ -406,7 +406,7 @@ router.post('/config/incident-statuses', async (req, res) => {
   res.redirect('/admin/config/incident-statuses?msg=success&type=success');
 });
 
-router.delete('/config/incident-statuses/:value', async (req, res) => {
+router.delete('/config/incident-statuses/:value', requireAdmin, async (req, res) => {
   const ok = await incidentStatuses.delete(req.params.value);
   if (!ok) return res.redirect('/admin/config/incident-statuses?msg=system&type=error');
   res.redirect('/admin/config/incident-statuses?msg=deleted&type=success');
@@ -428,7 +428,7 @@ router.get('/config/mappings', async (req, res) => {
   });
 });
 
-router.post('/config/mappings', async (req, res) => {
+router.post('/config/mappings', requireAdmin, async (req, res) => {
   const { incident_status, component_status } = req.body;
   if (!incident_status || !component_status) {
     return res.redirect('/admin/config/mappings?msg=error&type=error');
@@ -442,7 +442,7 @@ router.post('/config/mappings', async (req, res) => {
   res.redirect('/admin/config/mappings?msg=success&type=success');
 });
 
-router.delete('/config/mappings/:incidentStatus/:componentStatus', async (req, res) => {
+router.delete('/config/mappings/:incidentStatus/:componentStatus', requireAdmin, async (req, res) => {
   await statusMappings.delete(req.params.incidentStatus, req.params.componentStatus);
   res.redirect('/admin/config/mappings?msg=deleted&type=success');
 });

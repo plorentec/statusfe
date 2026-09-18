@@ -33,12 +33,17 @@ function isPrivateIp(ip) {
     if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
     if (parts[0] === 192 && parts[1] === 168) return true;
     if (parts[0] === 169 && parts[1] === 254) return true;
+    if (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127) return true; // CGNAT 100.64/10
+    if (parts[0] === 198 && (parts[1] === 18 || parts[1] === 19)) return true; // benchmarking 198.18/15
+    if (parts[0] === 192 && parts[1] === 0 && parts[2] === 0) return true;      // 192.0.0.0/24
+    if (parts[0] >= 224) return true; // multicast + reserved (224.0.0.0/4, 240.0.0.0/4)
     return false;
   }
   const lower = String(ip).toLowerCase();
   if (lower === '::1' || lower === '::') return true;
   if (lower.startsWith('fe80:')) return true;            // IPv6 link-local
   if (lower.startsWith('fc') || lower.startsWith('fd')) return true; // fc00::/7 ULA
+  if (lower.startsWith('ff')) return true;               // IPv6 multicast
   if (lower.startsWith('::ffff:')) return isPrivateIp(lower.slice(7)); // IPv4-mapped
   return false;
 }
@@ -69,20 +74,40 @@ async function deliver(pageId, event, data) {
       const crypto = require('crypto');
       const sign = wh.secret ? crypto.createHmac('sha256', wh.secret).update(JSON.stringify(payload)).digest('hex') : null;
       const client = url.protocol === 'https:' ? https : http;
+      // Connect to the already-validated IP, not by hostname: otherwise the
+      // request would re-resolve DNS and a rebinding domain could flip from a
+      // public address to a private one between check and connect (TOCTOU).
+      const target = addresses[0].address;
       await new Promise((resolve) => {
+        let done = false;
+        let timer = null;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          if (timer) clearTimeout(timer);
+          resolve();
+        };
         const req = client.request({
-          hostname: url.hostname, port: url.port || (url.protocol === 'https:' ? 443 : 80),
+          hostname: target, port: url.port || (url.protocol === 'https:' ? 443 : 80),
           path: url.pathname + url.search, method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'User-Agent': 'StatusFe/1.0',
+          servername: url.hostname,
+          headers: { 'Content-Type': 'application/json', 'User-Agent': 'StatusFe/1.0', 'Host': url.host,
             ...(sign && { 'X-StatusFe-Signature': sign }),
             'X-StatusFe-Event': event }
         }, res => {
           run('UPDATE webhooks SET last_triggered_at=NOW() WHERE id=$1', [wh.id]).catch(() => {});
           res.on('data', () => {});
-          res.on('end', resolve);
+          res.on('end', finish);
         });
-        req.on('error', resolve);
-        req.setTimeout(5000);
+        req.on('error', finish);
+        req.on('close', finish);
+        // req.setTimeout() only emits an event and never aborts the socket; a
+        // non-responding endpoint would hang the promise (and the API request
+        // awaiting it) forever. Destroy the socket on timeout instead.
+        timer = setTimeout(() => {
+          req.destroy(new Error('webhook timeout'));
+          finish();
+        }, 5000);
         req.write(JSON.stringify(payload));
         req.end();
       });

@@ -1,7 +1,13 @@
 # StatusFe — Roadmap / Backlog
 
 Ideas y mejoras pendientes para continuar en futuras sesiones. Ninguna está
-empezada; están ordenadas por valor/esfuerzo. Última revisión: v2.2.3 (2026-09-09).
+empezada; están ordenadas por valor/esfuerzo. Última revisión: v2.2.4 (2026-09-18).
+
+## Hecho hasta v2.2.4 (contexto)
+- ✅ v2.2.4: **crashes/DoS** — `decodeURIComponent` sin guard en cookies (crash del proceso ante `session_id=%zz`), `POST /api/v1/incidents`/`PUT /components/:id` sobre recursos inexistentes, CSRF con body no parseado (500→403), redirect loop de 2FA. Red de seguridad `unhandledRejection`.
+- ✅ v2.2.4: **seguridad** — checks de rol `admin` en todas las rutas de escritura de `/admin` (escalada vía API keys), fuga de páginas privadas por `external_id`, rutas API `/pages/admin` y `/pages/:id` recuperadas (auth-aware), secretos de webhooks solo para keys admin, SSRF sin TOCTOU + timeout real, sesiones invalidadas al borrar/cambiar rol.
+- ✅ v2.2.4: **integridad de datos** — `statusMappings.update` corregido, uptime/analytics con `TO_CHAR`, backfill `is_global` de un solo uso, `override_status` limpiable, `group_name` huérfano, `group_id` legacy no destructivo, validación de estados de incidente, `notice_page_ids` normalizado.
+- ✅ v2.2.4: **funcional/UI** — `custom_css`/`custom_html` ya se guardan desde el form, SMTP SSL/TLS, form de grupos (global/miembros), `email_notifications`, `<br>` en mensajes, tema oscuro, dots del template default.
 
 ## Hecho hasta v2.2.3 (contexto)
 - ✅ v2.2.3: **API keys sin texto plano** — se guarda solo `key_hash` (bcrypt) + `key_prefix`; el texto plano se muestra una vez al crear y nunca se persiste. Migración boot que nulea claves previas. `/admin/docs` usa clave pegada (sin auto-inyectar la guardada).

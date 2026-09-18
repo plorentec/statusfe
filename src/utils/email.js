@@ -13,7 +13,7 @@ async function getTransporter(smtp) {
   transporter = nodemailer.createTransport({
     host: smtp.host,
     port: parseInt(smtp.port) || 587,
-    secure: smtp.secure === 'true' || smtp.secure === true,
+    secure: smtp.secure === 'true' || smtp.secure === true || smtp.secure === '1' || smtp.secure === 1,
     auth: smtp.user ? { user: smtp.user, pass: smtp.pass } : undefined,
   });
   transporter.__fingerprint = fingerprint;
@@ -78,6 +78,7 @@ async function notifyComponentStatusChange(componentName, oldStatus, newStatus, 
   const results = [];
   for (const admin of admins) {
     const enabled = admin.email_notifications !== 0;
+    if (!enabled) { results.push({ email: admin.email, sent: false, enabled }); continue; }
     const sent = await sendEmail(admin.email, subject, html);
     results.push({ email: admin.email, sent, enabled });
   }
@@ -103,8 +104,9 @@ async function notifyIncident(created, incidentName, status, description, pageTi
 
   const results = [];
   for (const admin of admins) {
+    if (admin.email_notifications === 0) { results.push({ email: admin.email, sent: false, enabled: false }); continue; }
     const sent = await sendEmail(admin.email, subject, html);
-    results.push({ email: admin.email, sent });
+    results.push({ email: admin.email, sent, enabled: true });
   }
   return results;
 }

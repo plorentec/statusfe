@@ -32,6 +32,21 @@ function safeParsePermissions(raw) {
   }
 }
 
+// Accept an array or a comma-joined string ('id1,id2'), deduped. Callers that
+// iterate the result must use this so a raw string is never walked char by char.
+function normalizeIds(value) {
+  let ids = [];
+  if (Array.isArray(value)) ids = value.filter(Boolean);
+  else if (typeof value === 'string' && value) ids = value.split(',').map(s => s.trim()).filter(Boolean);
+  return [...new Set(ids)];
+}
+
+// Normalize a boolean-ish value to 1/0. Treats "0"/"false" as false (plain
+// truthiness turned the string "0" into 1 for is_public).
+function toBool01(v) {
+  return (v === true || v === 1 || v === '1' || v === 'on' || v === 'true') ? 1 : 0;
+}
+
 async function cascadeStatusChange(upstreamComponentId, newStatus) {
   // BFS over the dependency graph so a change to an upstream component
   // propagates transitively (A→B→C) instead of stopping after direct
@@ -86,7 +101,7 @@ module.exports.pages = {
     const id = uuidv4();
     await run(
       'INSERT INTO pages (id,name,slug,description,status,template,timezone,logo_url,custom_css,custom_html,is_public,refresh_interval,custom_layout,custom_layout_css,custom_layout_html,external_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)',
-      [id, name, slug, description||'', status||'operational', template||'default', timezone||'UTC', logo_url||null, sanitizeCss(custom_css)||null, sanitizeHtml(custom_html)||null, is_public ? 1 : 0, refresh_interval ? Math.max(15, parseInt(refresh_interval)) : 15, custom_layout ? 1 : 0, sanitizeCss(custom_layout_css)||null, sanitizeHtml(custom_layout_html)||null, external_id||null]
+      [id, name, slug, description||'', status||'operational', template||'default', timezone||'UTC', logo_url||null, sanitizeCss(custom_css)||null, sanitizeHtml(custom_html)||null, toBool01(is_public), refresh_interval ? Math.max(15, parseInt(refresh_interval)) : 15, toBool01(custom_layout), sanitizeCss(custom_layout_css)||null, sanitizeHtml(custom_layout_html)||null, external_id||null]
     );
     return this.getById(id);
   },
@@ -99,8 +114,8 @@ module.exports.pages = {
       if (data[k] !== undefined) {
         let val = data[k];
         if (k === 'refresh_interval') val = Math.max(15, parseInt(val) || 15);
-        if (k === 'is_public') val = (val === 'on' || val === 1 || val === true) ? 1 : 0;
-        if (k === 'custom_layout') val = (val === 'on' || val === 1 || val === true) ? 1 : 0;
+        if (k === 'is_public') val = toBool01(val);
+        if (k === 'custom_layout') val = toBool01(val);
         if (k === 'custom_css' || k === 'custom_layout_css') val = sanitizeCss(val);
         if (k === 'custom_html' || k === 'custom_layout_html') val = sanitizeHtml(val);
         fields.push(k+'=$'+(params.length+1));
@@ -278,9 +293,10 @@ module.exports.components = {
 
   async update(id, data) {
     const oldComp = await this.get(id);
+    if (!oldComp) return null;
     const fields = [];
     const params = [];
-    const allowed = ['name','description','status','group_name','group_id','position','external_id'];
+    const allowed = ['name','description','status','group_name','group_id','position','external_id','override_status'];
     for (const k of allowed) {
       if (data[k] !== undefined) {
         let val = data[k];
@@ -292,10 +308,11 @@ module.exports.components = {
       params.push(id);
       await run('UPDATE components SET ' + fields.join(',') + ', updated_at=NOW() WHERE id=$' + (params.length), ...params);
     }
-    // Keep the many-to-many memberships in sync with the group fields.
+    // Memberships only follow a *changed* legacy group_id: resending the same
+    // primary group must not wipe the component's other group memberships.
     if (data.group_ids !== undefined) {
       await this.setGroups(id, data.group_ids);
-    } else if (data.group_id !== undefined) {
+    } else if (data.group_id !== undefined && data.group_id !== oldComp.group_id) {
       await this.setGroups(id, data.group_id ? [data.group_id] : []);
     }
     if (data.status && oldComp.status !== data.status) {
@@ -342,7 +359,7 @@ module.exports.components = {
       const g = await module.exports.componentGroups.get(primary);
       await run('UPDATE components SET group_id=$1, group_name=$2 WHERE id=$3', [primary, g ? g.name : null, componentId]);
     } else {
-      await run('UPDATE components SET group_id=NULL WHERE id=$1', [componentId]);
+      await run('UPDATE components SET group_id=NULL, group_name=NULL WHERE id=$1', [componentId]);
     }
     return await this.getGroups(componentId);
   },
@@ -395,7 +412,9 @@ module.exports.components = {
     if (override) {
       await run('UPDATE components SET status=$1, override_status=$1, updated_at=NOW() WHERE id=$2', [newStatus, componentId]);
     } else {
-      await run('UPDATE components SET status=$1, updated_at=NOW() WHERE id=$2', [newStatus, componentId]);
+      // A normal (non-override) status change is authoritative and must clear
+      // any previous pin, otherwise getForPage would show the override forever.
+      await run('UPDATE components SET status=$1, override_status=NULL, updated_at=NOW() WHERE id=$2', [newStatus, componentId]);
     }
 
     let pageId = pageIdOrSlug;
@@ -480,7 +499,13 @@ module.exports.components = {
 };
 
 // ===== INCIDENTS =====
+// Fixed lifecycle statuses. Arbitrary values used to cascade straight into
+// components.status (cascade_status='same'), corrupting public status pages.
+const INCIDENT_STATUSES = ['investigating', 'identified', 'monitoring', 'resolved'];
+
 module.exports.incidents = {
+  VALID_STATUSES: INCIDENT_STATUSES,
+
   async list(filters = {}) {
     let q = 'SELECT * FROM incidents WHERE 1=1';
     const p = [];
@@ -504,6 +529,8 @@ module.exports.incidents = {
 
   async create({ component_id, page_id, name, status, impact, starts_at, resolved_at, message, visible, cascade_status }) {
     const id = uuidv4();
+    // Never let an unknown status flow through the cascade below.
+    const validStatus = INCIDENT_STATUSES.includes(status) ? status : 'investigating';
     let resolvedPageId = page_id;
     if (component_id && !page_id) {
       const pageComp = await queryOne('SELECT page_id FROM page_components WHERE component_id=$1 LIMIT 1', [component_id]);
@@ -515,11 +542,11 @@ module.exports.incidents = {
     const serverTZ = await module.exports.settings.get('server_timezone') || 'UTC';
     await run(
       'INSERT INTO incidents (id,component_id,page_id,name,status,impact,starts_at,resolved_at,message,visible,cascade_status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
-      [id, component_id||null, resolvedPageId, name, status||'investigating', impact||'none', starts_at||nowInTZ(serverTZ), resolved_at||null, message, visible ? 1 : 0, cs]
+      [id, component_id||null, resolvedPageId, name, validStatus, impact||'none', starts_at||nowInTZ(serverTZ), resolved_at||null, message, visible ? 1 : 0, cs]
     );
 
-    if (component_id && status !== 'resolved' && cs !== 'none') {
-      const incidentStatus = status || 'investigating';
+    if (component_id && validStatus !== 'resolved' && cs !== 'none') {
+      const incidentStatus = validStatus;
       const comp = await this.get(component_id);
       let newStatus;
       if (cs === 'same') {
@@ -551,11 +578,14 @@ module.exports.incidents = {
     const comp = component_id ? await module.exports.components.get(component_id) : null;
     const email = require('../utils/email');
     const compName = comp ? comp.name : 'Status Page';
-    email.notifyIncident(true, name, status, message, page ? page.name : compName).catch(() => {});
+    email.notifyIncident(true, name, validStatus, message, page ? page.name : compName).catch(() => {});
     return inc;
   },
 
   async update(id, data) {
+    data = { ...data };
+    // Drop unknown statuses so they never reach the component cascade.
+    if (data.status !== undefined && !INCIDENT_STATUSES.includes(data.status)) delete data.status;
     const fields = [];
     const params = [];
     const allowed = ['name','status','impact','starts_at','resolved_at','message','visible','component_id','cascade_status'];
@@ -739,8 +769,8 @@ module.exports.maintenance = {
       'INSERT INTO maintenance_windows (id,page_id,component_id,title,description,starts_at,ends_at,status,advance_notice_minutes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
       [id, page_id, component_id||null, title, description||'', starts_at, ends_at, status, advance_notice_minutes||0]
     );
-    if (notice_page_ids && notice_page_ids.length) {
-      for (const pid of notice_page_ids) {
+    if (notice_page_ids && normalizeIds(notice_page_ids).length) {
+      for (const pid of normalizeIds(notice_page_ids)) {
         await run('INSERT INTO maintenance_notice_pages (id,maintenance_id,page_id) VALUES ($1,$2,$3)', [uuidv4(), id, pid]);
       }
     }
@@ -760,7 +790,7 @@ module.exports.maintenance = {
     }
     if (data.notice_page_ids !== undefined) {
       await run('DELETE FROM maintenance_notice_pages WHERE maintenance_id=$1', [id]);
-      for (const pid of data.notice_page_ids) {
+      for (const pid of normalizeIds(data.notice_page_ids)) {
         await run('INSERT INTO maintenance_notice_pages (id,maintenance_id,page_id) VALUES ($1,$2,$3)', [uuidv4(), id, pid]);
       }
     }
@@ -825,7 +855,7 @@ module.exports.analytics = {
     const maxDays = retention ? parseInt(retention) : 365;
     const effectiveDays = days > maxDays ? maxDays : days;
     return await queryAll(
-      'SELECT DATE(created_at) as date, COUNT(*) as views FROM page_views WHERE page_id=$1 AND created_at >= NOW() - ($2::text || \' days\')::interval GROUP BY DATE(created_at) ORDER BY date DESC',
+      'SELECT TO_CHAR(DATE(created_at), \'YYYY-MM-DD\') as date, COUNT(*) as views FROM page_views WHERE page_id=$1 AND created_at >= NOW() - ($2::text || \' days\')::interval GROUP BY DATE(created_at) ORDER BY date DESC',
       [pageId, effectiveDays]
     );
   },
@@ -844,7 +874,7 @@ module.exports.analytics = {
     const maxDays = retention ? parseInt(retention) : 365;
     const effectiveDays = days > maxDays ? maxDays : days;
     const rows = await queryAll(
-      'SELECT sh.component_id, sh.new_status, DATE(sh.created_at) as date FROM status_history sh JOIN page_components pc ON sh.component_id = pc.component_id WHERE pc.page_id=$1 AND sh.created_at >= NOW() - ($2::text || \' days\')::interval',
+      'SELECT sh.component_id, sh.new_status, TO_CHAR(DATE(sh.created_at), \'YYYY-MM-DD\') as date FROM status_history sh JOIN page_components pc ON sh.component_id = pc.component_id WHERE pc.page_id=$1 AND sh.created_at >= NOW() - ($2::text || \' days\')::interval ORDER BY sh.created_at DESC',
       [pageId, effectiveDays]
     );
 
@@ -893,7 +923,7 @@ module.exports.analytics = {
     const maxDays = retention ? parseInt(retention) : 365;
     const effectiveDays = days > maxDays ? maxDays : days;
     const rows = await queryAll(
-        'SELECT new_status, DATE(created_at) as date FROM status_history WHERE component_id=$1 AND created_at >= NOW() - ($2::text || \' days\')::interval ORDER BY created_at DESC',
+        'SELECT new_status, TO_CHAR(DATE(created_at), \'YYYY-MM-DD\') as date FROM status_history WHERE component_id=$1 AND created_at >= NOW() - ($2::text || \' days\')::interval ORDER BY created_at DESC',
       [componentId, effectiveDays]
     );
 
@@ -931,7 +961,7 @@ module.exports.analytics = {
 
     for (const comp of components) {
       const rows = await queryAll(
-      'SELECT new_status, DATE(created_at) as date FROM status_history WHERE component_id=$1 AND created_at >= NOW() - ($2::text || \' days\')::interval ORDER BY created_at DESC',
+      'SELECT new_status, TO_CHAR(DATE(created_at), \'YYYY-MM-DD\') as date FROM status_history WHERE component_id=$1 AND created_at >= NOW() - ($2::text || \' days\')::interval ORDER BY created_at DESC',
         [comp.id, effectiveDays]
       );
 
@@ -1208,15 +1238,16 @@ module.exports.statusMappings = {
   },
 
   async update(incidentStatus, componentStatus, data) {
-    const fields = [];
-    const params = [];
-    const allowed = ['component_status'];
-    for (const k of allowed) {
-      if (data[k] !== undefined) { fields.push(k+'=$'+(params.length+1)); params.push(data[k]); }
-    }
-    if (fields.length) {
-      params.push(incidentStatus, componentStatus);
-      await run('UPDATE status_mappings SET ' + fields.join(',') + ' WHERE incident_status=$1 AND component_status=$2', ...params);
+    // Explicit numbering: the SET placeholder must not collide with the WHERE
+    // ones. The previous dynamic numbering produced
+    // `SET component_status=$1 WHERE incident_status=$1 AND component_status=$2`,
+    // so the target row was matched with the wrong values (silent no-op or a
+    // corrupted unrelated mapping).
+    if (data.component_status !== undefined) {
+      await run(
+        'UPDATE status_mappings SET component_status=$3 WHERE incident_status=$1 AND component_status=$2',
+        [incidentStatus, componentStatus, data.component_status]
+      );
     }
     return await this.get(incidentStatus, componentStatus);
   },
@@ -1341,7 +1372,7 @@ module.exports.componentGroups = {
 
   async create({ name, page_ids, position, is_global }) {
     const id = uuidv4();
-    await run('INSERT INTO component_groups (id, name, position, is_global) VALUES ($1,$2,$3,$4)', [id, name, parseInt(position) || 0, is_global ? 1 : 0]);
+    await run('INSERT INTO component_groups (id, name, position, is_global) VALUES ($1,$2,$3,$4)', [id, name, parseInt(position) || 0, toBool01(is_global)]);
     // A global group is not bound to specific pages: page_ids are ignored/cleared.
     const pids = is_global ? [] : this._normalizeIds(page_ids);
     for (const pid of pids) {
@@ -1357,7 +1388,7 @@ module.exports.componentGroups = {
     for (const k of allowed) {
       if (data[k] !== undefined) {
         let val = data[k];
-        if (k === 'is_global') val = (val === 'on' || val === 1 || val === true) ? 1 : 0;
+        if (k === 'is_global') val = toBool01(val);
         fields.push(k+'=$'+(params.length+1)); params.push(val);
       }
     }
@@ -1368,7 +1399,7 @@ module.exports.componentGroups = {
     // A global group is not bound to pages; clear them so the two states can't
     // coexist (and so removing a page binding never silently re-globalizes).
     const isNowGlobal = data.is_global !== undefined
-      ? (data.is_global === 'on' || data.is_global === 1 || data.is_global === true)
+      ? toBool01(data.is_global)
       : (await queryOne('SELECT is_global FROM component_groups WHERE id=$1', [id]))?.is_global;
     if (isNowGlobal) {
       if (data.page_ids !== undefined) await run('DELETE FROM group_pages WHERE group_id=$1', [id]);
@@ -1385,14 +1416,11 @@ module.exports.componentGroups = {
 
   // Accept array or comma-joined string of ids ('id1,id2'), deduped.
   _normalizeIds(value) {
-    let ids = [];
-    if (Array.isArray(value)) ids = value.filter(Boolean);
-    else if (typeof value === 'string' && value) ids = value.split(',').map(s => s.trim()).filter(Boolean);
-    return [...new Set(ids)];
+    return normalizeIds(value);
   },
 
   async delete(id) {
-    await run("UPDATE components SET group_id=NULL WHERE group_id=$1", [id]);
+    await run("UPDATE components SET group_id=NULL, group_name=NULL WHERE group_id=$1", [id]);
     await run('DELETE FROM group_pages WHERE group_id=$1', [id]);
     await run('DELETE FROM component_groups WHERE id=$1', [id]);
     return true;

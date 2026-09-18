@@ -37,7 +37,7 @@
 .perm-admin { background: #d97706; color: #fff; }
 .api-key-row { display: flex; justify-content: space-between; align-items: center; }
 </style>
-<script>document.body.classList.add('dark');</script>
+<script>document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('dark');});</script>
 </head>
 <body>
 <div class="admin-layout">
@@ -49,7 +49,7 @@
 <% if (typeof key_value !== 'undefined' && key_value) { %>
 <div class="card" style="margin-top:16px;border-color:#10b981;background:var(--bg)">
 <h3>🔑 New API Key Created</h3>
-<div style="font-size:13px;margin-bottom:8px">Permissions: <%- (key_perms || 'read, write') %></div>
+<div style="font-size:13px;margin-bottom:8px">Permissions: <%= (key_perms || 'read, write') %></div>
 <div class="key-display">
 <code id="newApiKey"><%= key_value %></code>
 <button class="btn btn-sm" onclick="copyToClipboard(document.getElementById('newApiKey').textContent.trim(), this)">Copy</button>

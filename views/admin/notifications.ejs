@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><%= title %> - StatusFe Admin</title>
 <link rel="stylesheet" href="/css/admin.css">
-<script>document.body.classList.add('dark');</script>
+<script>document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('dark');});</script>
 </head>
 <body>
 <div class="admin-layout">
@@ -129,7 +129,7 @@
 
 <div class="form-group checkbox-group">
 <label>
-<input type="checkbox" name="smtp_secure" value="1" <%= smtp.secure === 'true' ? 'checked' : '' %>>
+<input type="checkbox" name="smtp_secure" value="1" <%= (smtp.secure === 'true' || smtp.secure === '1' || smtp.secure === true) ? 'checked' : '' %>>
 Use SSL/TLS
 </label>
 </div>

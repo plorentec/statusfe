@@ -9,8 +9,10 @@ function csrfProtection(req, res, next) {
   const safe = ['GET', 'HEAD', 'OPTIONS'];
   if (safe.includes(req.method)) return next();
 
-  // Check for CSRF token in header or body only (not query params to prevent leakage)
-  const token = req.headers['x-csrf-token'] || req.body._csrf;
+  // Check for CSRF token in header or body only (not query params to prevent leakage).
+  // req.body can be undefined when no body parser matched (e.g. text/plain) — a
+  // missing token must yield a clean 403, never a TypeError/500.
+  const token = req.headers['x-csrf-token'] || (req.body && req.body._csrf);
 
   if (!token) {
     return res.status(403).json({ error: 'CSRF token missing' });
@@ -37,7 +39,12 @@ function readCsrfCookie(req) {
   // Read _csrf from raw cookie header to avoid signed cookie parsing issues
   const cookieHeader = req.headers.cookie || '';
   const match = cookieHeader.match(/_csrf=([^;]+)/);
-  return match ? decodeURIComponent(match[1]) : null;
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return null;
+  }
 }
 
 function csrfMiddleware(req, res, next) {

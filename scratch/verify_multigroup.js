@@ -187,17 +187,27 @@ async function main() {
   const tmpPages = await componentGroups.getPageIds(gInline.id);
   check('grupo global no tiene páginas', tmpPages.length === 0, JSON.stringify(tmpPages));
 
-  // ===== 15. Migration backfill: no-page groups become global, page-bound stay not =====
-  // Simulate an old install: a group with page rows and a group without.
+  // ===== 15. Migration backfill (one-time): no-page legacy groups become global =====
+  // Simulate an old install: a group with page rows and a group without. The
+  // backfill now runs once (settings marker), so clear it to re-simulate the
+  // first boot after the migration.
+  await db().run("DELETE FROM settings WHERE key='migration_is_global_backfilled'");
   const gBack = await componentGroups.create({ name: 'BackfillBound' });
   const gBackGlobal = await componentGroups.create({ name: 'BackfillGlobal', is_global: 0 }); // old default (no pages => global)
   await db().run('INSERT INTO group_pages (group_id, page_id) VALUES ($1,$2)', [gBack.id, pOne.id]);
-  // Now run migrate(): groups with no page rows should be flagged global.
+  // First migrate() runs the legacy backfill.
   await require(path.join(ROOT, 'src', 'db', 'init')).migrate();
   const backBound = await componentGroups.get(gBack.id);
   const backGlobal = await componentGroups.get(gBackGlobal.id);
   check('migrate: grupo con páginas NO se vuelve global', backBound.is_global === 0 && backBound.is_global !== 1, 'is_global=' + backBound.is_global);
-  check('migrate: grupo sin páginas pasa a global', backGlobal.is_global === 1, 'is_global=' + backGlobal.is_global);
+  check('migrate: grupo sin páginas pasa a global (backfill único)', backGlobal.is_global === 1, 'is_global=' + backGlobal.is_global);
+
+  // Regression (v2.2.4): a later non-global group with no page bindings must
+  // NOT be re-globalized by a subsequent boot/migrate().
+  const gLater = await componentGroups.create({ name: 'LaterNonGlobal' });
+  await require(path.join(ROOT, 'src', 'db', 'init')).migrate();
+  const backLater = await componentGroups.get(gLater.id);
+  check('migrate idempotente: grupo no-global sin páginas sigue no-global', backLater.is_global === 0, 'is_global=' + backLater.is_global);
 
   console.log(failures === 0 ? '\nALL MULTI-GROUP TESTS PASSED' : `\n${failures} TESTS FAILED`);
   process.exit(failures === 0 ? 0 : 1);

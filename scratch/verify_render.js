@@ -26,7 +26,10 @@ const incs = [{ id: 'i1', name: 'Inc', status: 'investigating', impact: 'major',
 const incidentsByComponent = { c1: [], c2: incs };
 const formatStatus = s => ({operational:'Operational'}[s] || s);
 const customization = { primary_color: '#10b981', secondary_color: '#059669', bg_color: '#ffffff', text_color: '#1e293b', font_family: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", logo_text: 'StatusFe', logo_color: '#10b981', border_radius: '12' };
-const base = { page: mkPage('default'), components: comps, incidents: incs, incidentsByComponent, formatStatus, refreshInterval: 15, groups: [{ id: 'g1', name: 'Infra', position: 0 }], upcomingMaintenance: [{ title: 'Mant', description: 'd', starts_at: '2026-09-02 10:00:00', ends_at: '2026-09-02 12:00:00' }], customization, version: V, sanitizeCss, sanitizeHtml, message: null, messageType: null };
+// Mirror app.locals.escapeHtml / app.locals.nl2br (used by status-page.ejs).
+const escapeHtml = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+const nl2br = (s) => escapeHtml(s).replace(/\n/g, '<br>');
+const base = { page: mkPage('default'), components: comps, incidents: incs, incidentsByComponent, formatStatus, refreshInterval: 15, groups: [{ id: 'g1', name: 'Infra', position: 0 }], upcomingMaintenance: [{ title: 'Mant', description: 'd', starts_at: '2026-09-02 10:00:00', ends_at: '2026-09-02 12:00:00' }], customization, version: V, sanitizeCss, sanitizeHtml, escapeHtml, nl2br, message: null, messageType: null };
 
 // status-page: 3 templates + custom_layout + custom css/html
 for (const t of ['default', 'grid', 'dark']) {

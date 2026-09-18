@@ -20,7 +20,7 @@
 .chart-container { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 20px; }
 .chart-container canvas { max-height: 300px; }
 </style>
-<script defer>document.body.classList.add('dark');</script>
+<script>document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('dark');});</script>
 </head>
 <body>
 <div class="admin-layout">
@@ -57,7 +57,7 @@
 <!-- Retention Settings -->
 <div class="retention-bar">
 <label for="retentionSelect">Data retention:</label>
-<select id="retentionSelect" onchange="changeRetention()">
+<select id="retentionSelect">
 <option value="30" <%= parseInt(retention) === 30 ? 'selected' : '' %>>30 days</option>
 <option value="90" <%= parseInt(retention) === 90 ? 'selected' : '' %>>3 months</option>
 <option value="180" <%= parseInt(retention) === 180 ? 'selected' : '' %>>6 months</option>

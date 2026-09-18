@@ -112,6 +112,24 @@ const check = (name, cond, extra) => {
   check('BUG: grupo asignado sale pre-marcado al reabrir', editPage.body.includes('name="group_ids" value="' + grp.id + '" checked'));
   check('filtro de búsqueda presente (componentes y grupos)', editPage.body.includes('pageCompFilter') && editPage.body.includes('pageGroupFilter'));
 
+  // 4c. v2.2.4: el form de página persiste custom_css/custom_html y desmarcar
+  // is_public (checkbox ausente) convierte la página en privada.
+  const putPage = await req('POST', '/admin/pages/' + pageRow.id, {
+    headers: { Cookie: cookieHeader(), 'x-csrf-token': csrf },
+    body: { name: 'E2E Page', slug: 'e2e-page', description: '', status: 'operational', template: 'default', refresh_interval: '15', group_ids: grp.id, custom_css: '.x{color:red}', custom_html: '<b>hi</b>', _method: 'PUT' }
+  });
+  check('PUT página (form) 302', putPage.status === 302, putPage.status);
+  const pageAfter = await queryOne('SELECT custom_css, custom_html, is_public FROM pages WHERE id=$1', [pageRow.id]);
+  check('custom_css/html persistidos desde el form', (pageAfter.custom_css || '').includes('color:red') && (pageAfter.custom_html || '').includes('<b>hi</b>'), JSON.stringify(pageAfter));
+  check('desmarcar is_public => página privada', pageAfter.is_public === 0, 'is_public=' + pageAfter.is_public);
+  const privPub = await req('GET', '/status/e2e-page');
+  check('página privada => 404 público', privPub.status === 404, 'status ' + privPub.status);
+  // Restaurar pública para el resto del test.
+  await req('POST', '/admin/pages/' + pageRow.id, {
+    headers: { Cookie: cookieHeader(), 'x-csrf-token': csrf },
+    body: { name: 'E2E Page', slug: 'e2e-page', description: '', status: 'operational', template: 'default', is_public: 'on', refresh_interval: '15', group_ids: grp.id, _method: 'PUT' }
+  });
+
   // 5. Public page shows the group's component WITHOUT individual assignment
   const pub = await req('GET', '/status/e2e-page');
   check('GET /status/e2e-page = 200', pub.status === 200, 'status ' + pub.status);
