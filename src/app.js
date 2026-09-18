@@ -94,6 +94,10 @@ setInterval(async () => {
 const app = express();
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
+// Optional bind address. Unset keeps Node's default (::/all interfaces). Setting
+// it to an IPv4 address (e.g. 0.0.0.0 or 127.0.0.1) makes the listener show up
+// in /proc/net/tcp, which some preview/proxy systems rely on to detect servers.
+const HOST = process.env.HOST || null;
 const HTTPS_ENABLED = process.env.HTTPS === 'true';
 
 // Security headers
@@ -362,6 +366,8 @@ module.exports = app;
     process.exit(1);
   }
   
+  const bind = HOST ? [PORT, HOST] : [PORT];
+  const shownHost = HOST || '::';
   if (HTTPS_ENABLED) {
     const https = require('https');
     const { generateSelfSignedCert } = require('./utils/ssl');
@@ -371,18 +377,18 @@ module.exports = app;
         key: fs.readFileSync(keyPath),
         cert: fs.readFileSync(certPath)
       }, app);
-      sslApp.listen(PORT, () => {
-        console.log(`StatusFe HTTPS: https://0.0.0.0:${PORT} (self-signed certificate)`);
+      sslApp.listen(...bind, () => {
+        console.log(`StatusFe HTTPS: https://${shownHost}:${PORT} (self-signed certificate)`);
       });
     } else {
       console.warn('HTTPS enabled but SSL cert generation failed. Falling back to HTTP.');
-      app.listen(PORT, () => {
-        console.log(`\n  StatusFe: http://0.0.0.0:${PORT}`);
+      app.listen(...bind, () => {
+        console.log(`\n  StatusFe: http://${shownHost}:${PORT}`);
       });
     }
   } else {
-    app.listen(PORT, () => {
-      console.log(`\n  StatusFe: http://0.0.0.0:${PORT}`);
+    app.listen(...bind, () => {
+      console.log(`\n  StatusFe: http://${shownHost}:${PORT}`);
     });
   }
 })();
