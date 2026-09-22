@@ -2,6 +2,14 @@
 
 All notable changes to StatusFe.
 
+## [Unreleased]
+
+### Fixed
+- **API status updates no longer block the web/panel while webhooks deliver** — `PUT /api/v1/components/:id/status` (and the other API routes) awaited webhook delivery before responding: an unbounded `dns.lookup` (libuv threadpool, 4 threads) plus up-to-5s POSTs per webhook could starve `compression()` for *every* request and freeze the whole web app for 5–20 s. Webhook dispatch is now detached from the request (fire-and-forget everywhere), DNS resolution is bounded to 2 s and **fails closed** (a webhook whose host cannot be resolved in time is skipped, never POSTed to an unvalidated address).
+- **Webhooks now respect their configured `events`** — the `events` column was stored but never honored, so every webhook received every event. Delivery is now filtered via `shouldDeliver()` (empty/unset/invalid `events` = all events, backward compatible).
+- **Status-change emails send in parallel with SMTP timeouts** — the per-admin `email_notifications` gating (2.2.4) now filters before sending, remaining sends run in parallel, and the SMTP transport has connection/greeting/socket timeouts (5 s / 5 s / 10 s) so a dead mail host can't hold senders open.
+- **New indexes on `status_history`** — composite `(component_id, created_at DESC)` and `(page_id, created_at DESC)` keep status-page renders fast as the history table grows.
+
 ## [2.2.4] — 2026-09-18
 
 ### Fixed (crashes / availability)

@@ -306,6 +306,8 @@ async function createTables() {
     'idx_page_components_comp ON page_components(component_id)',
     'idx_status_history_comp ON status_history(component_id)',
     'idx_status_history_page ON status_history(page_id)',
+    'idx_status_history_component_created ON status_history (component_id, created_at DESC)',
+    'idx_status_history_page_created ON status_history (page_id, created_at DESC)',
     'idx_incidents_page ON incidents(page_id)',
     'idx_incidents_status ON incidents(status)',
     'idx_api_keys_hash ON api_keys(key_hash)',

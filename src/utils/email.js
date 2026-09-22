@@ -15,6 +15,11 @@ async function getTransporter(smtp) {
     port: parseInt(smtp.port) || 587,
     secure: smtp.secure === 'true' || smtp.secure === true || smtp.secure === '1' || smtp.secure === 1,
     auth: smtp.user ? { user: smtp.user, pass: smtp.pass } : undefined,
+    // Bound SMTP I/O: a dead/unreachable host must not hang the sender
+    // indefinitely (each attempt previously re-consumed DNS threads).
+    connectionTimeout: 5000,
+    greetingTimeout: 5000,
+    socketTimeout: 10000,
   });
   transporter.__fingerprint = fingerprint;
 
@@ -75,14 +80,15 @@ async function notifyComponentStatusChange(componentName, oldStatus, newStatus, 
     </div>
   `;
 
-  const results = [];
-  for (const admin of admins) {
-    const enabled = admin.email_notifications !== 0;
-    if (!enabled) { results.push({ email: admin.email, sent: false, enabled }); continue; }
-    const sent = await sendEmail(admin.email, subject, html);
-    results.push({ email: admin.email, sent, enabled });
-  }
-  return results;
+  // Respect the per-admin preference (email_notifications=0 opts out — the
+  // gating itself shipped in 2.2.4) and send in parallel: sequential awaits
+  // multiplied the worst-case SMTP latency across admins.
+  const targets = admins.filter(admin => admin.email_notifications !== 0);
+  if (targets.length === 0) return [];
+  const settled = await Promise.allSettled(
+    targets.map(admin => sendEmail(admin.email, subject, html))
+  );
+  return settled.map((r, i) => ({ email: targets[i].email, sent: r.status === 'fulfilled' ? r.value : { ok: false, error: r.reason }, enabled: true }));
 }
 
 async function notifyIncident(created, incidentName, status, description, pageTitle) {

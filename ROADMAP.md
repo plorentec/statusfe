@@ -60,6 +60,17 @@ empezada; están ordenadas por valor/esfuerzo. Última revisión: v2.2.4 (2026-0
 - JSON con page + componentes + grupos + asignaciones para clonar páginas entre instalaciones.
 - Endpoint admin `GET /admin/pages/:id/export` + `POST /admin/pages/import`.
 
+### 7. Valor por defecto para `analytics_retention_days`
+- Hoy `analytics.cleanOldData()` retorna 0 si el ajuste no está seteado → `status_history` y `page_views` crecen sin límite en instalaciones que nunca abren Configuración.
+- Falta: fallback con un valor razonable (p. ej. 365 días) cuando la fila no exista, y reflejarlo en el form de configuración.
+
+### 8. `apiKeys.authenticate`: bcrypt async + caché LRU
+- `compareSync` (bcryptjs, JS puro) bloquea el event-loop ~100-300 ms por request autenticada.
+- Estrategia: pasar a `bcrypt.compare` async y cachear por `(key_prefix, sha256(key))` con LRU pequeña para no hashear la misma key en cada llamada.
+
+### 9. Cola/reintento de webhooks
+- La entrega es best-effort fire-and-forget (y así se mantiene el request no-bloqueante). Si se quiere entrega garantizada: tabla de cola con reintentos/backoff y marca de fallo visible en el admin.
+
 ## Deuda técnica conocida
 - ~~`api_keys` guarda la key en plano~~ → **resuelto en v2.2.3**: solo `key_hash` + `key_prefix`; el texto plano se muestra una vez al crear. `/admin/docs` ya no necesita el plaintext (usa clave pegada).
 - `components.list()` ya matchea el filtro `?group=` por membresías (join table); el parámetro sigue siendo el NOMBRE del grupo — valorar aceptar también `group_id`.

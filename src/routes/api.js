@@ -208,7 +208,7 @@ router.post('/pages/:pageId/components/:componentId', requirePerm('write'), asyn
   try {
     await components.assignToPage(req.params.pageId, req.params.componentId, req.body.position || 0);
     const page = await pages.getById(req.params.pageId) || await pages.getBySlug(req.params.pageId);
-    await triggerWebhook(page.id, 'component.assigned', { page_id: req.params.pageId, component_id: req.params.componentId });
+    triggerWebhook(page.id, 'component.assigned', { page_id: req.params.pageId, component_id: req.params.componentId }).catch(() => {});
     res.json({ message: 'Assigned' });
   } catch(e) { res.status(400).json({ error: e.message }); }
 });
@@ -276,7 +276,7 @@ router.put('/components/:id/status', requirePerm('write'), async (req, res) => {
   const pid = page_id || (result.component.pages && result.component.pages[0] ? result.component.pages[0].id : null);
   
   // Trigger webhook
-  if (pid) await triggerWebhook(pid, 'status.updated', { component_id: req.params.id, old: result.history?.old_status, new: status });
+  if (pid) triggerWebhook(pid, 'status.updated', { component_id: req.params.id, old: result.history?.old_status, new: status }).catch(() => {});
   
   // Create notifications for admins
   if (result.history) {
@@ -321,7 +321,7 @@ router.post('/incidents', requirePerm('write'), async (req, res) => {
   const incident = await incidents.create({ component_id, page_id, name, status, impact, starts_at: cleanStartsAt, resolved_at: cleanResolvedAt, message, visible });
   if (!incident) return res.status(400).json({ error: 'a page_id is required, or the component must belong to a page' });
   const pid = incident.page_id || page_id;
-  if (pid) await triggerWebhook(pid, 'incident.created', { incident_id: incident.id, name: incident.name, status: incident.status });
+  if (pid) triggerWebhook(pid, 'incident.created', { incident_id: incident.id, name: incident.name, status: incident.status }).catch(() => {});
   const admins = await queryAll("SELECT id FROM users WHERE role=$1", ['admin']);
   admins.forEach(a => {
     notifications.create({
@@ -355,14 +355,14 @@ router.put('/incidents/:id', requirePerm('write'), async (req, res) => {
       }).catch(() => {});
     });
   }
-  await triggerWebhook(updated.page_id, 'incident.updated', { incident_id: updated.id, status: updated.status });
+  triggerWebhook(updated.page_id, 'incident.updated', { incident_id: updated.id, status: updated.status }).catch(() => {});
   res.json({ incident: updated });
 });
 router.delete('/incidents/:id', requirePerm('admin'), async (req, res) => {
   const incident = await incidents.get(req.params.id);
   if (!incident) return res.status(404).json({ error: 'Not found' });
   await incidents.delete(req.params.id);
-  await triggerWebhook(incident.page_id, 'incident.deleted', { incident_id: req.params.id });
+  triggerWebhook(incident.page_id, 'incident.deleted', { incident_id: req.params.id }).catch(() => {});
   res.json({ message: 'Deleted' });
 });
 

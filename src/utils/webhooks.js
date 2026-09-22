@@ -48,22 +48,39 @@ function isPrivateIp(ip) {
   return false;
 }
 
-module.exports = { validateWebhookUrl, isPrivateIp, deliver };
+// Fail closed: a webhook is only delivered when its `events` column is empty
+// (or unparsable — backward compat: legacy rows = all events) or lists the event.
+// Exported for testing.
+function shouldDeliver(webhook, event) {
+  let evs;
+  try { evs = JSON.parse(webhook.events || '[]'); } catch (e) { evs = []; }
+  if (!Array.isArray(evs) || evs.length === 0) return true; // empty/invalid = all events (backward compat)
+  return evs.includes(event);
+}
+
+// Bound a promise; used to cap dns.lookup (libuv getaddrinfo can hang and
+// starve the threadpool). Portable — no reliance on Resolver timeout options.
+const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => { const t = setTimeout(() => rej(new Error('dns-timeout')), ms); p.finally(() => clearTimeout(t)).catch(() => {}); })]);
+
+module.exports = { validateWebhookUrl, isPrivateIp, shouldDeliver, deliver };
 
 async function deliver(pageId, event, data) {
   try {
     const rows = await queryAll('SELECT * FROM webhooks WHERE page_id=$1 AND is_active=1', [pageId]);
+    const targets = rows.filter(wh => shouldDeliver(wh, event));
     const payload = { id: uuidv4(), event, data, timestamp: new Date().toISOString() };
-    const promises = rows.map(async wh => {
+    const promises = targets.map(async wh => {
       const url = new URL(wh.url);
       // SSRF guard: resolve the hostname and refuse private IPs. validateWebhookUrl
       // only inspects the hostname at creation time — a public-looking name can
       // still resolve to 127.0.0.1/10.x/169.254.x etc.
+      // The lookup is bounded to 2s and fails closed (skip delivery) on
+      // timeout/error — never POST to an unvalidated host.
       let addresses;
       try {
-        addresses = await dns.lookup(url.hostname, { all: true });
+        addresses = await withTimeout(dns.lookup(url.hostname, { all: true }), 2000);
       } catch (e) {
-        return; // unresolvable host: skip silently
+        return; // unresolvable or slow host: skip silently
       }
       if (addresses.some(a => isPrivateIp(a.address))) {
         console.log('Webhook skipped (resolves to a private address):', wh.url);

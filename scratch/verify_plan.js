@@ -129,7 +129,13 @@ async function main() {
   }
   check('verifySignedCookie: cookies malformadas => null sin throw', !threw && allNull);
 
-  const { isPrivateIp } = require(path.join(ROOT, 'src', 'utils', 'webhooks'));
+  const { isPrivateIp, shouldDeliver } = require(path.join(ROOT, 'src', 'utils', 'webhooks'));
+  // shouldDeliver: honors the webhook `events` column (empty/invalid = all events)
+  check('shouldDeliver: evento listado => true', shouldDeliver({ events: '["status.updated"]' }, 'status.updated') === true);
+  check('shouldDeliver: evento NO listado => false', shouldDeliver({ events: '["incident.created"]' }, 'status.updated') === false);
+  check('shouldDeliver: array vacio => true (todos)', shouldDeliver({ events: '[]' }, 'status.updated') === true);
+  check('shouldDeliver: JSON invalido => true (compat)', shouldDeliver({ events: 'not-json' }, 'status.updated') === true);
+  check('shouldDeliver: columna ausente => true (compat)', shouldDeliver({}, 'status.updated') === true);
   const priv = ['127.0.0.1','10.1.2.3','172.16.0.1','172.31.9.9','192.168.1.4','169.254.169.254','0.0.0.0','::1','fe80::1','fc00::1','fd12::1','::ffff:192.168.0.5'];
   const pub = ['8.8.8.8','1.1.1.1','172.32.0.1','2606:4700::1111'];
   check('isPrivateIp: rangos privados detectados', priv.every(ip => isPrivateIp(ip)));
