@@ -4,13 +4,7 @@ All notable changes to StatusFe.
 
 ## [Unreleased]
 
-### Fixed
-- **API status updates no longer block the web/panel while webhooks deliver** — `PUT /api/v1/components/:id/status` (and the other API routes) awaited webhook delivery before responding: an unbounded `dns.lookup` (libuv threadpool, 4 threads) plus up-to-5s POSTs per webhook could starve `compression()` for *every* request and freeze the whole web app for 5–20 s. Webhook dispatch is now detached from the request (fire-and-forget everywhere), DNS resolution is bounded to 2 s and **fails closed** (a webhook whose host cannot be resolved in time is skipped, never POSTed to an unvalidated address).
-- **Webhooks now respect their configured `events`** — the `events` column was stored but never honored, so every webhook received every event. Delivery is now filtered via `shouldDeliver()` (empty/unset/invalid `events` = all events, backward compatible).
-- **Status-change emails send in parallel with SMTP timeouts** — the per-admin `email_notifications` gating (2.2.4) now filters before sending, remaining sends run in parallel, and the SMTP transport has connection/greeting/socket timeouts (5 s / 5 s / 10 s) so a dead mail host can't hold senders open.
-- **New indexes on `status_history`** — composite `(component_id, created_at DESC)` and `(page_id, created_at DESC)` keep status-page renders fast as the history table grows.
-
-## [2.2.4] — 2026-09-18
+## [2.2.4] — 2026-09-22
 
 ### Fixed (crashes / availability)
 - **DoS via a malformed session cookie** — `decodeURIComponent` was called without a guard on the raw `session_id`/`_flash_key`/logout cookies. A value like `%zz` threw a `URIError`; because the session middleware is `async`, Express 4 didn't catch it and the whole process crashed on `unhandledRejection`. Decoding is now guarded (malformed → anonymous). A `process.on('unhandledRejection')` logger was added as a safety net so a single rejected promise can never take the status page down.
@@ -37,6 +31,12 @@ All notable changes to StatusFe.
 - **`PUT /api/v1/components/:id` with the same `group_id` wiped other memberships** — the legacy field is now only synced when the primary group actually changes.
 - **Incident status was unvalidated** — with the default `cascade_status='same'`, an arbitrary string was copied straight into `components.status`. Only the four lifecycle statuses are accepted now (unknown → `investigating`, with a `400` at the API edge).
 - **`notice_page_ids` sent as a comma string was iterated character by character** via the API, generating FK-violating inserts. It is normalized to an id list.
+
+### Fixed (performance / responsiveness)
+- **API status updates no longer block the web/panel while webhooks deliver** — `PUT /api/v1/components/:id/status` (and the other API routes) awaited webhook delivery before responding: an unbounded `dns.lookup` (libuv threadpool, 4 threads) plus up-to-5s POSTs per webhook could starve `compression()` for *every* request and freeze the whole web app for 5–20 s. Webhook dispatch is now detached from the request (fire-and-forget everywhere), DNS resolution is bounded to 2 s and **fails closed** (a webhook whose host cannot be resolved in time is skipped, never POSTed to an unvalidated address).
+- **Webhooks now respect their configured `events`** — the `events` column was stored but never honored, so every webhook received every event. Delivery is now filtered via `shouldDeliver()` (empty/unset/invalid `events` = all events, backward compatible).
+- **Status-change emails send in parallel with SMTP timeouts** — the per-admin `email_notifications` gating (2.2.4) now filters before sending, remaining sends run in parallel, and the SMTP transport has connection/greeting/socket timeouts (5 s / 5 s / 10 s) so a dead mail host can't hold senders open.
+- **New indexes on `status_history`** — composite `(component_id, created_at DESC)` and `(page_id, created_at DESC)` keep status-page renders fast as the history table grows.
 
 ### Fixed (functional / UI)
 - **Custom CSS/HTML were silently discarded by the page form** — the admin handlers never read `custom_css`/`custom_html` from the body (only the REST API persisted them).

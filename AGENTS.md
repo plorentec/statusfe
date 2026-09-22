@@ -91,7 +91,7 @@ data/audit_logs/        ← Daily rotated CSV exports (created at runtime, `app.
 ## Version check
 - `/admin/check-update` strips 'v' prefix from GitHub tag: `(release.tag_name || ...).replace(/^v/, '')`. (No route exists at root `/check-update` — admin scope only.)
 - `currentVersion` comes from `package.json` (`pkg.version`) — bump the version there (and CHANGELOG) when releasing; no hardcoded strings in views. Status page footers use `app.locals.version`.
-- GitHub releases must use tag format `v2.2.4` (with 'v'). Release checklist: bump `package.json` + `CHANGELOG.md` → push → `git tag -a vX.Y.Z` + push tag → GitHub release with changelog notes. Refresh `package-lock.json` too (`npm install --package-lock-only`). NOTE: **v2.2.4 is bumped in package.json but NOT tagged/released on origin yet** (remote tags stop at v2.2.3); a fresh clone may need `git fetch --tags`.
+- GitHub releases must use tag format `v2.2.4` (with 'v'). Release checklist: bump `package.json` + `CHANGELOG.md` → push → `git tag -a vX.Y.Z` + push tag → GitHub release with changelog notes. Refresh `package-lock.json` too (`npm install --package-lock-only`).
 
 ## Security model (v2.2.4)
 - `/admin/docs` is **admin-only** (`role=user` is redirected). Since 2.2.3 it does **not** show full API keys: the list shows the 8-char `key_prefix` and the curl examples need a manually pasted key.
