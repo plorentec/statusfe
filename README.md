@@ -103,7 +103,7 @@ Access / Accede en: `http://localhost:3000`
 | **HTTPS** | Self-signed cert auto-generation via openssl (`HTTPS=true`) | Generación automática de certificado auto-firmado vía openssl |
 | **CORS** | Restricted to `/status/`, `/embed/`, `/api/` paths only | Restringido solo a las rutas `/status/`, `/embed/`, `/api/` |
 | **Session Security** | PostgreSQL persisted, signed cookies (HMAC-SHA256), 24h TTL, hourly cleanup | Persistidas en PostgreSQL, cookies firmadas (HMAC-SHA256), TTL 24h, limpieza horaria |
-| **Registration Lock** | Disabled after first user is created | Desactivada después de crear el primer usuario |
+| **Registration Closed** | Removed since v2.2.1 — `/register` redirects to `/login`; users are created only from the admin panel | Cerrada desde v2.2.1 — `/register` redirige a `/login`; los usuarios se crean solo desde el panel de administración |
 
 ### API / API REST
 
@@ -173,28 +173,33 @@ Access / Accede en: `http://localhost:3000`
 ### Docker / Docker
 
 ```yaml
-# docker-compose.yml
+# docker-compose.yml (network_mode: host on both services — no ports: mapping;
+# DB_HOST points at 127.0.0.1 because host networking shares the namespace)
 services:
   statusfe:
-    build: .
-    ports:
-      - "${PORT:-3000}:3000"
+    build:
+      context: .
+      network: host
+    container_name: statusfe
+    restart: unless-stopped
+    network_mode: host
     environment:
       - PORT=3000
+      - HOST=0.0.0.0
       - SESSION_SECRET=${SESSION_SECRET:-change-me-to-a-random-string}
-      - DB_HOST=postgres
+      - DB_HOST=127.0.0.1
       - DB_PORT=5432
       - DB_NAME=statusfe
       - DB_USER=postgres
       - DB_PASSWORD=statusfe-secret
-    depends_on:
-      postgres:
-        condition: service_healthy
     volumes:
       - statusfe-data:/app/data
 
   postgres:
     image: postgres:16-alpine
+    container_name: statusfe-postgres
+    restart: unless-stopped
+    network_mode: host
     environment:
       - POSTGRES_DB=statusfe
       - POSTGRES_USER=postgres
@@ -202,7 +207,7 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -h 127.0.0.1"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -290,7 +295,7 @@ Returns / Obtener: `{ "component": { ... } }` or `{ "component": null }` if not 
 - Se muestra en la columna **External ID** de `/admin/components`.
 
 #### Component Groups / Grupos de Componentes
-Public list / Lista pública (no auth):
+Todos los endpoints de grupos requieren API key (`router.use(auth)` en `api.js:108`):
 ```
 GET    /api/v1/groups              — List groups (optional ?page_id=) / Listar grupos
 ```
@@ -421,7 +426,7 @@ docker compose exec statusfe env | grep DB_
 docker exec -it statusfe node -e "
 const bcrypt = require('bcryptjs');
 const { run } = require('./src/db/database');
-run('UPDATE users SET password_hash=? WHERE email=?', [
+run('UPDATE users SET password_hash=$1 WHERE email=$2', [
   bcrypt.hashSync('newpassword', 10), 'admin@status.local'
 ]);
 "
