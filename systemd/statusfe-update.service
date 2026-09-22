@@ -1,0 +1,17 @@
+# statusfe-update.service — the oneshot unit that applies a StatusFe self-update.
+# Installed by scripts/install-update-agent.sh (which substitutes __SELF_UPDATE_BIN__).
+# Do NOT use this template directly; run the installer.
+[Unit]
+Description=StatusFe self-update agent (git checkout + docker compose + rollback)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+# __SELF_UPDATE_BIN__ = /usr/local/bin/statusfe-self-update
+ExecStart=__SELF_UPDATE_BIN__
+# Allow ample time for build + 60s health checks + a possible rollback cycle.
+TimeoutStartSec=1800
+
+[Install]
+WantedBy=multi-user.target

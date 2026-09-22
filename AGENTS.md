@@ -42,6 +42,10 @@ src/utils/csv.js        ← `csvCell()` — OWASP spreadsheet formula-injection 
 src/utils/email.js      ← Nodemailer transporter (cached per SMTP fingerprint); `sendWelcomeEmail` loads `settings.getSMTP()`.
 src/utils/totp.js       ← 2FA TOTP helper.
 src/utils/ssl.js        ← Self-signed cert via openssl when `HTTPS=true`.
+src/utils/update-agent.js ← Self-update bridge: atomic `data/update_*.json` state, server-side latest-release resolution (`SELF_UPDATE_RELEASES_URL`), request/status logic (409/400/501/502 guards, `no_agent` detection). Used by `POST /admin/update` + `GET /admin/update/status`.
+scripts/self-update.sh  ← Host-side update agent (git checkout tag + docker compose + 60s health + auto-rollback; always exits 0, honest `update_result.json`). Installed to `/usr/local/bin/statusfe-self-update`.
+scripts/install-update-agent.sh ← sudo installer: sed-injects the volume trigger path into the systemd unit templates, enables `statusfe-update.path`; `uninstall` argument reverses it.
+systemd/statusfe-update.path / .service ← Unit TEMPLATES with `__TRIGGER_PATH__`/`__SELF_UPDATE_BIN__` placeholders — never install raw.
 views/admin.ejs         ← Master EJS layout for `layout()`-rendered fragments. Sidebar is hardcoded HERE (lines 11-123) for those views.
 views/partials/_sidebar.ejs ← SECOND sidebar copy, included by the 16 full-document `views/admin/*.ejs`. **Add new nav links in BOTH.** (`views/admin/dashboard.ejs` has NO sidebar.)
 data/audit_logs/        ← Daily rotated CSV exports (created at runtime, `app.js:74`; NOT covered by `.gitignore`, which only ignores `data/*.db*` and `data/session_secret.txt`).
@@ -137,6 +141,16 @@ Improvement ideas not yet implemented live in `ROADMAP.md`.
 - `systemd/statusfe.service` in the repo is legacy/alternative (bare node as `www-data`) — production uses Docker.
 - Version on the admin panel (`/admin/check-update`) compares `package.json` against the latest GitHub release tag — publish a release after bumping so the banner clears.
 
+## Self-update (v2.2.5)
+- **App-side**: `src/utils/update-agent.js` — atomic file read/write (tmp + rename) in `data/`, resolves the latest GitHub release server-side (`SELF_UPDATE_RELEASES_URL` overridable; on any fetch/parse failure returns null → the route 502s; the route never crashes), manages `update_request.json` (trigger) + `update_result.json` (agent feedback). Routes: `POST /admin/update` (202 queued / 400 target==current / 409 in progress / 501 disabled / 502 could not resolve latest), `GET /admin/update/status` (requireAdmin; `idle` when no files, else the result file, else `no_agent`). Guards: same POST rejected while a request is <60 s old or an `in_progress` result is <10 min old. `SELF_UPDATE_DISABLED=1` → 501 (checked at call time).
+- **no_agent semantics**: a request file older than 20 s with no fresh `in_progress` result means no host agent consumed it → the status endpoint returns `no_agent` and the UI disables the button with a "No update agent is configured on this host" hint.
+- **Host agent**: `scripts/self-update.sh` (installed at `/usr/local/bin/statusfe-self-update`), config at `/etc/default/statusfe-update`, systemd `.path` + `.service` templates in `systemd/` (placeholders `__TRIGGER_PATH__`/`__SELF_UPDATE_BIN__` substituted by the installer). The agent consumes the request file **first**, writes `in_progress` at every phase (`starting`→`building`→`swapping`→`health`), and ALWAYS exits 0 (honest result file, no systemd restart loop). Auto-rolls back to the previous commit on any post-checkout failure.
+- **Environment**: `SELF_UPDATE_DISABLED=1` (disables POST /admin/update), `SELF_UPDATE_RELEASES_URL` (override GitHub API — used by the tests to avoid the network).
+- **Install**: `sudo bash scripts/install-update-agent.sh [REPO_DIR]` (auto-detects volume mountpoint); remove with `sudo bash scripts/install-update-agent.sh uninstall`.
+- **Yoda specifics**: volume name is auto-detected by the installer (`docker volume ls ... statusfe*data`); deploy recipe unchanged (git fetch + compose build/up for app, agent installed separately).
+- **Data dir**: `path.join(__dirname, '..', '..', 'data')` — same as other `data/` files (line 8 of `app.js`).
+- **Tests**: `scratch/verify_update.js` boots the app against pg-mem with `SELF_UPDATE_RELEASES_URL` pointed at a local mock (never the network); the two `data/update_*.json` files are gitignored and cleaned at test start/exit.
+
 ## Gotchas
 - **SQL**: placeholders `$1, $2, ...` not `?`. Use `NOW()`, `CURRENT_TIMESTAMP`. Intervals: `NOW() - INTERVAL '30 days'` / `($1::text || ' days')::interval`.
 - **SQLite→PG**: `INSERT OR REPLACE` → `INSERT ... ON CONFLICT ... DO UPDATE`. `INSERT OR IGNORE` → `ON CONFLICT ... DO NOTHING`.
@@ -145,5 +159,6 @@ Improvement ideas not yet implemented live in `ROADMAP.md`.
 - Rate limits: global 200/min, auth 10/15min, API 60/min (`src/middleware/rate-limit.js:4-28`), admin 60/min (inline in `app.js:125-132`). All mounts wrapped in `safeLimiter` (`app.js:107`) so a limiter-internal error can't 500/stop serving.
 - `api.js` route ORDER matters: public `GET /pages/:slug` (`:50`) matches any `/pages/<x>`; `/pages/admin` must stay registered BEFORE it (`:30`). Since 2.2.4 the public handlers are auth-aware via `optionalAuth` — do not re-add separate authed `/pages/:id` variants behind it (that shadowing was the 2.2.4 fix).
 - Docker Compose: `network_mode: host` on both services. No `ports:` mapping. `DB_HOST=127.0.0.1` (not `postgres`). Build has `network: host`. See Production deployment section for the live server specifics.
+
 
 

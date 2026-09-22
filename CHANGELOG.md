@@ -4,6 +4,11 @@ All notable changes to StatusFe.
 
 ## [Unreleased]
 
+### Added
+- **Self-update button** (`/admin/changelog`) — one-click update to the latest GitHub release. The app writes a trigger file (`data/update_request.json`); a host-side systemd agent (`/usr/local/bin/statusfe-self-update`) reads it, checks out the tag, rebuilds, and health-checks with automatic rollback on failure. The UI polls for phases, handles `no_agent`, `failed`, and `rolled_back` states gracefully.
+- **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
+- **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
+
 ## [2.2.4] — 2026-09-22
 
 ### Fixed (crashes / availability)

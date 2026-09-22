@@ -82,7 +82,7 @@ Access / Accede en: `http://localhost:3000`
 | **Notifications Center** | Auto-created on status changes, mark read/delete | Centro de notificaciones automáticas por cambios de estado |
 | **Analytics Dashboard** | 30-day page views, uptime %, per-page and per-component charts | Vista de páginas 30 días, % de disponibilidad, gráficos por página y componente |
 | **Audit Log** | Last 100 entries, CSV download with date filters, configurable retention | Últimas 100 entradas, descarga CSV con filtros de fecha, retención configurable |
-| **Changelog** | Version history and release notes with GitHub update checker | Historial de versiones y notas de lanzamiento con verificador de actualizaciones |
+| **Changelog** | Version history and release notes with GitHub update checker and one-click Update now button | Historial de versiones y notas de lanzamiento con verificador de actualizaciones y botón "Actualizar ahora" |
 | **Customize** | Global visual settings: colors, fonts, logo, border radius | Configuración visual global: colores, fuentes, logo, radio de borde |
 | **API Documentation** | Interactive docs page with key selector for testing | Documentación interactiva con selector de clave para pruebas |
 | **Status Config** | Custom component and incident status definitions (labels, colors) | Definiciones personalizadas de estados (etiquetas, colores) |

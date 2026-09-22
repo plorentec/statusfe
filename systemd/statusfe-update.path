@@ -1,0 +1,13 @@
+# statusfe-update.path — triggers the self-update agent when the app writes the request file.
+# Installed by scripts/install-update-agent.sh (which substitutes __TRIGGER_PATH__).
+# Do NOT use this template directly; run the installer.
+[Unit]
+Description=StatusFe self-update trigger (watch for update_request.json)
+
+[Path]
+# __TRIGGER_PATH__ = <docker volume mountpoint>/update_request.json
+PathExists=__TRIGGER_PATH__
+Unit=statusfe-update.service
+
+[Install]
+WantedBy=multi-user.target

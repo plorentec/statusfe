@@ -9,6 +9,7 @@ const { pages, components, componentGroups, apiKeys, incidents, maintenance, not
 const pkg = require('../../package.json');
 const { requireAuth, requireAdmin, destroyUserSessions } = require('../middleware/session');
 const { layout } = require('../middleware/layout');
+const updateAgent = require('../utils/update-agent');
 
 router.use(requireAuth);
 
@@ -1066,6 +1067,31 @@ router.get('/changelog', async (req, res) => {
     messageType: res.locals.messageType,
     version: pkg.version
   }));
+});
+
+// Self-update: queue an update to the latest published release. The target is
+// resolved SERVER-SIDE (never accepted from the client) and handed to a
+// host-side agent through data/update_request.json — the app never touches
+// Docker/git itself. CSRF is enforced by the global middleware on /admin.
+router.post('/update', requireAdmin, async (req, res) => {
+  try {
+    const result = await updateAgent.requestUpdate(req.user);
+    return res.status(result.code).json(result.body);
+  } catch (e) {
+    console.error('Self-update request error:', e);
+    return res.status(500).json({ error: 'Update request failed.' });
+  }
+});
+
+// Self-update progress for the changelog poller (result written by the agent).
+router.get('/update/status', requireAdmin, async (req, res) => {
+  try {
+    const result = await updateAgent.getUpdateStatus();
+    return res.status(result.code).json(result.body);
+  } catch (e) {
+    console.error('Self-update status error:', e);
+    return res.status(500).json({ error: 'Could not read update status.' });
+  }
 });
 
 // Check for updates

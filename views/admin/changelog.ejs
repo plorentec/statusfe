@@ -45,22 +45,127 @@
 </div>
 
 <script>
+function esc(s) {
+  if (!s) return '';
+  return String(s).replace(/[&<>"']/g, function(c) {
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+  });
+}
+
+var _pollTimer = null;
+var _pollStop = 0;
+var _consecutiveErrors = 0;
+
 function checkUpdate() {
-  const el = document.getElementById('updateStatus');
+  var el = document.getElementById('updateStatus');
   el.innerHTML = '<p style="color: var(--info);">Checking...</p>';
   fetch('/admin/check-update')
-    .then(r => r.json())
-    .then(data => {
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
       if (data.hasUpdate) {
-        el.innerHTML = `<p style="color: var(--warning);">⚠️ New version available: <strong>${data.latestVersion}</strong></p>
-          <p>Current: ${data.currentVersion} — Published: ${new Date(data.publishedAt).toLocaleDateString()}</p>
-          <a href="${data.url}" target="_blank" class="btn btn-primary">View Release Notes</a>`;
+        el.innerHTML = '<p style="color: var(--warning);">⚠️ New version available: <strong>' + esc(data.latestVersion) + '</strong></p>' +
+          '<p>Current: ' + esc(data.currentVersion) + ' — Published: ' + esc(data.publishedAt) + '</p>' +
+          '<a href="' + esc(data.url) + '" target="_blank" class="btn btn-primary">View Release Notes</a> ' +
+          '<button class="btn btn-primary" onclick="startUpdate()">⬆️ Update now to v' + esc(data.latestVersion)</button>';
       } else {
-        el.innerHTML = `<p style="color: var(--success);">✅ You're running the latest version: ${data.currentVersion}</p>`;
+        el.innerHTML = '<p style="color: var(--success);">✅ You\'re running the latest version: ' + esc(data.currentVersion) + '</p>';
       }
     })
-    .catch(err => {
-      el.innerHTML = `<p style="color: var(--danger);">Could not check for updates: ${err.message}</p>`;
+    .catch(function(err) {
+      el.innerHTML = '<p style="color: var(--danger);">Could not check for updates: ' + esc(err.message) + '</p>';
     });
 }
+
+function startUpdate() {
+  var el = document.getElementById('updateStatus');
+  el.innerHTML = '<p style="color: var(--info);">Starting update…</p>';
+
+  fetch('/admin/update', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': document.getElementById('csrfToken') ? document.getElementById('csrfToken').value : '' }
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.status === 'queued') {
+      el.innerHTML = '<p style="color: var(--info);">Update queued — waiting for agent…</p>';
+      _pollStop = Date.now() + 180000; // 3 min
+      pollStatus();
+    } else {
+      el.innerHTML = '<p style="color: var(--danger);">Failed to queue update: ' + esc(data.error) + '</p>' +
+        '<a href="https://github.com/plorentec/statusfe/releases/latest" target="_blank" class="btn btn-secondary">View Release Notes</a>';
+    }
+  })
+  .catch(function(err) {
+    el.innerHTML = '<p style="color: var(--danger);">Update request failed: ' + esc(err.message) + '</p>';
+  });
+}
+
+function pollStatus() {
+  var el = document.getElementById('updateStatus');
+  if (Date.now() > _pollStop) {
+    el.innerHTML = '<p style="color: var(--danger);">Update timed out after 3 minutes. Check the release page for manual update.</p>' +
+      '<a href="https://github.com/plorentec/statusfe/releases/latest" target="_blank" class="btn btn-secondary">View Release Notes</a>';
+    _pollTimer = null;
+    return;
+  }
+
+  fetch('/admin/update/status', {
+    headers: { 'X-CSRF-Token': document.getElementById('csrfToken') ? document.getElementById('csrfToken').value : '' }
+  })
+  .then(function(r) {
+    if (!r.ok) throw new Error('Status endpoint unavailable');
+    return r.json();
+  })
+  .then(function(data) {
+    _consecutiveErrors = 0;
+    if (data.status === 'done') {
+      el.innerHTML = '<p style="color: var(--success);">✅ Updated to v' + esc(data.targetVersion) + ' — reloading…</p>';
+      _pollTimer && clearInterval(_pollTimer);
+      _pollTimer = null;
+      setTimeout(function() { location.reload(); }, 3000);
+    } else if (data.status === 'failed' || data.status === 'rolled_back') {
+      var msg = data.status === 'rolled_back' ? '⚠️ Update was rolled back' : '❌ Update failed';
+      el.innerHTML = '<p style="color: var(--danger);">' + esc(msg) + '.</p>' +
+        (data.error ? '<p style="color: var(--danger);">Error: ' + esc(data.error) + '</p>' : '') +
+        '<a href="https://github.com/plorentec/statusfe/releases/latest" target="_blank" class="btn btn-secondary">View Release Notes</a>';
+      _pollTimer && clearInterval(_pollTimer);
+      _pollTimer = null;
+    } else if (data.status === 'no_agent') {
+      el.innerHTML = '<p style="color: var(--warning);">⚠️ ' + esc(data.hint || 'No update agent is configured on this host') + '</p>' +
+        '<a href="https://github.com/plorentec/statusfe/releases/latest" target="_blank" class="btn btn-secondary">View Release Notes</a>';
+      _pollTimer && clearInterval(_pollTimer);
+      _pollTimer = null;
+    } else {
+      // in_progress, queued — render phase
+      var phaseText = data.phase ? esc(data.phase) : 'Waiting for agent…';
+      var statusLabel = phaseText.charAt(0).toUpperCase() + phaseText.slice(1);
+      el.innerHTML = '<p style="color: var(--info);">⏳ ' + statusLabel + '</p>' +
+        (data.targetVersion ? '<p style="color: var(--info);">Target: v' + esc(data.targetVersion) + '</p>' : '');
+      _pollTimer = setTimeout(pollStatus, 2000);
+    }
+  })
+  .catch(function(err) {
+    _consecutiveErrors++;
+    var el = document.getElementById('updateStatus');
+    el.innerHTML = '<p style="color: var(--warning);">Update running — waiting for the app to come back… (' + _consecutiveErrors + ')</p>';
+    _pollTimer = setTimeout(pollStatus, 2000);
+  });
+}
+
+// On page load: if already in progress or queued, resume polling automatically.
+(function() {
+  fetch('/admin/update/status', {
+    headers: { 'X-CSRF-Token': document.getElementById('csrfToken') ? document.getElementById('csrfToken').value : '' }
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.status === 'in_progress' || data.status === 'queued') {
+      var el = document.getElementById('updateStatus');
+      el.innerHTML = '<p style="color: var(--info);">⏳ Update in progress — checking status…</p>';
+      _pollStop = Date.now() + 180000;
+      pollStatus();
+    }
+  })
+  .catch(function() { /* silently ignore — nothing to resume */ });
+})();
 </script>
