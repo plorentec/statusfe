@@ -3,6 +3,7 @@ data/*.db
 data/*.db-wal
 data/*.db-shm
 data/session_secret.txt
+data/seed_keys.txt
 .env
 *.log
 .DS_Store

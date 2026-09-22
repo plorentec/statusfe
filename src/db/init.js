@@ -1,6 +1,15 @@
 const { prepare, run, queryOne, queryAll } = require('./database');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
+const fs = require('fs');
+const path = require('path');
+
+// One-shot recovery file for the seeded "Default Admin Key" (fresh DB only).
+// seed() writes it; migrate() deletes it on the NEXT boot (never the boot that
+// wrote it — seedKeysFileJustWritten guards that), so the plaintext can sit on
+// disk at most until the next restart.
+const SEED_KEYS_FILE = path.join(__dirname, '..', '..', 'data', 'seed_keys.txt');
+let seedKeysFileJustWritten = false;
 
 // Create all tables (idempotent — IF NOT EXISTS)
 async function createTables() {
@@ -347,14 +356,33 @@ async function seed() {
       [adminId, 'Admin', 'admin', 'Default admin page', 'operational', 'default']
     );
 
-    // Default API key — plaintext value is generated, hashed and returned once at
-    // setup; it is NOT persisted readable (security: no plaintext at rest).
+    // Default Admin API Key — the plaintext is exposed exactly once (console +
+    // one-shot 0600 file). Auth still relies on key_hash only; the DB column
+    // stays NULL so no plaintext at rest. migrate() deletes the file on the next
+    // boot (one-time recovery).
     const apiKey = uuidv4() + '-' + uuidv4();
     const hash = bcrypt.hashSync(apiKey, 10);
+    // Persist a NULL in the key column (security: plaintext only in file + console).
     await run(
       'INSERT INTO api_keys (id, key_hash, key, key_prefix, name, permissions) VALUES ($1, $2, $3, $4, $5, $6)',
       [uuidv4(), hash, null, apiKey.substring(0, 8), 'Default Admin Key', JSON.stringify(['read','write','admin'])]
     );
+
+    // Write plaintext key to a 0600 file and print to console. The file survives
+    // the boot that created it (migrate() does not delete it until the next boot).
+    try {
+      const dataDir = path.join(__dirname, '..', '..', 'data');
+      if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+      fs.writeFileSync(SEED_KEYS_FILE, apiKey + '\n', { mode: 0o600 });
+      fs.chmodSync(SEED_KEYS_FILE, 0o600); // enforce mode in case file already existed
+      seedKeysFileJustWritten = true;
+      console.log('=== Default Admin Key (save this — it will NOT be shown again) ===');
+      console.log(apiKey);
+      console.log('Also saved to ' + SEED_KEYS_FILE + ' — delete this file after storing the key.');
+    } catch(e) {
+      console.error('WARNING: could not write seed key file:', e.message);
+      console.log('Default Admin Key: ' + apiKey);
+    }
 
     // Default components
     const defaults = [
@@ -442,14 +470,19 @@ async function seed() {
       'SELECT id FROM status_mappings WHERE incident_status=$1 AND component_status=$2',
       [m.incident, m.component]
     );
-    if (!exists) {
-      await run(
-        'INSERT INTO status_mappings (id, incident_status, component_status) VALUES ($1, $2, $3)',
-        [uuidv4(), m.incident, m.component]
-      );
+if (!exists) {
+        await run(
+          'INSERT INTO status_mappings (id, incident_status, component_status) VALUES ($1, $2, $3)',
+          [uuidv4(), m.incident, m.component]
+        );
+      }
     }
+
+    // Default analytics retention window (days). Seed 365 so analytics getters
+    // and cleanOldData() have a consistent baseline; existing installs keep
+    // whatever value they set via the admin UI.
+    await run("INSERT INTO settings (key,value) VALUES ('analytics_retention_days','365') ON CONFLICT (key) DO NOTHING");
   }
-}
 
 // Run migrations + seed
 async function init() {
@@ -474,7 +507,20 @@ async function migrate() {
 
   // Security: never keep API key plaintext at rest. Auth relies on key_hash only;
   // wipe any previously stored readable key (idempotent, safe on every boot).
-  await run(`UPDATE api_keys SET key = NULL WHERE key IS NOT NULL`);
+  // The seeded "Default Admin Key" is exempted — its plaintext lives in the
+  // one-shot file (data/seed_keys.txt), not in the DB.
+  await run(`UPDATE api_keys SET key = NULL WHERE key IS NOT NULL AND name <> 'Default Admin Key'`);
+
+  // One-shot seed key file: keep the file from the boot that wrote it (so the
+  // operator can still read it that boot), but delete it on the next boot so
+  // plaintext never sits on disk across reboots.
+  if (!seedKeysFileJustWritten && fs.existsSync(SEED_KEYS_FILE)) {
+    try {
+      fs.unlinkSync(SEED_KEYS_FILE);
+      console.log('Removed stale data/seed_keys.txt (seeded key file is one-boot only)');
+    } catch(e) { /* ignore — already gone */ }
+  }
+  seedKeysFileJustWritten = false;
 
   // is_global on component_groups: add the column if the table predates it
   // (older installs), then backfill existing global groups. "Global" previously

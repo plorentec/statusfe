@@ -1,6 +1,7 @@
 const { prepare, run, queryOne, queryAll } = require('./database');
 const { v4: uuidv4 } = require('uuid');
 const { sanitizeCss, sanitizeHtml } = require('../utils/sanitize');
+const crypto = require('crypto');
 
 let customizationCache = null;
 
@@ -658,6 +659,38 @@ module.exports.incidents = {
   async delete(id) { await run('DELETE FROM incidents WHERE id=$1', [id]); return true; }
 };
 
+// ===== API key auth cache =====
+// bcrypt.compareSync (pure-JS bcryptjs, cost=10) blocks the event loop for ~100-300ms
+// per API auth request. Switch to await bcrypt.compare + LRU cache so most requests
+// skip bcrypt entirely.  Cache keys: `${prefix}:${sha256_hex}`.
+// Value on positive hit: authenticated row's id (allows revocation check on hit).
+// Value on negative hit: false (avoids bcrypt for bad keys sharing the same prefix).
+const _authCache = new Map();
+const AUTH_CACHE_MAX = 32;
+const AUTH_CACHE_TTL_MS = 30 * 1000;
+
+function _authCacheGet(k) {
+  const entry = _authCache.get(k);
+  if (!entry) return undefined;
+  if (Date.now() > entry.expires) { _authCache.delete(k); return undefined; }
+  _authCache.delete(k); _authCache.set(k, entry); // LRU touch
+  return entry.auth;
+}
+function _authCacheSet(k, auth) {
+  if (_authCache.size >= AUTH_CACHE_MAX) _authCache.delete(_authCache.keys().next().value);
+  _authCache.set(k, { auth, expires: Date.now() + AUTH_CACHE_TTL_MS });
+}
+
+async function _authResult(r) {
+  // Throttle last_used_at writes to ~1/minute per key (was: one UPDATE per request).
+  const stale = !r.last_used_at || (Date.now() - new Date(r.last_used_at).getTime() > 60 * 1000);
+  if (stale) run('UPDATE api_keys SET last_used_at=NOW() WHERE id=$1', [r.id]).catch(() => {});
+  const page = await queryOne('SELECT slug FROM pages WHERE id=$1', [r.page_id]);
+  let permissions = ['read'];
+  try { permissions = JSON.parse(r.permissions); } catch(e) { /* malformed → default */ }
+  return { id: r.id, name: r.name, permissions, page_id: r.page_id, page_slug: page?.slug, rate_limit: r.rate_limit };
+}
+
 // ===== API KEYS =====
 module.exports.apiKeys = {
   async list(pageId) {
@@ -699,22 +732,30 @@ module.exports.apiKeys = {
     // active key on each request.
     const prefix = String(key).substring(0, 8);
     const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    // Cache fingerprint: prefix narrows the DB lookup, sha256(full key) makes the
+    // entry unique to the exact secret without storing it raw.
+    const cacheKey = prefix + ':' + crypto.createHash('sha256').update(String(key)).digest('hex');
+    const cached = _authCacheGet(cacheKey);
+    if (cached !== undefined) {
+      if (cached === false) return null; // negative hit: bad key within TTL
+      // Positive hit: cached value is the authenticated row id. Re-validate by id
+      // (cheap) so revoke/expiry still take effect inside the TTL window.
+      const row = await queryOne('SELECT * FROM api_keys WHERE id=$1 AND is_active=1 AND (expires_at IS NULL OR expires_at > $2)', [cached, now]);
+      if (row) return await _authResult(row);
+      _authCache.delete(cacheKey); // key was revoked/expired since caching
+    }
     const rows = await queryAll(
       'SELECT * FROM api_keys WHERE is_active=1 AND key_prefix=$1 AND (expires_at IS NULL OR expires_at > $2)',
       [prefix, now]
     );
     const bcrypt = require('bcryptjs');
     for (const r of rows) {
-      if (bcrypt.compareSync(key, r.key_hash)) {
-        // Throttle last_used_at writes to ~1/minute per key (was: one UPDATE per request)
-        const stale = !r.last_used_at || (Date.now() - new Date(r.last_used_at).getTime() > 60 * 1000);
-        if (stale) run('UPDATE api_keys SET last_used_at=NOW() WHERE id=$1', [r.id]).catch(() => {});
-        const page = await queryOne('SELECT slug FROM pages WHERE id=$1', [r.page_id]);
-        let permissions = ['read'];
-        try { permissions = JSON.parse(r.permissions); } catch(e) { /* malformed → default */ }
-        return { id: r.id, name: r.name, permissions, page_id: r.page_id, page_slug: page?.slug, rate_limit: r.rate_limit };
+      if (await bcrypt.compare(key, r.key_hash)) {
+        _authCacheSet(cacheKey, r.id);
+        return await _authResult(r);
       }
     }
+    _authCacheSet(cacheKey, false); // negative cache: avoids bcrypt re-runs for bad keys for 30s
     return null;
   }
 };
@@ -1004,8 +1045,9 @@ module.exports.analytics = {
 
   async cleanOldData() {
     const retention = await module.exports.settings.get('analytics_retention_days');
-    if (!retention) return 0;
-    const days = parseInt(retention);
+    // Same 365-day default as the other analytics getters: the old early-return
+    // of 0 meant NO cleanup ever happened, and the tables grew unbounded.
+    const days = retention ? parseInt(retention) : 365;
     let deleted = 0;
     const viewsDeleted = await run("DELETE FROM page_views WHERE created_at < NOW() - ($1::text || ' days')::interval", [days]);
     deleted += viewsDeleted.changes;
