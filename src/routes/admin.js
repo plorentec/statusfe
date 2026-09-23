@@ -1109,7 +1109,24 @@ router.get('/check-update', requireAuth, async (req, res) => {
         try {
           const release = JSON.parse(data);
           const latestTag = (release.tag_name || release.name || currentVersion).replace(/^v/, '');
-          const hasUpdate = latestTag !== currentVersion;
+          // Compare semver: only report an update when latest is strictly greater
+          // than current (prevents downgrade warnings like "update to 2.2.4" when
+          // already running 2.2.5). Falls back to string !== when either version
+          // is malformed.
+          function compareVersions(a, b) {
+            try {
+              const pa = a.split('.').map(Number);
+              const pb = b.split('.').map(Number);
+              for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+                const ca = pa[i] || 0;
+                const cb = pb[i] || 0;
+                if (ca !== cb) return cb > ca ? 1 : -1;
+              }
+              return 0;
+            } catch { return null; }
+          }
+          const cmp = compareVersions(latestTag, currentVersion);
+          const hasUpdate = (cmp === null) ? latestTag !== currentVersion : cmp > 0;
           res.json({ currentVersion, latestVersion: latestTag, hasUpdate, url: release.html_url, publishedAt: release.published_at });
         } catch(e) {
           res.json({ currentVersion, latestVersion: currentVersion, hasUpdate: false, error: e.message });
