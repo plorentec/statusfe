@@ -312,6 +312,54 @@ router.post('/components', async (req, res) => {
   res.redirect('/admin/components?msg=success&type=success');
 });
 
+// Bulk delete components. Registered as a literal 'bulk-delete' segment (not ':id')
+// BEFORE any '/components/:id/...' route — no POST '/components/:id' pattern exists,
+// so there is no method+path collision with the routes below.
+// Mirrors the single DELETE /components/:id handler: same admin notification, same
+// components.delete() cascade, session-auth only (the single delete has no requireAdmin).
+router.post('/components/bulk-delete', async (req, res) => {
+  // Accept component_ids as a string or an array; a single checkbox arrives as a
+  // string, repeated keys as an array, and some clients comma-join the values.
+  var raw = req.body.component_ids;
+  var parts = [];
+  if (typeof raw === 'string') parts = raw.split(',');
+  else if (Array.isArray(raw)) {
+    for (const r of raw) parts.push(...String(r == null ? '' : r).split(','));
+  }
+  // Component ids are TEXT (uuidv4): keep non-empty trimmed values, deduped.
+  // 'Invalid' ids (not-a-number, '') simply miss the lookup below and are ignored.
+  var seen = new Set();
+  var ids = [];
+  for (const part of parts) {
+    var v = String(part).trim();
+    if (v && !seen.has(v)) { seen.add(v); ids.push(v); }
+  }
+  if (ids.length === 0) {
+    return res.redirect('/admin/components?msg=bulk_delete_error&type=error');
+  }
+  const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
+  var count = 0;
+  for (const id of ids) {
+    const comp = await components.get(id);
+    if (!comp) continue; // non-existent ids ignored gracefully
+    for (const a of admins) {
+      await notifications.create({
+        user_id: a.id,
+        component_id: id,
+        type: 'component_deleted',
+        title: 'Component deleted: ' + comp.name,
+        message: comp.name + ' has been permanently deleted'
+      });
+    }
+    await components.delete(id);
+    count++;
+  }
+  if (count === 0) {
+    return res.redirect('/admin/components?msg=bulk_delete_error&type=error');
+  }
+  res.redirect('/admin/components?msg=bulk_deleted&type=success');
+});
+
 router.get('/components/:id/edit', async (req, res) => {
   const comp = await components.get(req.params.id);
   if (!comp) {

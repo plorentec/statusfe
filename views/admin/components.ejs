@@ -19,15 +19,21 @@
 </div>
 
 <% if (componentMode === 'list') { %>
+<% const compCount = components.length; %>
+<% const compCountLabel = compCount + (compCount === 1 ? ' component' : ' components'); %>
 <div class="card-header-row">
-<h2>All Components</h2>
+<h2>All Components <small class="text-muted">(<%= compCountLabel %>)</small></h2>
+<div style="display:flex;gap:8px;">
+<button type="button" id="bulk-delete-btn" class="btn btn-danger" disabled>Delete Selected</button>
 <a href="/admin/components/new" class="btn btn-primary">+ New Component</a>
+</div>
 </div>
 
 <div class="table-container">
-<table class="admin-table">
+<table id="component-list-table" class="admin-table">
 <thead>
 <tr>
+<th><input type="checkbox" id="select-all-checkbox" style="vertical-align:middle;"></th>
 <th>Name</th>
 <th>External ID</th>
 <th>Group</th>
@@ -39,10 +45,11 @@
 </thead>
 <tbody>
 <% if (components.length === 0) { %>
-<tr><td colspan="7" class="empty-cell">No components yet. <a href="/admin/components/new">Create your first component</a>.</td></tr>
+<tr><td colspan="8" class="empty-cell">No components yet. <a href="/admin/components/new">Create your first component</a>.</td></tr>
 <% } else { %>
 <% components.forEach(c => { %>
 <tr>
+<td><input type="checkbox" name="component_ids" class="component-row-check" value="<%= c.id %>"></td>
 <td><strong><%= c.name %></strong><br><small class="text-muted"><%= c.description || '' %></small></td>
 <td><small><code><%= c.external_id || '-' %></code></small></td>
 <td><% const compGroups = c.groups || []; if (compGroups.length > 0) { %><%= compGroups.map(g => g.name).join(', ') %><% } else { %><%= c.group_name || '-' %><% } %></td>
@@ -71,6 +78,7 @@
 </tbody>
 </table>
 </div>
+<p class="text-muted" style="margin-top:8px;"><%= compCountLabel %> total</p>
 <% } %>
 
 <% if (componentMode === 'create' || componentMode === 'edit') { %>
@@ -165,6 +173,55 @@
   }
   if (typeof sfBindFilter === 'function') {
     sfBindFilter('compGroupFilter', 'compGroupList');
+  }
+  /* Bulk delete (scoped to the component list view — guarded by the table id) */
+  var table = document.getElementById('component-list-table');
+  var allCb = document.getElementById('select-all-checkbox');
+  var bulkBtn = document.getElementById('bulk-delete-btn');
+  if (table && allCb && bulkBtn) {
+    var checkboxes = table.querySelectorAll('tbody input.component-row-check');
+    function checkedIds() {
+      var ids = [];
+      for (var i = 0; i < checkboxes.length; i++) {
+        if (checkboxes[i].checked) ids.push(checkboxes[i].value);
+      }
+      return ids;
+    }
+    function updateSelection() {
+      var n = checkedIds().length;
+      bulkBtn.disabled = n === 0;
+      bulkBtn.title = n ? n + ' component(s) selected' : '';
+    }
+    allCb.addEventListener('change', function() {
+      for (var i = 0; i < checkboxes.length; i++) { checkboxes[i].checked = allCb.checked; }
+      updateSelection();
+    });
+    for (var i = 0; i < checkboxes.length; i++) {
+      checkboxes[i].addEventListener('change', updateSelection);
+    }
+    bulkBtn.addEventListener('click', function() {
+      var ids = checkedIds();
+      if (ids.length === 0) return;
+      if (!window.confirm('Delete ' + ids.length + ' component(s)? This cannot be undone.')) return;
+      /* Nested per-row delete forms forbid putting these inputs in a static
+         form around the table — build the POST form dynamically instead. */
+      var form = document.createElement('form');
+      form.method = 'post';
+      form.action = '/admin/components/bulk-delete';
+      function addField(name, value) {
+        var input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = name;
+        input.value = value;
+        form.appendChild(input);
+      }
+      var tokenEl = document.getElementById('csrfToken');
+      if (tokenEl) addField('_csrf', tokenEl.value);
+      for (var j = 0; j < ids.length; j++) addField('component_ids', ids[j]);
+      document.body.appendChild(form);
+      form.submit();
+    });
+    updateSelection();
   }
 })();
 </script>

@@ -129,6 +129,8 @@ async function session(req, res, next) {
       key_deleted: 'API key permanently deleted.',
       logo_too_large: 'Logo image too large — the encoded file must stay under 200 KB.',
       logo_invalid: 'Logo must be a PNG, JPEG, WebP or SVG image.',
+      bulk_delete_error: 'Nothing deleted — no valid components were selected.',
+      bulk_deleted: 'Selected components deleted.',
       default: flashMsg
     };
     res.locals.message = msgs[flashMsg] || flashMsg;
