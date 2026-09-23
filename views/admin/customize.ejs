@@ -36,6 +36,30 @@
 </div>
 
 <div class="card" style="margin-top:20px;">
+<h3 style="font-size:16px;font-weight:600;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border);">Logo Image</h3>
+<div id="logo_preview_wrap" style="margin-bottom:16px;<%= customization.logo_image ? '' : 'display:none;' %>">
+<img id="logo_preview" src="<%= customization.logo_image ? String(customization.logo_image) : '' %>" alt="Current logo" style="max-height:64px;max-width:240px;background:#fff;padding:8px;border-radius:8px;border:1px solid var(--border);">
+<div style="margin-top:8px;">
+<button type="button" class="btn" id="logo_remove_btn">Remove Logo</button>
+<span id="logo_removed_note" style="display:none;margin-left:8px;color:#ef4444;">Logo will be removed when you save.</span>
+</div>
+</div>
+<div class="form-row">
+<div class="form-group">
+<label for="logo_image_file">Upload Image</label>
+<input type="file" id="logo_image_file" accept="image/png,image/svg+xml,image/webp,image/jpeg">
+</div>
+<div class="form-group">
+<label>&nbsp;</label>
+<button type="button" class="btn btn-primary" id="logo_upload_btn">Upload Image</button>
+</div>
+</div>
+<input type="hidden" name="_logo_image_data" id="logo_image_data" value="">
+<input type="hidden" name="_logo_image_remove" id="logo_image_remove" value="0">
+<small class="text-muted">PNG, JPEG, WebP or SVG, max ~150 KB (200 KB once base64-encoded). The image replaces the text badge on public status pages (this preview updates immediately but is only saved with <em>Save Customization</em>). <span id="logo_js_error" style="color:#ef4444;"></span></small>
+</div>
+
+<div class="card" style="margin-top:20px;">
 <h3 style="font-size:16px;font-weight:600;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border);">Colors</h3>
 <div class="form-row">
 <div class="form-group">
@@ -101,6 +125,56 @@
       }
     }
   }
+})();
+</script>
+<script>
+// Logo upload: convert the picked file to a base64 data URI and carry it in a
+// hidden field so the urlencoded form POST stays parser-free (no multipart).
+(function() {
+  var file = document.getElementById('logo_image_file');
+  var uploadBtn = document.getElementById('logo_upload_btn');
+  var removeBtn = document.getElementById('logo_remove_btn');
+  var dataInput = document.getElementById('logo_image_data');
+  var removeInput = document.getElementById('logo_image_remove');
+  var preview = document.getElementById('logo_preview');
+  var previewWrap = document.getElementById('logo_preview_wrap');
+  var note = document.getElementById('logo_removed_note');
+  var err = document.getElementById('logo_js_error');
+  if (!file || !uploadBtn || !dataInput || !removeInput) return;
+  var MAX_CHARS = 200 * 1024; // must match the server-side cap
+  var ALLOWED = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'];
+  uploadBtn.addEventListener('click', function() {
+    err.textContent = '';
+    var f = file.files && file.files[0];
+    if (!f) { err.textContent = 'Choose a file first.'; return; }
+    if (ALLOWED.indexOf(f.type) === -1) {
+      err.textContent = 'Unsupported file type (' + (f.type || 'unknown') + '). Use PNG, JPEG, WebP or SVG.';
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function() {
+      var uri = String(reader.result || '');
+      if (uri.length > MAX_CHARS) {
+        err.textContent = 'File too large — encoded size is ' + Math.round(uri.length / 1024) + ' KB (max 200 KB).';
+        return;
+      }
+      dataInput.value = uri;
+      removeInput.value = '0';
+      if (note) note.style.display = 'none';
+      if (preview && previewWrap) {
+        preview.src = uri;
+        previewWrap.style.display = 'block';
+      }
+    };
+    reader.onerror = function() { err.textContent = 'Could not read the file.'; };
+    reader.readAsDataURL(f);
+  });
+  if (removeBtn) removeBtn.addEventListener('click', function() {
+    err.textContent = '';
+    dataInput.value = '';
+    removeInput.value = '1';
+    if (note) note.style.display = 'inline';
+  });
 })();
 </script>
 </body>

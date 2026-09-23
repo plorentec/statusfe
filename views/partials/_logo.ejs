@@ -1,4 +1,9 @@
 <%
+  // Logo image (base64 data URI uploaded from the Customize panel). Re-check
+  // the shape here as defense-in-depth — the POST /customize route enforces
+  // the same pattern before saving, so a tampered/legacy row never reaches <img>.
+  var logoImage = (typeof customization !== 'undefined' && customization && customization.logo_image) ? String(customization.logo_image) : '';
+  var hasLogoImage = /^data:image\/(png|jpe?g|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$/.test(logoImage);
   var logoText = (typeof customization !== 'undefined' && customization && customization.logo_text) ? String(customization.logo_text) : 'StatusFe';
   var logoColor = (typeof customization !== 'undefined' && customization && customization.logo_color) ? String(customization.logo_color) : '#10b981';
   var badgeLetter = logoText.charAt(0).toUpperCase();
@@ -6,4 +11,5 @@
   // names render in a single color to avoid awkward mid-word splits.
   var isDefaultBrand = logoText === 'StatusFe';
 %>
-<span style="display:inline-flex;align-items:center;gap:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-weight:800;font-size:28px;color:currentColor;text-decoration:none;letter-spacing:-0.5px;"><span style="display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;background:<%= logoColor %>;border-radius:10px;color:#fff;font-size:22px;font-weight:900;line-height:1;"><%= badgeLetter %></span><% if (isDefaultBrand) { %><span>Status<span style="color:<%= logoColor %>;">Fe</span></span><% } else { %><span><%= logoText %></span><% } %></span>
+<% if (hasLogoImage) { %><img src="<%= logoImage %>" alt="Logo" class="logo" style="max-height:48px;max-width:220px;object-fit:contain;">
+<% } else { %><span style="display:inline-flex;align-items:center;gap:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-weight:800;font-size:28px;color:currentColor;text-decoration:none;letter-spacing:-0.5px;"><span style="display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;background:<%= logoColor %>;border-radius:10px;color:#fff;font-size:22px;font-weight:900;line-height:1;"><%= badgeLetter %></span><% if (isDefaultBrand) { %><span>Status<span style="color:<%= logoColor %>;">Fe</span></span><% } else { %><span><%= logoText %></span><% } %></span><% } %>

@@ -336,13 +336,32 @@ router.get('/customize', async (req, res) => {
     title: 'Customize',
     user: req.user,
     customization,
-    message: req.query.msg,
-    messageType: req.query.type
+    message: res.locals.message || req.query.msg,
+    messageType: res.locals.messageType || req.query.type
   });
 });
 
 router.post('/customize', requireAdmin, async (req, res) => {
-  await settings.setCustomization(req.body);
+  const data = { ...(req.body || {}) };
+  // Logo image upload: the form JS converts the picked file to a base64 data
+  // URI and stores it in _logo_image_data; _logo_image_remove=1 clears it.
+  // (No multipart parser exists — the body stays urlencoded.)
+  const MAX_LOGO_CHARS = 200 * 1024; // ~150 KB original after base64 inflation
+  const DATA_URI_RE = /^data:image\/(png|jpe?g|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$/;
+  const logoData = typeof data._logo_image_data === 'string' ? data._logo_image_data.trim() : '';
+  const removeLogo = data._logo_image_remove === '1';
+
+  if (!removeLogo && logoData) {
+    if (logoData.length > MAX_LOGO_CHARS) {
+      return res.redirect('/admin/customize?msg=logo_too_large&type=error');
+    }
+    if (!DATA_URI_RE.test(logoData)) {
+      return res.redirect('/admin/customize?msg=logo_invalid&type=error');
+    }
+    data.logo_image = logoData;
+  }
+  if (removeLogo) await settings.delete('custom_logo_image');
+  await settings.setCustomization(data);
   res.redirect('/admin/customize?msg=success&type=success');
 });
 

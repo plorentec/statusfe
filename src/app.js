@@ -142,6 +142,9 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.json());
+// Logo uploads arrive as base64 data URIs inside the Customize form; give that
+// route a larger urlencoded limit (the global 100 KB default would reject them).
+app.use('/admin/customize', express.urlencoded({ extended: true, limit: '512kb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Handle _method for PUT/DELETE from forms (body or query param)

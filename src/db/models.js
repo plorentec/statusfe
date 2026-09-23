@@ -1105,6 +1105,8 @@ module.exports.settings = {
       font_family: await get('custom_font_family', "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"),
       logo_text: await get('custom_logo_text', 'StatusFe'),
       logo_color: await get('custom_logo_color', '#10b981'),
+      // Base64 data URI uploaded from the Customize panel (null = text badge).
+      logo_image: await get('custom_logo_image', null),
       border_radius: await get('custom_border_radius', '12'),
     };
     customizationCache = c;
@@ -1120,6 +1122,7 @@ module.exports.settings = {
       font_family: 'custom_font_family',
       logo_text: 'custom_logo_text',
       logo_color: 'custom_logo_color',
+      logo_image: 'custom_logo_image',
       border_radius: 'custom_border_radius',
     };
     for (const [k, settingKey] of Object.entries(map)) {
