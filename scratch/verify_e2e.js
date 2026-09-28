@@ -94,6 +94,26 @@ const check = (name, cond, extra) => {
   const comp = await queryOne('SELECT * FROM components WHERE name=$1', ['RouterTest']);
   check('componente creado con group_id', !!comp && !!comp.group_id);
 
+  // 3b. Components list: search + sort (regresión: la plantilla usaba req.query → 500)
+  const listAll = await req('GET', '/admin/components', { headers: { Cookie: cookieHeader() } });
+  absorb(listAll);
+  check('GET /admin/components = 200 (lista autenticada)', listAll.status === 200, 'status ' + listAll.status);
+  check('lista incluye barra de búsqueda (q + sort)', listAll.body.includes('name="q"') && listAll.body.includes('name="sort"'));
+  check('lista sin referencia rota a req.query', !listAll.body.includes('req.query'));
+
+  const searched = await req('GET', '/admin/components?q=RouterTest&sort=created_DESC', { headers: { Cookie: cookieHeader() } });
+  absorb(searched);
+  check('GET /admin/components?q=&sort= = 200', searched.status === 200, 'status ' + searched.status);
+  check('búsqueda encuentra RouterTest', searched.body.includes('RouterTest'));
+  check('búsqueda filtra el resto (API fuera)', !searched.body.includes('<strong>API</strong>'));
+  check('input conserva el query buscado', searched.body.includes('value="RouterTest"'));
+  check('sort created_DESC seleccionado', searched.body.includes('value="created_DESC" selected'));
+  check('botón Clear visible con filtro activo', searched.body.includes('href="/admin/components" class="btn">Clear'));
+
+  const noHit = await req('GET', '/admin/components?q=zzz-no-existe', { headers: { Cookie: cookieHeader() } });
+  absorb(noHit);
+  check('búsqueda sin resultados = 200 + estado vacío', noHit.status === 200 && noHit.body.includes('empty-cell'), 'status ' + noHit.status);
+
   // 4. Create a page selecting the group
   const createPage = await req('POST', '/admin/pages', {
     headers: { Cookie: cookieHeader(), 'x-csrf-token': csrf },

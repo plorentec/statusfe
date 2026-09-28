@@ -207,6 +207,48 @@ async function main() {
   const pPub = await pages.create({ name: 'Pub', slug: 'page-pub', is_public: '1' });
   check('is_public "0" => 0 y "1" => 1', pPriv.is_public === 0 && pPub.is_public === 1, pPriv.is_public + '/' + pPub.is_public);
 
+  // 7h. components.list: búsqueda de texto y ordenamiento por columna.
+  const cSrch = await components.create({ name: 'SearchMe 100%', description: 'needle in haystack', external_id: 'EXT-9911' });
+  const sName = await components.list({ search: 'searchme' });
+  check('búsqueda por nombre (case-insensitive)', sName.some(r => r.id === cSrch.id), sName.length + ' resultados');
+
+  const sDesc = await components.list({ search: 'needle' });
+  check('búsqueda por descripción', sDesc.length === 1 && sDesc[0].id === cSrch.id, sDesc.length + ' resultados');
+
+  const sExt = await components.list({ search: 'ext-9911' });
+  check('búsqueda por external_id', sExt.length === 1 && sExt[0].id === cSrch.id, sExt.length + ' resultados');
+
+  const sGrp = await components.list({ search: 'infrastructure' });
+  check('búsqueda por nombre de grupo', sGrp.length > 0 && sGrp.every(r => r.groups.some(g => /infrastructure/i.test(g.name)) || /infrastructure/i.test(r.group_name || '')), sGrp.length + ' resultados');
+
+  const total = (await components.list()).length;
+  const sWild = await components.list({ search: '%' });
+  check('comodín % es literal (no devuelve todo)', sWild.length > 0 && sWild.length < total && sWild.every(r => /%/.test([r.name, r.description, r.external_id, r.group_name].filter(Boolean).join(' '))), sWild.length + '/' + total);
+
+  // Búsqueda sobre membresías multi-grupo (no solo la columna legacy group_name)
+  const gSec = await componentGroups.create({ name: 'GrupoSoloMembresia' });
+  const cMulti = await components.create({ name: 'CompMulti', group_id: null, group_name: null });
+  await components.setGroups(cMulti.id, [gSec.id]);
+  const sMulti = await components.list({ search: 'gruposolomembresia' });
+  check('búsqueda alcanza grupos por membresía (multi-grupo)', sMulti.length === 1 && sMulti[0].id === cMulti.id, sMulti.length + ' resultados');
+
+  const byNameAsc = await components.list({ sort: 'name_ASC' });
+  const namesAsc = byNameAsc.map(r => r.name);
+  check('sort name_ASC ordena A→Z', JSON.stringify(namesAsc) === JSON.stringify([...namesAsc].sort((a, b) => a.localeCompare(b))), namesAsc.slice(0, 4).join(','));
+
+  const byNameDesc = await components.list({ sort: 'name_DESC' });
+  check('sort name_DESC ordena Z→A', byNameDesc[0].name === namesAsc[namesAsc.length - 1], byNameDesc[0].name);
+
+  const byCreated = await components.list({ sort: 'created_DESC' });
+  const createdVals = byCreated.map(r => String(r.created_at));
+  check('sort created_DESC es descendente', createdVals.every((v, i) => i === 0 || createdVals[i - 1] >= v), createdVals[0] + ' .. ' + createdVals[createdVals.length - 1]);
+
+  const inj = await components.list({ sort: 'name;DROP TABLE components' });
+  check('sort inyectado cae al default (position)', JSON.stringify(inj.map(r => r.position)) === JSON.stringify(inj.map(r => r.position).slice().sort((a, b) => a - b)), inj.length + ' filas intactas');
+
+  const defaultList = await components.list();
+  check('default sigue siendo position,name', JSON.stringify(defaultList.map(r => r.name)) === JSON.stringify([...defaultList].sort((a, b) => a.position - b.position || String(a.name).localeCompare(String(b.name))).map(r => r.name)), defaultList.length + ' filas');
+
   console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TESTS FAILED`);
   process.exit(failures === 0 ? 0 : 1);
 }

@@ -276,7 +276,9 @@ router.get('/components', async (req, res) => {
     components: allComponents,
     componentMode: 'list',
     groups: await componentGroups.list(),
-    csrfToken: res.locals.csrfToken
+    csrfToken: res.locals.csrfToken,
+    searchQuery: filterOpts.search || '',
+    sortBy: filterOpts.sort || 'position_ASC'
   });
 });
 

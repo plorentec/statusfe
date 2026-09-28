@@ -31,19 +31,19 @@
 
 <!-- Search bar -->
 <form method="get" action="/admin/components" style="margin-bottom:16px;display:flex;gap:8px;align-items:center;">
-  <input type="text" name="q" value="<%= req.query.q || '' %>" placeholder="Search components…" style="flex:1;max-width:360px;" id="componentSearchInput" onkeydown="if(event.key==='Enter')this.form.submit()">
+  <input type="text" name="q" value="<%= searchQuery %>" placeholder="Search components…" style="flex:1;max-width:360px;" id="componentSearchInput" onkeydown="if(event.key==='Enter')this.form.submit()">
   <select name="sort" onchange="this.form.submit()" style="font-size:13px;padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--white);color:var(--text);">
-    <option value="position_ASC" <%= (req.query.sort || 'position_ASC') === 'position_ASC' ? 'selected' : '' %>>Position ↑</option>
-    <option value="position_DESC" <%= req.query.sort === 'position_DESC' ? 'selected' : '' %>>Position ↓</option>
-    <option value="name_ASC" <%= (req.query.sort || 'position_ASC') === 'name_ASC' ? 'selected' : '' %>>Name A→Z</option>
-    <option value="name_DESC" <%= req.query.sort === 'name_DESC' ? 'selected' : '' %>>Name Z→A</option>
-    <option value="created_DESC" <%= req.query.sort === 'created_DESC' ? 'selected' : '' %>>Newest first</option>
-    <option value="created_ASC" <%= req.query.sort === 'created_ASC' ? 'selected' : '' %>>Oldest first</option>
-    <option value="group_ASC" <%= req.query.sort === 'group_ASC' ? 'selected' : '' %>>Group A→Z</option>
-    <option value="status_ASC" <%= req.query.sort === 'status_ASC' ? 'selected' : '' %>>Status A→Z</option>
+    <option value="position_ASC" <%= sortBy === 'position_ASC' ? 'selected' : '' %>>Position ↑</option>
+    <option value="position_DESC" <%= sortBy === 'position_DESC' ? 'selected' : '' %>>Position ↓</option>
+    <option value="name_ASC" <%= sortBy === 'name_ASC' ? 'selected' : '' %>>Name A→Z</option>
+    <option value="name_DESC" <%= sortBy === 'name_DESC' ? 'selected' : '' %>>Name Z→A</option>
+    <option value="created_DESC" <%= sortBy === 'created_DESC' ? 'selected' : '' %>>Newest first</option>
+    <option value="created_ASC" <%= sortBy === 'created_ASC' ? 'selected' : '' %>>Oldest first</option>
+    <option value="group_ASC" <%= sortBy === 'group_ASC' ? 'selected' : '' %>>Group A→Z</option>
+    <option value="status_ASC" <%= sortBy === 'status_ASC' ? 'selected' : '' %>>Status A→Z</option>
   </select>
   <button type="submit" class="btn btn-primary">Search</button>
-  <% if (req.query.q || req.query.sort !== 'position_ASC') { %>
+  <% if (searchQuery || sortBy !== 'position_ASC') { %>
   <a href="/admin/components" class="btn">Clear</a>
   <% } %>
 </form>
@@ -53,12 +53,12 @@
 <thead>
 <tr>
 <th><input type="checkbox" id="select-all-checkbox" style="vertical-align:middle;"></th>
-<th><a href="?q=<%= encodeURIComponent(req.query.q || '') %>&sort=name_ASC" style="color:inherit;text-decoration:none;">Name <%= (req.query.sort && /^name_(ASC|DESC)$/.test(req.query.sort)) ? (req.query.sort === 'name_ASC' ? '↑' : '↓') : '' %></a></th>
+<th><a href="?q=<%= encodeURIComponent(searchQuery) %>&sort=name_ASC" style="color:inherit;text-decoration:none;">Name <%= /^name_(ASC|DESC)$/.test(sortBy) ? (sortBy === 'name_ASC' ? '↑' : '↓') : '' %></a></th>
 <th>External ID</th>
-<th><a href="?q=<%= encodeURIComponent(req.query.q || '') %>&sort=group_ASC" style="color:inherit;text-decoration:none;">Group <%= (req.query.sort && /^group_(ASC|DESC)$/.test(req.query.sort)) ? (req.query.sort === 'group_ASC' ? '↑' : '↓') : '' %></a></th>
-<th><a href="?q=<%= encodeURIComponent(req.query.q || '') %>&sort=status_ASC" style="color:inherit;text-decoration:none;">Status <%= (req.query.sort && /^status_(ASC|DESC)$/.test(req.query.sort)) ? (req.query.sort === 'status_ASC' ? '↑' : '↓') : '' %></a></th>
+<th><a href="?q=<%= encodeURIComponent(searchQuery) %>&sort=group_ASC" style="color:inherit;text-decoration:none;">Group <%= /^group_(ASC|DESC)$/.test(sortBy) ? (sortBy === 'group_ASC' ? '↑' : '↓') : '' %></a></th>
+<th><a href="?q=<%= encodeURIComponent(searchQuery) %>&sort=status_ASC" style="color:inherit;text-decoration:none;">Status <%= /^status_(ASC|DESC)$/.test(sortBy) ? (sortBy === 'status_ASC' ? '↑' : '↓') : '' %></a></th>
 <th>Position</th>
-<th><a href="?q=<%= encodeURIComponent(req.query.q || '') %>&sort=created_DESC" style="color:inherit;text-decoration:none;">Created <%= (req.query.sort && /^created_(ASC|DESC)$/.test(req.query.sort)) ? (req.query.sort === 'created_ASC' ? '↑' : '↓') : '' %></a></th>
+<th><a href="?q=<%= encodeURIComponent(searchQuery) %>&sort=created_DESC" style="color:inherit;text-decoration:none;">Created <%= /^created_(ASC|DESC)$/.test(sortBy) ? (sortBy === 'created_ASC' ? '↑' : '↓') : '' %></a></th>
 <th>Actions</th>
 </tr>
 </thead>

@@ -142,13 +142,6 @@ module.exports.components = {
     // Status filter (used by status page)
     if (filters.status) { q += ' AND status=$' + (p.length + 1); p.push(filters.status); }
 
-    // Text search across name, description, external_id, group_name
-    if (filters.search) {
-      const term = '%' + filters.search + '%';
-      q += ` AND (LOWER(name) LIKE LOWER($${p.length + 1}) OR LOWER(description) LIKE LOWER($${p.length + 1}) OR LOWER(external_id) LIKE LOWER($${p.length + 1}) OR LOWER(group_name) LIKE LOWER($${p.length + 1}))`;
-      p.push(term);
-    }
-
     // Sorting: validate against allowlist
     const allowedCols = {
       name: 'name',
@@ -172,6 +165,14 @@ module.exports.components = {
     let rows = await queryAll(q, p);
     const memberMap = await module.exports.components.getGroupsForMany(rows.map(r => r.id));
     for (const r of rows) r.groups = memberMap.get(r.id) || [];
+    // Text search: matched in JS (not SQL) so a literal % or _ never acts as a LIKE
+    // wildcard and so multi-group memberships (component_group_members) are searchable.
+    if (filters.search) {
+      const needle = String(filters.search).toLowerCase();
+      const hit = r => [r.name, r.description, r.external_id, r.group_name, ...(r.groups || []).map(g => g.name)]
+        .some(v => v != null && String(v).toLowerCase().includes(needle));
+      rows = rows.filter(hit);
+    }
     // Group filter matches ANY of the component's groups (membership or legacy name)
     if (filters.group) {
       const target = String(filters.group).toLowerCase();
