@@ -255,7 +255,10 @@ router.delete('/pages/:id', async (req, res) => {
 
 // ===== COMPONENTS CRUD =====
 router.get('/components', async (req, res) => {
-  const allComponents = await components.list();
+  const filterOpts = {};
+  if (req.query.q) filterOpts.search = req.query.q.trim();
+  if (req.query.sort) filterOpts.sort = req.query.sort;
+  const allComponents = await components.list(filterOpts);
   for (const c of allComponents) {
     c.activeIncidents = await components.getActiveIncidents(c.id);
     const activeInc = await components.getActiveIncidentForComponent(c.id);

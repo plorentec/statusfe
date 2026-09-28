@@ -138,8 +138,37 @@ module.exports.components = {
   async list(filters = {}) {
     let q = 'SELECT * FROM components WHERE 1=1';
     const p = [];
+
+    // Status filter (used by status page)
     if (filters.status) { q += ' AND status=$' + (p.length + 1); p.push(filters.status); }
-    q += ' ORDER BY position,name';
+
+    // Text search across name, description, external_id, group_name
+    if (filters.search) {
+      const term = '%' + filters.search + '%';
+      q += ` AND (LOWER(name) LIKE LOWER($${p.length + 1}) OR LOWER(description) LIKE LOWER($${p.length + 1}) OR LOWER(external_id) LIKE LOWER($${p.length + 1}) OR LOWER(group_name) LIKE LOWER($${p.length + 1}))`;
+      p.push(term);
+    }
+
+    // Sorting: validate against allowlist
+    const allowedCols = {
+      name: 'name',
+      status: 'status',
+      group: 'group_name',
+      position: 'position',
+      created: 'created_at',
+      external_id: 'external_id',
+    };
+    let sortCol = 'position';
+    let sortDir = 'ASC';
+    if (filters.sort) {
+      const [col, dir = 'ASC'] = filters.sort.split('_');
+      if (allowedCols[col]) {
+        sortCol = allowedCols[col];
+        sortDir = dir.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+      }
+    }
+    q += ` ORDER BY ${sortCol} ${sortDir}, name ASC`;
+
     let rows = await queryAll(q, p);
     const memberMap = await module.exports.components.getGroupsForMany(rows.map(r => r.id));
     for (const r of rows) r.groups = memberMap.get(r.id) || [];
