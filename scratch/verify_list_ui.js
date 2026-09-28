@@ -206,6 +206,13 @@ function boot(html, url = 'http://localhost/admin/components') {
   check('cada fila expone data-search', [...doc.querySelectorAll('tr.component-row')].every(r => (r.getAttribute('data-search') || '').length > 0));
   check('fecha en formato corto', /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(doc.querySelector('tr.component-row time').textContent),
     doc.querySelector('tr.component-row time').textContent);
+  /* the browser reformats <time datetime> into the viewer's own timezone */
+  const tm = doc.querySelector('tr.component-row time');
+  const d = new Date(tm.getAttribute('datetime'));
+  const p2 = n => (n < 10 ? '0' : '') + n;
+  const expectedLocal = d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes());
+  check('fecha formateada en la zona horaria del navegador', tm.textContent === expectedLocal, tm.textContent + ' vs ' + expectedLocal);
+  check('datetime conserva el instante absoluto', !!tm.getAttribute('datetime'), tm.getAttribute('datetime'));
   // HTML emitted by the server must escape the query separator (JS rewrites them later as DOM strings)
   check('HTML del servidor sin & crudo en los enlaces', !/href="[^"]*&sort=/.test(html));
   check('HTML del servidor escapa la query (&amp;)', /href="\?q=x&amp;sort=/.test(html));

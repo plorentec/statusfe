@@ -354,7 +354,21 @@
     searchClear.addEventListener('click', function() {
       if (searchInput) searchInput.value = '';
       if (serverQ) { submitSearch(); return; }
-      applyFilter();
+  /* Render <time> in the viewer's timezone (the server renders its own TZ);
+     the datetime attribute keeps the absolute instant for sorting/machines. */
+  function formatTimes() {
+    var times = table.querySelectorAll('tr.component-row time[datetime]');
+    var p = function(n) { return (n < 10 ? '0' : '') + n; };
+    for (var i = 0; i < times.length; i++) {
+      var d = new Date(times[i].getAttribute('datetime'));
+      if (isNaN(d.getTime())) continue;
+      times[i].textContent = d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
+        ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+    }
+  }
+
+  applyFilter();
+  formatTimes();
       syncUrl();
       if (searchInput) searchInput.focus();
     });
