@@ -107,12 +107,15 @@ const check = (name, cond, extra) => {
   check('búsqueda encuentra RouterTest', searched.body.includes('RouterTest'));
   check('búsqueda filtra el resto (API fuera)', !searched.body.includes('<strong>API</strong>'));
   check('input conserva el query buscado', searched.body.includes('value="RouterTest"'));
-  check('sort created_DESC seleccionado', searched.body.includes('value="created_DESC" selected'));
-  check('botón Clear visible con filtro activo', searched.body.includes('href="/admin/components" class="btn">Clear'));
+  check('columna Created marcada como descendente', searched.body.includes('data-col="created" aria-sort="descending"'));
+  check('6 cabeceras ordenables con enlace alterno', (searched.body.match(/th class="sortable/g) || []).length === 6
+    && searched.body.includes('sort=created_ASC'));
+  check('limpiar visible con filtro activo', /id="componentSearchClear"(?! hidden)/.test(searched.body));
 
   const noHit = await req('GET', '/admin/components?q=zzz-no-existe', { headers: { Cookie: cookieHeader() } });
   absorb(noHit);
   check('búsqueda sin resultados = 200 + estado vacío', noHit.status === 200 && noHit.body.includes('empty-cell'), 'status ' + noHit.status);
+  check('mensaje específico de "sin coincidencias"', noHit.body.includes('No components match'));
 
   // 4. Create a page selecting the group
   const createPage = await req('POST', '/admin/pages', {

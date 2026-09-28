@@ -20,61 +20,67 @@
 
 <% if (componentMode === 'list') { %>
 <% const compCount = components.length; %>
-<% const compCountLabel = compCount + (compCount === 1 ? ' component' : ' components'); %>
+<% /* --- helpers for sortable headers: the <a> is also the no-JS fallback --- */ %>
+<% const curSort = /^(name|external_id|group|status|position|created)_(ASC|DESC)$/.exec(sortBy) || null; %>
+<% const nextDir = col => (curSort && curSort[1] === col) ? (curSort[2] === 'ASC' ? 'DESC' : 'ASC') : (col === 'created' ? 'DESC' : 'ASC'); %>
+<% const sortHref = col => '?' + (searchQuery ? 'q=' + encodeURIComponent(searchQuery) + '&amp;' : '') + 'sort=' + col + '_' + nextDir(col); %>
+<% const arrowOf = col => (curSort && curSort[1] === col) ? (curSort[2] === 'ASC' ? '↑' : '↓') : '↕'; %>
+<% const ariaOf = col => (curSort && curSort[1] === col) ? (curSort[2] === 'ASC' ? 'ascending' : 'descending') : 'none'; %>
+<% const thTag = (col, label) => `<th class="sortable${curSort && curSort[1] === col ? ' sorted' : ''}" data-col="${col}" aria-sort="${ariaOf(col)}"><a href="${sortHref(col)}">${label} <span class="sort-arrow" aria-hidden="true">${arrowOf(col)}</span></a></th>`; %>
+<% const asDate = v => (v instanceof Date ? v : new Date(v)); %>
+<% const tsOf = v => { const t = asDate(v).getTime(); return isNaN(t) ? 0 : t; }; %>
+<% const fmtDate = v => { const d = asDate(v); if (isNaN(d.getTime())) return String(v || ''); const p = n => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); }; %>
 <div class="card-header-row">
-<h2>All Components <small class="text-muted">(<%= compCountLabel %>)</small></h2>
+<h2>All Components</h2>
 <div style="display:flex;gap:8px;">
 <button type="button" id="bulk-delete-btn" class="btn btn-danger" disabled>Delete Selected</button>
 <a href="/admin/components/new" class="btn btn-primary">+ New Component</a>
 </div>
 </div>
 
-<!-- Search bar -->
-<form method="get" action="/admin/components" style="margin-bottom:16px;display:flex;gap:8px;align-items:center;">
-  <input type="text" name="q" value="<%= searchQuery %>" placeholder="Search components…" style="flex:1;max-width:360px;" id="componentSearchInput" onkeydown="if(event.key==='Enter')this.form.submit()">
-  <select name="sort" onchange="this.form.submit()" style="font-size:13px;padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--white);color:var(--text);">
-    <option value="position_ASC" <%= sortBy === 'position_ASC' ? 'selected' : '' %>>Position ↑</option>
-    <option value="position_DESC" <%= sortBy === 'position_DESC' ? 'selected' : '' %>>Position ↓</option>
-    <option value="name_ASC" <%= sortBy === 'name_ASC' ? 'selected' : '' %>>Name A→Z</option>
-    <option value="name_DESC" <%= sortBy === 'name_DESC' ? 'selected' : '' %>>Name Z→A</option>
-    <option value="created_DESC" <%= sortBy === 'created_DESC' ? 'selected' : '' %>>Newest first</option>
-    <option value="created_ASC" <%= sortBy === 'created_ASC' ? 'selected' : '' %>>Oldest first</option>
-    <option value="group_ASC" <%= sortBy === 'group_ASC' ? 'selected' : '' %>>Group A→Z</option>
-    <option value="status_ASC" <%= sortBy === 'status_ASC' ? 'selected' : '' %>>Status A→Z</option>
-  </select>
-  <button type="submit" class="btn btn-primary">Search</button>
-  <% if (searchQuery || sortBy !== 'position_ASC') { %>
-  <a href="/admin/components" class="btn">Clear</a>
-  <% } %>
+<form id="componentListFilter" class="list-toolbar" method="get" action="/admin/components">
+<div class="search-box">
+<svg class="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.6-3.6"></path></svg>
+<input type="text" class="search-input" id="componentSearchInput" name="q" value="<%= searchQuery %>" placeholder="Search by name, group, ID or description…" autocomplete="off" spellcheck="false" aria-label="Search components">
+<button type="button" class="search-clear" id="componentSearchClear" title="Clear search" aria-label="Clear search"<% if (!searchQuery) { %> hidden<% } %>>&times;</button>
+<input type="hidden" name="sort" id="componentSortInput" value="<%= sortBy %>">
+</div>
+<div class="list-meta" id="componentListMeta"><%= compCount + (compCount === 1 ? ' component' : ' components') %></div>
+<noscript><button type="submit" class="btn btn-sm">Search</button></noscript>
 </form>
 
 <div class="table-container">
 <table id="component-list-table" class="admin-table">
 <thead>
 <tr>
-<th><input type="checkbox" id="select-all-checkbox" style="vertical-align:middle;"></th>
-<th><a href="?q=<%= encodeURIComponent(searchQuery) %>&sort=name_ASC" style="color:inherit;text-decoration:none;">Name <%= /^name_(ASC|DESC)$/.test(sortBy) ? (sortBy === 'name_ASC' ? '↑' : '↓') : '' %></a></th>
-<th>External ID</th>
-<th><a href="?q=<%= encodeURIComponent(searchQuery) %>&sort=group_ASC" style="color:inherit;text-decoration:none;">Group <%= /^group_(ASC|DESC)$/.test(sortBy) ? (sortBy === 'group_ASC' ? '↑' : '↓') : '' %></a></th>
-<th><a href="?q=<%= encodeURIComponent(searchQuery) %>&sort=status_ASC" style="color:inherit;text-decoration:none;">Status <%= /^status_(ASC|DESC)$/.test(sortBy) ? (sortBy === 'status_ASC' ? '↑' : '↓') : '' %></a></th>
-<th>Position</th>
-<th><a href="?q=<%= encodeURIComponent(searchQuery) %>&sort=created_DESC" style="color:inherit;text-decoration:none;">Created <%= /^created_(ASC|DESC)$/.test(sortBy) ? (sortBy === 'created_ASC' ? '↑' : '↓') : '' %></a></th>
-<th>Actions</th>
+<th class="th-check"><input type="checkbox" id="select-all-checkbox" aria-label="Select all visible components"></th>
+<%- thTag('name', 'Name') %>
+<%- thTag('external_id', 'External ID') %>
+<%- thTag('group', 'Group') %>
+<%- thTag('status', 'Status') %>
+<%- thTag('position', 'Position') %>
+<%- thTag('created', 'Created') %>
+<th class="th-actions">Actions</th>
 </tr>
 </thead>
 <tbody>
 <% if (components.length === 0) { %>
-<tr><td colspan="8" class="empty-cell">No components yet. <a href="/admin/components/new">Create your first component</a>.</td></tr>
+<tr><td colspan="8" class="empty-cell"><% if (searchQuery) { %>No components match <strong><%= searchQuery %></strong>. <a href="/admin/components">Clear the search</a>.<% } else { %>No components yet. <a href="/admin/components/new">Create your first component</a>.<% } %></td></tr>
 <% } else { %>
-<% components.forEach(c => { %>
-<tr>
-<td><input type="checkbox" name="component_ids" class="component-row-check" value="<%= c.id %>"></td>
+<% components.forEach(c => {
+  const compGroups = c.groups || [];
+  const groupText = compGroups.length > 0 ? compGroups.map(g => g.name).join(', ') : (c.group_name || '-');
+  const searchText = [c.name, c.description, c.external_id, c.group_name].concat(compGroups.map(g => g.name)).filter(Boolean).join(' ').toLowerCase();
+  const createdTs = tsOf(c.created_at);
+%>
+<tr class="component-row" data-name="<%= c.name %>" data-external="<%= c.external_id || '' %>" data-group="<%= groupText === '-' ? '' : groupText %>" data-status="<%= c.status %>" data-pos="<%= Number(c.position) || 0 %>" data-ts="<%= createdTs %>" data-search="<%= searchText %>">
+<td><input type="checkbox" name="component_ids" class="component-row-check" value="<%= c.id %>" aria-label="Select <%= c.name %>"></td>
 <td><strong><%= c.name %></strong><br><small class="text-muted"><%= c.description || '' %></small></td>
 <td><small><code><%= c.external_id || '-' %></code></small></td>
-<td><% const compGroups = c.groups || []; if (compGroups.length > 0) { %><%= compGroups.map(g => g.name).join(', ') %><% } else { %><%= c.group_name || '-' %><% } %></td>
+<td><%= groupText %></td>
 <td><span class="status-badge status-<%= c.status %>"><%= c.status %></span></td>
 <td><%= c.position %></td>
-<td><%= c.created_at %></td>
+<td><time<% if (createdTs) { %> datetime="<%= new Date(createdTs).toISOString() %>"<% } %>><%= fmtDate(c.created_at) %></time></td>
 <td class="actions">
 <a href="/admin/components/<%= c.id %>/edit" class="btn btn-sm">Edit</a>
 <form action="/admin/components/<%= c.id %>/status" method="post" class="inline-status-form" style="display:inline;">
@@ -93,11 +99,11 @@
 </td>
 </tr>
 <% }) %>
+<tr id="componentNoMatch" class="no-match-row" hidden><td colspan="8" class="empty-cell">No components match your search.</td></tr>
 <% } %>
 </tbody>
 </table>
 </div>
-<p class="text-muted" style="margin-top:8px;"><%= compCountLabel %> total</p>
 <% } %>
 
 <% if (componentMode === 'create' || componentMode === 'edit') { %>
@@ -193,31 +199,188 @@
   if (typeof sfBindFilter === 'function') {
     sfBindFilter('compGroupFilter', 'compGroupList');
   }
-  /* Bulk delete (scoped to the component list view — guarded by the table id) */
+
+  /* ===== Component list: instant search + click-to-sort headers (no page reload) ===== */
   var table = document.getElementById('component-list-table');
+  var tbody = table && table.tBodies[0];
+  if (!tbody) return;
+
+  var filterForm = document.getElementById('componentListFilter');
+  var searchInput = document.getElementById('componentSearchInput');
+  var searchClear = document.getElementById('componentSearchClear');
+  var sortInput = document.getElementById('componentSortInput');
+  var metaEl = document.getElementById('componentListMeta');
+  var noMatchRow = document.getElementById('componentNoMatch');
   var allCb = document.getElementById('select-all-checkbox');
   var bulkBtn = document.getElementById('bulk-delete-btn');
-  if (table && allCb && bulkBtn) {
-    var checkboxes = table.querySelectorAll('tbody input.component-row-check');
-    function checkedIds() {
-      var ids = [];
-      for (var i = 0; i < checkboxes.length; i++) {
-        if (checkboxes[i].checked) ids.push(checkboxes[i].value);
+
+  var rows = [].slice.call(tbody.querySelectorAll('tr.component-row'));
+  var renderedCount = rows.length;
+  /* the query the server already filtered for us */
+  var serverQ = ((searchInput && searchInput.value) || '').trim().toLowerCase();
+  var COL_KEY = { name: 'name', external_id: 'external', group: 'group', status: 'status', position: 'pos', created: 'ts' };
+
+  function rowCheck(row) { return row.querySelector('input.component-row-check'); }
+  function isVisible(row) { return row.style.display !== 'none'; }
+  function visibleCount() {
+    var n = 0;
+    for (var i = 0; i < rows.length; i++) if (isVisible(rows[i])) n++;
+    return n;
+  }
+  /* only visible rows are ever selectable/deletable */
+  function checkedIds() {
+    var ids = [];
+    for (var i = 0; i < rows.length; i++) {
+      var cb = rowCheck(rows[i]);
+      if (cb && cb.checked && isVisible(rows[i])) ids.push(cb.value);
+    }
+    return ids;
+  }
+  function updateSelection() {
+    if (!bulkBtn) return;
+    var n = checkedIds().length;
+    bulkBtn.disabled = n === 0;
+    bulkBtn.title = n ? n + ' component(s) selected' : '';
+  }
+  function updateMeta() {
+    if (!metaEl) return;
+    var vis = visibleCount();
+    var noun = renderedCount === 1 ? ' component' : ' components';
+    metaEl.textContent = vis < renderedCount ? vis + ' of ' + renderedCount + noun : renderedCount + noun;
+  }
+  function applyFilter() {
+    if (!searchInput) return;
+    var q = searchInput.value.trim().toLowerCase();
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i];
+      var ok = !q || (row.getAttribute('data-search') || '').indexOf(q) !== -1;
+      row.style.display = ok ? '' : 'none';
+      if (!ok) {
+        /* never delete rows the user cannot see */
+        var cb = rowCheck(row);
+        if (cb && cb.checked) cb.checked = false;
       }
-      return ids;
     }
-    function updateSelection() {
-      var n = checkedIds().length;
-      bulkBtn.disabled = n === 0;
-      bulkBtn.title = n ? n + ' component(s) selected' : '';
+    if (noMatchRow) noMatchRow.hidden = !(q && visibleCount() === 0);
+    if (searchClear) searchClear.hidden = !searchInput.value;
+    updateMeta();
+    updateSelection();
+  }
+  function buildUrl(sortValue) {
+    var q = (searchInput && searchInput.value.trim()) || '';
+    var parts = [];
+    if (q) parts.push('q=' + encodeURIComponent(q));
+    if (sortValue && sortValue !== 'position_ASC') parts.push('sort=' + sortValue);
+    return location.pathname + (parts.length ? '?' + parts.join('&') : '');
+  }
+  function syncUrl() {
+    if (!window.history || !history.replaceState) return;
+    try { history.replaceState(null, '', buildUrl(sortInput ? sortInput.value : '')); } catch (e) {}
+  }
+  function markSort(col, dir) {
+    if (sortInput) sortInput.value = col + '_' + dir;
+    var ths = table.querySelectorAll('th.sortable');
+    for (var i = 0; i < ths.length; i++) {
+      var c = ths[i].getAttribute('data-col');
+      var active = (c === col);
+      if (ths[i].classList) ths[i].classList.toggle('sorted', active);
+      ths[i].setAttribute('aria-sort', active ? (dir === 'ASC' ? 'ascending' : 'descending') : 'none');
+      var arrow = ths[i].querySelector('.sort-arrow');
+      if (arrow) arrow.textContent = active ? (dir === 'ASC' ? '↑' : '↓') : '↕';
+      var link = ths[i].querySelector('a');
+      if (link) {
+        /* keep the no-JS fallback pointing at the opposite direction */
+        var next = active ? (dir === 'ASC' ? 'DESC' : 'ASC') : (c === 'created' ? 'DESC' : 'ASC');
+        link.setAttribute('href', buildUrl(c + '_' + next));
+      }
     }
+  }
+  function sortRows(col, dir) {
+    var key = COL_KEY[col];
+    if (!key) return;
+    var numeric = (key === 'pos' || key === 'ts');
+    var sorted = rows.slice().sort(function(a, b) {
+      var A = a.getAttribute('data-' + key) || '';
+      var B = b.getAttribute('data-' + key) || '';
+      var r;
+      if (numeric) r = (parseFloat(A) || 0) - (parseFloat(B) || 0);
+      else r = String(A).localeCompare(String(B), undefined, { sensitivity: 'base', numeric: true });
+      if (r === 0) r = String(a.getAttribute('data-name') || '').localeCompare(String(b.getAttribute('data-name') || ''), undefined, { sensitivity: 'base' });
+      return dir === 'DESC' ? -r : r;
+    });
+    var statics = [];
+    for (var i = 0; i < tbody.children.length; i++) {
+      var el = tbody.children[i];
+      if ((' ' + el.className + ' ').indexOf(' component-row ') === -1) statics.push(el);
+    }
+    for (var j = 0; j < sorted.length; j++) tbody.appendChild(sorted[j]);
+    for (var k = 0; k < statics.length; k++) tbody.appendChild(statics[k]);
+    rows = sorted;
+    markSort(col, dir);
+    syncUrl();
+  }
+
+  /* clicking a header toggles its direction: A→Z ⇄ Z→A (no reload) */
+  var ths = table.querySelectorAll('th.sortable');
+  for (var t = 0; t < ths.length; t++) {
+    ths[t].addEventListener('click', function(e) {
+      var col = this.getAttribute('data-col');
+      var cur = (sortInput && sortInput.value) || '';
+      var m = /^(.*)_(ASC|DESC)$/.exec(cur);
+      var dir = (m && m[1] === col) ? (m[2] === 'ASC' ? 'DESC' : 'ASC') : (col === 'created' ? 'DESC' : 'ASC');
+      sortRows(col, dir);
+      if (e.cancelable) e.preventDefault();
+    });
+  }
+
+  /* Search: refine the rendered set in place. Only when the query is no longer an
+     extension of the server-rendered one (i.e. it got shorter) do we re-ask the
+     server, so results stay correct without reloading on every keystroke. */
+  function submitSearch() { if (filterForm) filterForm.submit(); }
+  function onSearchChange() {
+    if (!searchInput) return;
+    if (searchClear) searchClear.hidden = !searchInput.value;
+    var v = searchInput.value.trim().toLowerCase();
+    if (v.indexOf(serverQ) === 0) { applyFilter(); syncUrl(); }
+    else submitSearch();
+  }
+  if (searchInput) {
+    searchInput.addEventListener('input', onSearchChange);
+    searchInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); onSearchChange(); }
+    });
+  }
+  if (searchClear) {
+    searchClear.addEventListener('click', function() {
+      if (searchInput) searchInput.value = '';
+      if (serverQ) { submitSearch(); return; }
+      applyFilter();
+      syncUrl();
+      if (searchInput) searchInput.focus();
+    });
+  }
+  if (filterForm) {
+    filterForm.addEventListener('submit', function(e) {
+      var v = ((searchInput && searchInput.value) || '').trim().toLowerCase();
+      if (v.indexOf(serverQ) === 0) { e.preventDefault(); applyFilter(); syncUrl(); }
+    });
+  }
+
+  /* select-all and bulk delete only ever touch VISIBLE rows */
+  if (allCb) {
     allCb.addEventListener('change', function() {
-      for (var i = 0; i < checkboxes.length; i++) { checkboxes[i].checked = allCb.checked; }
+      for (var i = 0; i < rows.length; i++) {
+        var cb = rowCheck(rows[i]);
+        if (cb && isVisible(rows[i])) cb.checked = allCb.checked;
+      }
       updateSelection();
     });
-    for (var i = 0; i < checkboxes.length; i++) {
-      checkboxes[i].addEventListener('change', updateSelection);
-    }
+  }
+  for (var r = 0; r < rows.length; r++) {
+    var cb0 = rowCheck(rows[r]);
+    if (cb0) cb0.addEventListener('change', updateSelection);
+  }
+  if (bulkBtn) {
     bulkBtn.addEventListener('click', function() {
       var ids = checkedIds();
       if (ids.length === 0) return;
@@ -240,8 +403,12 @@
       document.body.appendChild(form);
       form.submit();
     });
-    updateSelection();
   }
+
+  applyFilter();
+  var initial = /^(.*)_(ASC|DESC)$/.exec((sortInput && sortInput.value) || '');
+  if (initial && COL_KEY[initial[1]]) markSort(initial[1], initial[2]);
+  updateSelection();
 })();
 </script>
 </body>
