@@ -70,12 +70,12 @@
 <% components.forEach(c => {
   const compGroups = c.groups || [];
   const groupText = compGroups.length > 0 ? compGroups.map(g => g.name).join(', ') : (c.group_name || '-');
-  const searchText = [c.name, c.description, c.external_id, c.group_name].concat(compGroups.map(g => g.name)).filter(Boolean).join(' ').toLowerCase();
+  const searchText = [c.name, c.description, c.external_id, c.group_name, c.parent_name].concat(compGroups.map(g => g.name)).filter(Boolean).join(' ').toLowerCase();
   const createdTs = tsOf(c.created_at);
 %>
 <tr class="component-row" data-name="<%= c.name %>" data-external="<%= c.external_id || '' %>" data-group="<%= groupText === '-' ? '' : groupText %>" data-status="<%= c.status %>" data-pos="<%= Number(c.position) || 0 %>" data-ts="<%= createdTs %>" data-search="<%= searchText %>">
 <td><input type="checkbox" name="component_ids" class="component-row-check" value="<%= c.id %>" aria-label="Select <%= c.name %>"></td>
-<td><strong><%= c.name %></strong><br><small class="text-muted"><%= c.description || '' %></small></td>
+<td<% if (c.parent_id) { %> class="child-cell"<% } %>><strong><%= c.name %></strong><% if (c.parent_id) { %> <small class="child-parent-tag" title="Child of <%= c.parent_name || 'parent' %>">&#8627; <%= c.parent_name || 'parent' %></small><% } %><br><small class="text-muted"><%= c.description || '' %></small></td>
 <td><small><code><%= c.external_id || '-' %></code></small></td>
 <td><%= groupText %></td>
 <td><span class="status-badge status-<%= c.status %>"><%= c.status %></span></td>
@@ -165,6 +165,23 @@
 <option value="major_outage" <%= component.status === 'major_outage' ? 'selected' : '' %>>Major Outage</option>
 <option value="under_maintenance" <%= component.status === 'under_maintenance' ? 'selected' : '' %>>Under Maintenance</option>
 </select>
+</div>
+<div class="form-group">
+<label for="parent_id">Parent component</label>
+<select id="parent_id" name="parent_id">
+<option value="">— None (top-level) —</option>
+<% (parents || []).forEach(p => { %>
+<option value="<%= p.id %>" <%= component.parent_id === p.id ? 'selected' : '' %>><%= p.name %></option>
+<% }); %>
+</select>
+<small class="text-muted">A parent shows the worst status among its children. This component and its own descendants are not offered (that would create a cycle).</small>
+</div>
+<div class="form-group">
+<label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+<input type="checkbox" id="show_children" name="show_children" <%= Number(component.show_children) === 1 ? 'checked' : '' %>>
+Show child components on the public status page
+</label>
+<small class="text-muted">When checked, children appear indented under this component on /status/:slug. When unchecked they are hidden there — the admin list and the API always show them.</small>
 </div>
 <div class="form-actions">
 <button type="submit" class="btn btn-primary"><%= componentMode === 'create' ? 'Create Component' : 'Save Changes' %></button>

@@ -147,7 +147,20 @@ router.post('/components', requirePerm('write'), async (req, res) => {
   const { name, description, status, position, external_id } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
   const group = await components.resolveGroup(req.body);
-  const c = await components.create({ name, description, status, group_id: group.group_id, group_name: group.group_name, group_ids: group.group_ids, position, external_id });
+  let c;
+  try {
+    c = await components.create({
+      name, description, status, group_id: group.group_id, group_name: group.group_name,
+      group_ids: group.group_ids, position, external_id,
+      parent_id: req.body.parent_id || null,
+      show_children: req.body.show_children
+    });
+  } catch (e) {
+    // Cycle guard / missing parent (model validation) — nothing was written.
+    if (e.code === 'invalid_parent' || e.code === 'parent_missing') return res.status(400).json({ error: e.message });
+    console.error('POST /api/v1/components error:', e);
+    return res.status(500).json({ error: 'Internal error' });
+  }
   const admins = await queryAll("SELECT id FROM users WHERE role=$1", ['admin']);
   admins.forEach(a => {
     notifications.create({
@@ -170,7 +183,15 @@ router.put('/components/:id', requirePerm('write'), async (req, res) => {
     body.group_name = group.group_name;
     body.group_ids = group.group_ids;
   }
-  const c = await components.update(req.params.id, body);
+  let c;
+  try {
+    c = await components.update(req.params.id, body);
+  } catch (e) {
+    // Cycle guard / missing parent (model validation) — nothing was written.
+    if (e.code === 'invalid_parent' || e.code === 'parent_missing') return res.status(400).json({ error: e.message });
+    console.error('PUT /api/v1/components error:', e);
+    return res.status(500).json({ error: 'Internal error' });
+  }
   if (c && oldComp) {
     const admins = await queryAll("SELECT id FROM users WHERE role=$1", ['admin']);
     admins.forEach(a => {

@@ -1102,3 +1102,9 @@ body.dark select option {
   .list-meta { margin-left: 0; }
   .search-box { max-width: none; }
 }
+
+/* ===== Composite components (parent/child) =====
+   Child rows are indented and tagged with "↳ parent name" inside the Name
+   cell — no extra column, so colspan/sort/JS stay untouched. */
+.child-cell { padding-left: 28px; }
+.child-parent-tag { font-size: 11px; color: var(--text-muted); white-space: nowrap; }

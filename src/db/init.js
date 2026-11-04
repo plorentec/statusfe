@@ -47,6 +47,8 @@ async function createTables() {
       group_id TEXT,
       dependency_id TEXT,
       external_id TEXT,
+      parent_id TEXT,
+      show_children INTEGER DEFAULT 0,
       position INTEGER DEFAULT 0,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -521,6 +523,21 @@ async function migrate() {
     } catch(e) { /* ignore — already gone */ }
   }
   seedKeysFileJustWritten = false;
+
+  // Composite components: parent/child aggregation. Add the columns if the
+  // table predates them (older installs); harmless on a fresh schema where the
+  // columns were created with the table. parent_id has no FK on purpose — the
+  // delete path re-points children to NULL first (portable + no FK surprises).
+  try {
+    await run(`ALTER TABLE components ADD COLUMN IF NOT EXISTS parent_id TEXT`);
+  } catch(e) {
+    // Column already exists or the wording differs — safe to proceed.
+  }
+  try {
+    await run(`ALTER TABLE components ADD COLUMN IF NOT EXISTS show_children INTEGER DEFAULT 0`);
+  } catch(e) {
+    // Column already exists or the wording differs — safe to proceed.
+  }
 
   // is_global on component_groups: add the column if the table predates it
   // (older installs), then backfill existing global groups. "Global" previously

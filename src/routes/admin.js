@@ -293,6 +293,7 @@ router.get('/components/new', async (req, res) => {
     component: {},
     groups: await componentGroups.list(),
     selectedGroupIds: [],
+    parents: await components.parentOptions(null),
     csrfToken: res.locals.csrfToken
   });
 });
@@ -303,7 +304,18 @@ router.post('/components', async (req, res) => {
     return res.redirect('/admin/components/new?msg=error&type=error');
   }
   const group = await components.resolveGroup(req.body);
-  const comp = await components.create({ name, description, status, group_id: group.group_id, group_name: group.group_name, group_ids: group.group_ids, position, external_id });
+  let comp;
+  try {
+    comp = await components.create({
+      name, description, status, group_id: group.group_id, group_name: group.group_name,
+      group_ids: group.group_ids, position, external_id,
+      parent_id: req.body.parent_id || null,
+      show_children: req.body.show_children ? 1 : 0
+    });
+  } catch (e) {
+    // Cycle guard / missing parent raised by the model — no partial create.
+    return res.redirect('/admin/components/new?msg=' + (e.code === 'invalid_parent' || e.code === 'parent_missing' ? e.code : 'error') + '&type=error');
+  }
   const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
   for (const a of admins) {
     await notifications.create({
@@ -380,6 +392,8 @@ router.get('/components/:id/edit', async (req, res) => {
     component: comp,
     groups: await componentGroups.list(),
     selectedGroupIds: (await components.getGroups(comp.id)).map(g => g.id),
+    // Options exclude this component and its own descendants (cycle guard).
+    parents: await components.parentOptions(comp.id),
     pages: await pages.list(),
     csrfToken: res.locals.csrfToken
   });
@@ -396,7 +410,18 @@ router.put('/components/:id', async (req, res) => {
   }
   const oldData = { name: comp.name, description: comp.description, status: comp.status, group_name: comp.group_name, position: comp.position };
   const group = await components.resolveGroup(req.body);
-  const updated = await components.update(req.params.id, { name, description, status, group_id: group.group_id, group_name: group.group_name, group_ids: group.group_ids, position, external_id });
+  let updated;
+  try {
+    updated = await components.update(req.params.id, {
+      name, description, status, group_id: group.group_id, group_name: group.group_name,
+      group_ids: group.group_ids, position, external_id,
+      parent_id: req.body.parent_id || null,
+      show_children: req.body.show_children ? 1 : 0
+    });
+  } catch (e) {
+    // Cycle guard / missing parent raised by the model — nothing was written.
+    return res.redirect('/admin/components/' + req.params.id + '/edit?msg=' + (e.code === 'invalid_parent' || e.code === 'parent_missing' ? e.code : 'error') + '&type=error');
+  }
   const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
   for (const a of admins) {
     await notifications.create({

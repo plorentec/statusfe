@@ -48,6 +48,102 @@ function toBool01(v) {
   return (v === true || v === 1 || v === '1' || v === 'on' || v === 'true') ? 1 : 0;
 }
 
+// ===== Composite components (parent/child aggregation) =====
+// Severity of a component status. Only these five values are canonical in
+// components.status; any unrecognized value ranks as 2 (degraded_performance)
+// so an unknown status can never silently read as green.
+const COMPONENT_SEVERITY = {
+  operational: 0,
+  under_maintenance: 1,
+  degraded_performance: 2,
+  partial_outage: 3,
+  major_outage: 4,
+};
+
+function severity(status) {
+  return Object.prototype.hasOwnProperty.call(COMPONENT_SEVERITY, status)
+    ? COMPONENT_SEVERITY[status]
+    : 2;
+}
+
+// Worst status among a list of statuses (empty list => 'operational').
+// Ties keep the first worst value; an unrecognized value keeps its own string.
+function worstStatus(statuses) {
+  let worst = 'operational';
+  let rank = 0;
+  for (const s of (statuses || [])) {
+    const r = severity(s);
+    if (r > rank) { rank = r; worst = s; }
+  }
+  return worst;
+}
+
+// Is `candidateId` reachable by walking parent_id upward from itself to
+// `ancestorId`? (candidate === ancestor, or candidate is a descendant of
+// ancestor). Cycle guard in the same style as dependencies.wouldCreateCycle.
+async function isDescendant(candidateId, ancestorId) {
+  const stack = [candidateId];
+  const seen = new Set();
+  while (stack.length > 0) {
+    const cur = stack.pop();
+    if (cur === ancestorId) return true;
+    if (seen.has(cur)) continue;
+    seen.add(cur);
+    const row = await queryOne('SELECT parent_id FROM components WHERE id=$1', [cur]);
+    if (!row) return false;
+    if (row.parent_id) stack.push(row.parent_id);
+  }
+  return false;
+}
+
+// Walk up the parent_id chain, materializing each ancestor's status as the
+// WORST status among its children (write-through, so every read path — admin
+// list, /api/v1/*, public page, embed — is correct with no read-time logic).
+// A component with no children is left untouched (its status is its own).
+// override_status on an ancestor PINS it: never overwritten, but the walk
+// continues upward using the pinned value.
+//   includeSelf=false → start at the PARENT of componentId (the component's
+//     own status was just written by the caller).
+//   includeSelf=true  → recompute componentId itself first (used after a
+//     delete/reparent or when clearing an override, where the row's own
+//     children set changed).
+// The visited set makes the walk cycle-safe even if bad data slips through.
+async function recomputeAncestorChain(componentId, includeSelf = false) {
+  let curId = componentId;
+  if (!includeSelf) {
+    const cur = await queryOne('SELECT parent_id FROM components WHERE id=$1', [componentId]);
+    curId = cur ? cur.parent_id : null;
+  }
+  const visited = new Set();
+  while (curId) {
+    if (visited.has(curId)) break;
+    visited.add(curId);
+
+    const node = await queryOne('SELECT * FROM components WHERE id=$1', [curId]);
+    if (!node) break;
+
+    const kids = await queryAll('SELECT status, override_status FROM components WHERE parent_id=$1', [curId]);
+    // A component with no children keeps whatever status it has.
+    if (kids.length > 0) {
+      const derived = worstStatus(kids.map(k => k.override_status || k.status));
+      if (!node.override_status && node.status !== derived) {
+        await run('UPDATE components SET status=$1, updated_at=NOW() WHERE id=$2', [derived, node.id]);
+        try {
+          await run(
+            'INSERT INTO status_history (id,component_id,page_id,old_status,new_status,created_at) VALUES ($1,$2,$3,$4,$5,NOW())',
+            [uuidv4(), node.id, null, node.status, derived]
+          );
+        } catch(e) {
+          if (!e.message.includes('FOREIGN KEY')) throw e;
+        }
+      }
+    }
+    // Continue upward even when this node is pinned — the pinned value feeds
+    // the next level's aggregation.
+    curId = node.parent_id;
+  }
+}
+
 async function cascadeStatusChange(upstreamComponentId, newStatus) {
   // BFS over the dependency graph so a change to an upstream component
   // propagates transitively (A→B→C) instead of stopping after direct
@@ -71,7 +167,7 @@ async function cascadeStatusChange(upstreamComponentId, newStatus) {
           await run('UPDATE components SET status=$1, updated_at=NOW() WHERE id=$2', [newStatus, dep.component_id]);
           const dhId = uuidv4();
           try {
-            await run('INSERT INTO status_history (id,component_id,page_id,old_status,new_status) VALUES ($1,$2,$3,$4,$5)', [dhId, dep.component_id, null, depComp.status, newStatus]);
+            await run('INSERT INTO status_history (id,component_id,page_id,old_status,new_status,created_at) VALUES ($1,$2,$3,$4,$5,NOW())', [dhId, dep.component_id, null, depComp.status, newStatus]);
           } catch(e) {
             if (!e.message.includes('FOREIGN KEY')) throw e;
           }
@@ -80,6 +176,11 @@ async function cascadeStatusChange(upstreamComponentId, newStatus) {
       }
     }
   }
+
+  // Composite components: every status write path already ends up here, so
+  // recomputing the ancestor chain from the changed component covers admin,
+  // API, update() and both incident paths with one hook.
+  await recomputeAncestorChain(upstreamComponentId);
 }
 
 // ===== PAGES =====
@@ -165,6 +266,18 @@ module.exports.components = {
     let rows = await queryAll(q, p);
     const memberMap = await module.exports.components.getGroupsForMany(rows.map(r => r.id));
     for (const r of rows) r.groups = memberMap.get(r.id) || [];
+    // Composite components: attach the parent's name (for the "↳ parent" tag
+    // in the admin list). Batched, pg-mem portable (IN placeholders, no ANY).
+    const parentIds = [...new Set(rows.map(r => r.parent_id).filter(Boolean))];
+    const parentNameById = new Map();
+    if (parentIds.length) {
+      const prows = await queryAll(
+        `SELECT id, name FROM components WHERE id IN (${parentIds.map((_, i) => '$' + (i + 1)).join(',')})`,
+        parentIds
+      );
+      for (const p of prows) parentNameById.set(p.id, p.name);
+    }
+    for (const r of rows) r.parent_name = r.parent_id ? (parentNameById.get(r.parent_id) || null) : null;
     // Text search: matched in JS (not SQL) so a literal % or _ never acts as a LIKE
     // wildcard and so multi-group memberships (component_group_members) are searchable.
     if (filters.search) {
@@ -258,7 +371,7 @@ module.exports.components = {
       if (displayed.length > 0) {
         // A component in multiple groups appears under each displayed group.
         for (const g of displayed) {
-          result.push({ ...c, current_status: currentStatus, group_name: g.name, group_position: g.position });
+          result.push({ ...c, current_status: currentStatus, group_name: g.name, group_position: g.position, is_child: 0 });
         }
       } else {
         // Directly assigned to the page but not in any displayed group: fall back
@@ -268,7 +381,8 @@ module.exports.components = {
           ...c,
           current_status: currentStatus,
           group_name: c.group_name || 'Other',
-          group_position: fb ? fb.position : Number.MAX_SAFE_INTEGER
+          group_position: fb ? fb.position : Number.MAX_SAFE_INTEGER,
+          is_child: 0
         });
       }
     }
@@ -280,17 +394,91 @@ module.exports.components = {
       if (pa !== pb) return pa - pb;
       return String(a.name).localeCompare(String(b.name));
     });
-    return result;
+
+    // ===== Composite components: visibility + nesting (design decision 3) =====
+    // Per component:
+    //   top        — no parent → rendered normally
+    //   standalone — parent exists but is NOT on this page → rendered alone
+    //                (never silently lost)
+    //   child      — parent on this page and parent.show_children = 1 →
+    //                rendered immediately after each parent row, inheriting the
+    //                parent's group bucket, tagged is_child = 1
+    //   hidden     — parent on this page and parent.show_children = 0 → dropped
+    //                (admin list and GET /api/v1/components are NOT page-scoped
+    //                and keep showing everything)
+    const parentIds = [...new Set(rows.map(r => r.parent_id).filter(Boolean))];
+    const parentById = new Map();
+    if (parentIds.length) {
+      const prows = await queryAll(
+        `SELECT id, name, show_children FROM components WHERE id IN (${parentIds.map((_, i) => '$' + (i + 1)).join(',')})`,
+        parentIds
+      );
+      for (const p of prows) parentById.set(p.id, p);
+    }
+    const onPage = new Set(rows.map(r => r.id));
+    const kindByComp = new Map();
+    for (const c of rows) {
+      if (!c.parent_id) { kindByComp.set(c.id, 'top'); continue; }
+      const p = parentById.get(c.parent_id);
+      if (!p || !onPage.has(c.parent_id)) { kindByComp.set(c.id, 'standalone'); continue; }
+      kindByComp.set(c.id, Number(p.show_children) === 1 ? 'child' : 'hidden');
+    }
+
+    // Row bookkeeping in sorted order: rows per component (multi-group rows)
+    // and child components per displayed parent (deduped, first-seen order).
+    const rowsByComp = new Map();
+    const childrenOf = new Map();
+    for (const r of result) {
+      if (!rowsByComp.has(r.id)) rowsByComp.set(r.id, []);
+      rowsByComp.get(r.id).push(r);
+      if (kindByComp.get(r.id) === 'child') {
+        if (!childrenOf.has(r.parent_id)) childrenOf.set(r.parent_id, []);
+        const kids = childrenOf.get(r.parent_id);
+        if (!kids.includes(r.id)) kids.push(r.id);
+      }
+    }
+
+    const out = [];
+    const emit = (row) => {
+      out.push(row);
+      // Nested children follow every row of their parent (a parent displayed
+      // under several groups shows its children in each of those buckets).
+      for (const kidId of (childrenOf.get(row.id) || [])) {
+        const krows = rowsByComp.get(kidId);
+        if (!krows || krows.length === 0) continue;
+        emit({ ...krows[0], group_name: row.group_name, group_position: row.group_position, is_child: 1 });
+      }
+    };
+    for (const row of result) {
+      const kind = kindByComp.get(row.id);
+      // 'hidden' rows are dropped; 'child' rows are emitted via their parent.
+      if (kind === 'hidden' || kind === 'child') continue;
+      emit(row);
+    }
+    return out;
   },
 
-  async create({ name, description, status, group_name, group_id, group_ids, position, external_id }) {
+  async create({ name, description, status, group_name, group_id, group_ids, position, external_id, parent_id, show_children }) {
     const id = uuidv4();
+    // Parent validation: a dangling parent_id would silently make the child
+    // "standalone" everywhere, so reject it up front (no FK by design).
+    let parentId = parent_id ? String(parent_id) : null;
+    if (parentId) {
+      const parent = await this.get(parentId);
+      if (!parent) {
+        const err = new Error('Parent component not found');
+        err.code = 'parent_missing';
+        throw err;
+      }
+    }
     await run(
-      'INSERT INTO components (id,name,description,status,group_name,group_id,external_id,position) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
-      [id, name, description||'', status||'operational', group_name||null, group_id||null, external_id||null, position||0]
+      'INSERT INTO components (id,name,description,status,group_name,group_id,external_id,position,parent_id,show_children) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+      [id, name, description||'', status||'operational', group_name||null, group_id||null, external_id||null, position||0, parentId, toBool01(show_children)]
     );
     const gids = (group_ids && group_ids.length) ? group_ids : (group_id ? [group_id] : []);
     if (gids.length) await this.setGroups(id, gids);
+    // The new child joins its parent's aggregate right away.
+    if (parentId) await recomputeAncestorChain(id);
     return this.get(id);
   },
 
@@ -327,14 +515,40 @@ module.exports.components = {
     if (!oldComp) return null;
     const fields = [];
     const params = [];
-    const allowed = ['name','description','status','group_name','group_id','position','external_id','override_status'];
+    const allowed = ['name','description','status','group_name','group_id','position','external_id','override_status','parent_id','show_children'];
+    // Cycle guard BEFORE any write: a component may not be its own parent nor
+    // a descendant of itself (same walk style as dependencies.wouldCreateCycle).
+    if (data.parent_id !== undefined && data.parent_id !== null && data.parent_id !== '') {
+      const newParentId = String(data.parent_id);
+      if (newParentId === id) {
+        const err = new Error('A component cannot be its own parent');
+        err.code = 'invalid_parent';
+        throw err;
+      }
+      if (await isDescendant(newParentId, id)) {
+        const err = new Error('A component cannot be one of its own descendants');
+        err.code = 'invalid_parent';
+        throw err;
+      }
+      const newParent = await this.get(newParentId);
+      if (!newParent) {
+        const err = new Error('Parent component not found');
+        err.code = 'parent_missing';
+        throw err;
+      }
+    }
     for (const k of allowed) {
       if (data[k] !== undefined) {
         let val = data[k];
         if ((k === 'group_id' || k === 'group_name') && (val === '' || val === null)) val = null;
+        if (k === 'parent_id' && (val === '' || val === null)) val = null;
+        if (k === 'show_children') val = toBool01(val);
         fields.push(k+'=$'+(params.length+1)); params.push(val);
       }
     }
+    const newParentId = data.parent_id !== undefined
+      ? (data.parent_id === null || data.parent_id === '' ? null : String(data.parent_id))
+      : oldComp.parent_id;
     if (fields.length) {
       params.push(id);
       await run('UPDATE components SET ' + fields.join(',') + ', updated_at=NOW() WHERE id=$' + (params.length), ...params);
@@ -350,20 +564,59 @@ module.exports.components = {
       const pages = await queryAll('SELECT page_id FROM page_components WHERE component_id=$1', [id]);
       for (const pc of pages) {
         const hId = uuidv4();
-        await run('INSERT INTO status_history (id,component_id,page_id,old_status,new_status) VALUES ($1,$2,$3,$4,$5)', [hId, id, pc.page_id, oldComp.status, data.status]);
+        await run('INSERT INTO status_history (id,component_id,page_id,old_status,new_status,created_at) VALUES ($1,$2,$3,$4,$5,NOW())', [hId, id, pc.page_id, oldComp.status, data.status]);
       }
       const hId2 = uuidv4();
       try {
-        await run('INSERT INTO status_history (id,component_id,page_id,old_status,new_status) VALUES ($1,$2,$3,$4,$5)', [hId2, id, null, oldComp.status, data.status]);
+        await run('INSERT INTO status_history (id,component_id,page_id,old_status,new_status,created_at) VALUES ($1,$2,$3,$4,$5,NOW())', [hId2, id, null, oldComp.status, data.status]);
       } catch(e) {
         if (!e.message.includes('FOREIGN KEY')) throw e;
       }
       await cascadeStatusChange(id, data.status);
+      // Recompute this row too: if it is (an unpinned) parent, its status is
+      // derived from its children and a plain write must not stick.
+      await recomputeAncestorChain(id, true);
+    }
+    // Reparenting changes BOTH aggregates: the old parent lost a child, the
+    // new parent gained one.
+    if (newParentId !== oldComp.parent_id) {
+      if (oldComp.parent_id) await recomputeAncestorChain(oldComp.parent_id, true);
+      if (newParentId) await recomputeAncestorChain(newParentId, true);
     }
     return this.get(id);
   },
 
-  async delete(id) { await run('DELETE FROM components WHERE id=$1', [id]); return true; },
+  async delete(id) {
+    const comp = await this.get(id);
+    const formerParentId = comp ? comp.parent_id : null;
+    // Children survive as top-level components (covers single + bulk delete —
+    // both funnel through this method).
+    await run('UPDATE components SET parent_id=NULL WHERE parent_id=$1', [id]);
+    await run('DELETE FROM components WHERE id=$1', [id]);
+    // The former parent lost a child (or an entire subtree) → recompute it.
+    if (formerParentId) await recomputeAncestorChain(formerParentId, true);
+    return true;
+  },
+
+  // Options for the "Parent component" <select>: every component except
+  // `excludeId` itself and its own descendants (choosing those would cycle).
+  async parentOptions(excludeId) {
+    const all = await queryAll('SELECT id, name, position, parent_id FROM components ORDER BY name');
+    if (!excludeId) return all;
+    const banned = new Set([excludeId]);
+    let frontier = [excludeId];
+    while (frontier.length > 0) {
+      const kids = await queryAll(
+        `SELECT id FROM components WHERE parent_id IN (${frontier.map((_, i) => '$' + (i + 1)).join(',')})`,
+        frontier
+      );
+      frontier = [];
+      for (const k of kids) {
+        if (!banned.has(k.id)) { banned.add(k.id); frontier.push(k.id); }
+      }
+    }
+    return all.filter(c => !banned.has(c.id));
+  },
 
   // Get the groups a component belongs to (ordered).
   async getGroups(componentId) {
@@ -457,10 +710,10 @@ module.exports.components = {
     const hId = uuidv4();
     const effectivePageId = (pageId && isUUID(pageId)) ? pageId : null;
     try {
-      await run('INSERT INTO status_history (id,component_id,page_id,old_status,new_status) VALUES ($1,$2,$3,$4,$5)', [hId, componentId, effectivePageId, oldStatus, newStatus]);
+      await run('INSERT INTO status_history (id,component_id,page_id,old_status,new_status,created_at) VALUES ($1,$2,$3,$4,$5,NOW())', [hId, componentId, effectivePageId, oldStatus, newStatus]);
     } catch(e) {
       if (e.message.includes('FOREIGN KEY')) {
-        await run('INSERT INTO status_history (id,component_id,page_id,old_status,new_status) VALUES ($1,$2,$3,$4,$5)', [hId, componentId, null, oldStatus, newStatus]);
+        await run('INSERT INTO status_history (id,component_id,page_id,old_status,new_status,created_at) VALUES ($1,$2,$3,$4,$5,NOW())', [hId, componentId, null, oldStatus, newStatus]);
       } else throw e;
     }
 
@@ -473,6 +726,12 @@ module.exports.components = {
     email.notifyComponentStatusChange(comp.name, oldStatus, newStatus, pageTitle).catch(() => {});
 
     await cascadeStatusChange(componentId, newStatus);
+
+    // Recompute THIS row as well: an unpinned parent's status is derived from
+    // its children, so a plain write (incl. clearing an override pin) must
+    // settle on the derived value. A row with no children is left as written;
+    // a pinned row is skipped inside the walk.
+    await recomputeAncestorChain(componentId, true);
 
     return {
       component: await this.get(componentId),
@@ -583,7 +842,9 @@ module.exports.incidents = {
       if (cs === 'same') {
         newStatus = incidentStatus;
       } else if (cs === 'criticality') {
-        newStatus = module.exports.statusMappings.resolve(incidentStatus);
+        // resolve() is async — without the await a Promise (always truthy) was
+        // written as the component status, so the fallback below never ran.
+        newStatus = await module.exports.statusMappings.resolve(incidentStatus);
         if (!newStatus) {
           if (incidentStatus === 'investigating') newStatus = 'major_outage';
           else if (incidentStatus === 'identified') newStatus = 'partial_outage';
@@ -596,7 +857,7 @@ module.exports.incidents = {
         await run('UPDATE components SET status=$1, updated_at=NOW() WHERE id=$2', [newStatus, component_id]);
         const hId = uuidv4();
         try {
-          await run('INSERT INTO status_history (id,component_id,page_id,old_status,new_status) VALUES ($1,$2,$3,$4,$5)', [hId, component_id, resolvedPageId, oldStatus, newStatus]);
+          await run('INSERT INTO status_history (id,component_id,page_id,old_status,new_status,created_at) VALUES ($1,$2,$3,$4,$5,NOW())', [hId, component_id, resolvedPageId, oldStatus, newStatus]);
         } catch(e) {
           if (!e.message.includes('FOREIGN KEY')) throw e;
         }
@@ -641,7 +902,7 @@ module.exports.incidents = {
         if (cs === 'same') {
           newStatus = data.status;
         } else {
-          newStatus = module.exports.statusMappings.resolve(data.status);
+          newStatus = await module.exports.statusMappings.resolve(data.status);
           if (!newStatus) {
             if (data.status === 'investigating') newStatus = 'major_outage';
             else if (data.status === 'identified') newStatus = 'partial_outage';
@@ -654,7 +915,7 @@ module.exports.incidents = {
           await run('UPDATE components SET status=$1, updated_at=NOW() WHERE id=$2', [newStatus, inc.component_id]);
           const hId = uuidv4();
           try {
-            await run('INSERT INTO status_history (id,component_id,page_id,old_status,new_status) VALUES ($1,$2,$3,$4,$5)', [hId, inc.component_id, inc.page_id, comp.status, newStatus]);
+            await run('INSERT INTO status_history (id,component_id,page_id,old_status,new_status,created_at) VALUES ($1,$2,$3,$4,$5,NOW())', [hId, inc.component_id, inc.page_id, comp.status, newStatus]);
           } catch(e) {
             if (!e.message.includes('FOREIGN KEY')) throw e;
           }
@@ -669,7 +930,7 @@ module.exports.incidents = {
             await run('UPDATE components SET status=$1, updated_at=NOW() WHERE id=$2', ['operational', inc.component_id]);
             const hId = uuidv4();
             try {
-              await run('INSERT INTO status_history (id,component_id,page_id,old_status,new_status) VALUES ($1,$2,$3,$4,$5)', [hId, inc.component_id, inc.page_id, comp.status, 'operational']);
+              await run('INSERT INTO status_history (id,component_id,page_id,old_status,new_status,created_at) VALUES ($1,$2,$3,$4,$5,NOW())', [hId, inc.component_id, inc.page_id, comp.status, 'operational']);
             } catch(e) {
               if (!e.message.includes('FOREIGN KEY')) throw e;
             }
@@ -1566,3 +1827,10 @@ module.exports.auditLog = {
     await run("DELETE FROM audit_log WHERE created_at < NOW() - ($1::text || ' days')::interval", [days]);
   }
 };
+
+// Composite-component helpers exposed for harnesses (severity map, worst-of
+// aggregation, ancestor recompute). Routes never call these directly — they
+// go through components.* / cascadeStatusChange.
+module.exports.recomputeAncestorChain = recomputeAncestorChain;
+module.exports.worstStatus = worstStatus;
+module.exports.severity = severity;

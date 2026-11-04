@@ -131,6 +131,8 @@ async function session(req, res, next) {
       logo_invalid: 'Logo must be a PNG, JPEG, WebP or SVG image.',
       bulk_delete_error: 'Nothing deleted — no valid components were selected.',
       bulk_deleted: 'Selected components deleted.',
+      invalid_parent: 'Invalid parent: a component cannot be its own parent or one of its own descendants.',
+      parent_missing: 'The selected parent component does not exist.',
       default: flashMsg
     };
     res.locals.message = msgs[flashMsg] || flashMsg;

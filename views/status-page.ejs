@@ -19,6 +19,7 @@
 /* Default styles for custom layout placeholders — override with your own CSS */
 .sp-component-item { display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid #e5e7eb; }
 .sp-component-item:last-child { border-bottom:none; }
+.sp-component-item.is-child { padding-left:22px; }
 .sp-component-name { font-weight:500; }
 .sp-component-status { font-size:13px; padding:3px 10px; border-radius:20px; font-weight:500; }
 .sp-component-item.status-operational .sp-component-status { background:#dcffe4; color:#065f46; }
@@ -78,7 +79,9 @@ body { font-family: <%- sanitizeCss(customization.font_family) %>; }
     name: c.name,
     status: c.current_status || c.status,
     description: c.description || '',
-    group_name: c.group_name
+    group_name: c.group_name,
+    parent_id: c.parent_id || null,
+    is_child: c.is_child ? 1 : 0
   }));
   const incidentsData = (incidents || []).map(i => ({
     id: i.id,
@@ -131,13 +134,13 @@ body { font-family: <%- sanitizeCss(customization.font_family) %>; }
     return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
-  // Render components as HTML list items
+  // Render components as HTML list items (children indented under the parent)
   function renderComponentsHTML(comps) {
     if (!comps || comps.length === 0) return '<p>No components</p>';
     let html = '';
     comps.forEach(c => {
       const status = c.current_status || c.status;
-      html += '<div class="sp-component-item status-' + escapeHtml(status) + '">';
+      html += '<div class="sp-component-item status-' + escapeHtml(status) + (c.is_child ? ' is-child' : '') + '">';
       html += '<span class="sp-component-name">' + escapeHtml(c.name) + '</span>';
       html += '<span class="sp-component-status">' + escapeHtml(formatStatus(status)) + '</span>';
       html += '</div>';
@@ -234,14 +237,14 @@ body { font-family: <%- sanitizeCss(customization.font_family) %>; }
 <% components.forEach(c => {
   const g = c.group_name || 'Other';
   if (!groups[g]) groups[g] = [];
-  groups[g].push({ name: c.name, status: c.current_status || c.status, description: c.description });
+  groups[g].push({ name: c.name, status: c.current_status || c.status, description: c.description, is_child: c.is_child });
 }); %>
 <% for (const [name, comps] of Object.entries(groups)) { %>
 <% const gw = worstStatus(comps); %>
 <div class="component-group">
 <h2><%= name %> <span class="component-badge badge-<%= gw %>"><%= formatStatus(gw) %></span></h2>
 <% comps.forEach(c => { %>
-<div class="component-row status-<%= c.status %>">
+<div class="component-row status-<%= c.status %><%= c.is_child ? ' is-child' : '' %>">
 <div class="component-row-left">
 <span class="component-dot dot-<%= c.status %>"></span>
 <div>
@@ -323,7 +326,7 @@ body { font-family: <%- sanitizeCss(customization.font_family) %>; }
 <% components.forEach(c => {
   const g = c.group_name || 'Other';
   if (!groups[g]) groups[g] = [];
-  groups[g].push({ name: c.name, status: c.current_status || c.status, description: c.description });
+  groups[g].push({ name: c.name, status: c.current_status || c.status, description: c.description, is_child: c.is_child });
 }); %>
 <% for (const [groupName, comps] of Object.entries(groups)) { %>
 <% const gw = worstStatus(comps); %>
@@ -331,7 +334,7 @@ body { font-family: <%- sanitizeCss(customization.font_family) %>; }
 <h2><%= groupName %> <span class="card-status <%= gw %>"><%= formatStatus(gw) %></span></h2>
 <div class="card-grid">
 <% comps.forEach(c => { %>
-<div class="status-card <%= c.status %>">
+<div class="status-card <%= c.status %><%= c.is_child ? ' is-child' : '' %>">
 <div class="card-top">
 <span class="card-name"><%= c.name %></span>
 <span class="card-status <%= c.status %>"><%= formatStatus(c.status) %></span>
@@ -411,14 +414,14 @@ body { font-family: <%- sanitizeCss(customization.font_family) %>; }
 <% components.forEach(c => {
   const g = c.group_name || 'Other';
   if (!groups[g]) groups[g] = [];
-  groups[g].push({ name: c.name, status: c.current_status || c.status, description: c.description });
+  groups[g].push({ name: c.name, status: c.current_status || c.status, description: c.description, is_child: c.is_child });
 }); %>
 <% for (const [groupName, comps] of Object.entries(groups)) { %>
 <% const gw = worstStatus(comps); %>
 <div class="dark-group">
 <h2><%= groupName %> <span class="dark-badge <%= gw %>"><%= formatStatus(gw) %></span></h2>
 <% comps.forEach(c => { %>
-<div class="dark-item">
+<div class="dark-item<%= c.is_child ? ' is-child' : '' %>">
 <div class="dark-item-left">
 <span class="dot dot-<%= c.status %>"></span>
 <div>

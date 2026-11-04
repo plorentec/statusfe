@@ -320,3 +320,10 @@ header.page-header {
   .incident-row { flex-direction: column; gap: 8px; }
   .dark-item { flex-direction: column; align-items: flex-start; gap: 10px; }
 }
+
+/* ===== Composite components (parent/child) =====
+   Children are nested directly under their parent (getForPage reorders them);
+   show_children=0 children are dropped server-side, so this is pure indent. */
+.component-row.is-child { padding-left: 22px; }
+.status-card.is-child { margin-left: 22px; }
+.dark-item.is-child { padding-left: 22px; }

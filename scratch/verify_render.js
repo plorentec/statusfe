@@ -51,8 +51,8 @@ if (!clHtml.includes('<h1>Test Page</h1>')) { console.log('FAIL layout placehold
 // admin templates with exact route locals
 render('components/list', path.join(__dirname, '../views/admin/components.ejs'), { title: 'Components', user: { name: 'u', role: 'admin' }, message: null, messageType: null, components: [{ ...comps[0], groups: [{ id: 'g1', name: 'Infra' }, { id: 'g2', name: 'Red' }] }, comps[1]], componentMode: 'list', groups: [{ id: 'g1', name: 'Infra' }, { id: 'g2', name: 'Red' }], csrfToken: 'tok', searchQuery: '', sortBy: 'position_ASC' });
 render('components/list/search', path.join(__dirname, '../views/admin/components.ejs'), { title: 'Components', user: { name: 'u', role: 'admin' }, message: null, messageType: null, components: comps, componentMode: 'list', groups: [{ id: 'g1', name: 'Infra' }], csrfToken: 'tok', searchQuery: 'api & web', sortBy: 'created_DESC' });
-render('components/create', path.join(__dirname, '../views/admin/components.ejs'), { title: 'New Component', user: { name: 'u', role: 'admin' }, message: null, messageType: null, components: comps, componentMode: 'create', component: {}, groups: [{ id: 'g1', name: 'Infra' }], selectedGroupIds: [], csrfToken: 'tok' });
-render('components/edit', path.join(__dirname, '../views/admin/components.ejs'), { title: 'Edit Component', user: { name: 'u', role: 'admin' }, message: null, messageType: null, components: comps, componentMode: 'edit', component: comps[0], groups: [{ id: 'g1', name: 'Infra' }, { id: 'g2', name: 'Red' }], selectedGroupIds: ['g1', 'g2'], pages: [{ id: 'p1', name: 'A' }], csrfToken: 'tok' });
+render('components/create', path.join(__dirname, '../views/admin/components.ejs'), { title: 'New Component', user: { name: 'u', role: 'admin' }, message: null, messageType: null, components: comps, componentMode: 'create', component: {}, groups: [{ id: 'g1', name: 'Infra' }], selectedGroupIds: [], parents: [{ id: 'c1', name: 'Router' }], csrfToken: 'tok' });
+render('components/edit', path.join(__dirname, '../views/admin/components.ejs'), { title: 'Edit Component', user: { name: 'u', role: 'admin' }, message: null, messageType: null, components: comps, componentMode: 'edit', component: { ...comps[0], parent_id: 'c2', show_children: 1 }, groups: [{ id: 'g1', name: 'Infra' }, { id: 'g2', name: 'Red' }], selectedGroupIds: ['g1', 'g2'], parents: [{ id: 'c2', name: 'API' }, { id: 'c3', name: 'CDN' }], pages: [{ id: 'p1', name: 'A' }], csrfToken: 'tok' });
 render('config-statuses/component', path.join(__dirname, '../views/admin/config-statuses.ejs'), { title: 'Component Statuses', user: { name: 'u', role: 'admin' }, statuses: [{ value: 'operational', label: 'Operational', color: '#10b981', position: 0, is_system: 1 }], type: 'component', message: null, messageType: null, csrfToken: 'tok' });
 render('config-statuses/incident', path.join(__dirname, '../views/admin/config-statuses.ejs'), { title: 'Incident Statuses', user: { name: 'u', role: 'admin' }, statuses: [{ value: 'investigating', label: 'Investigating', color: '#ef4444', position: 0, is_system: 1 }], type: 'incident', message: null, messageType: null, csrfToken: 'tok' });
 render('pages/list', path.join(__dirname, '../views/admin/pages.ejs'), { title: 'Pages', user: { name: 'u', role: 'admin' }, message: null, messageType: null, pages: [mkPage('default')], pageMode: 'list' });
@@ -69,9 +69,33 @@ const csHtml = render('config-statuses/csrf-check', path.join(__dirname, '../vie
 if (!csHtml.includes("input.name = '_csrf'")) { console.log('FAIL config-statuses sin inyección CSRF'); failures++; }
 if (!csHtml.includes('id="csrfToken"')) { console.log('FAIL config-statuses sin input csrfToken'); failures++; }
 // components edit: checkboxes multi-grupo marcados
-const ceHtml = render('components/edit/csrf', path.join(__dirname, '../views/admin/components.ejs'), { title: 'Edit Component', user: { name: 'u', role: 'admin' }, message: null, messageType: null, components: comps, componentMode: 'edit', component: comps[0], groups: [{ id: 'g1', name: 'Infra' }, { id: 'g2', name: 'Red' }], selectedGroupIds: ['g1', 'g2'], pages: [], csrfToken: 'tok' });
+const ceHtml = render('components/edit/csrf', path.join(__dirname, '../views/admin/components.ejs'), { title: 'Edit Component', user: { name: 'u', role: 'admin' }, message: null, messageType: null, components: comps, componentMode: 'edit', component: comps[0], groups: [{ id: 'g1', name: 'Infra' }, { id: 'g2', name: 'Red' }], selectedGroupIds: ['g1', 'g2'], parents: [], pages: [], csrfToken: 'tok' });
 if (!ceHtml.includes('name="group_ids"')) { console.log('FAIL components/edit sin checkboxes group_ids'); failures++; }
 if ((ceHtml.match(/checked/g) || []).length < 2) { console.log('FAIL components/edit: los 2 grupos deberían salir marcados'); failures++; }
+
+// ===== Composite components: form + list + status page =====
+// create/edit form: parent <select> + show_children checkbox (local `parents` required)
+const cfHtml = render('components/create/parent', path.join(__dirname, '../views/admin/components.ejs'), { title: 'New Component', user: { name: 'u', role: 'admin' }, message: null, messageType: null, components: comps, componentMode: 'create', component: {}, groups: [], selectedGroupIds: [], parents: [{ id: 'c9', name: 'yoda' }], csrfToken: 'tok' });
+if (!cfHtml.includes('name="parent_id"') || !cfHtml.includes('name="show_children"')) { console.log('FAIL components/create: faltan parent_id/show_children'); failures++; }
+if (!cfHtml.includes('value="c9"') || !cfHtml.includes('yoda')) { console.log('FAIL components/create: opciones de padre no renderizadas'); failures++; }
+const efHtml = render('components/edit/parent-selected', path.join(__dirname, '../views/admin/components.ejs'), { title: 'Edit Component', user: { name: 'u', role: 'admin' }, message: null, messageType: null, components: comps, componentMode: 'edit', component: { ...comps[0], parent_id: 'c9', show_children: 1 }, groups: [], selectedGroupIds: [], parents: [{ id: 'c9', name: 'yoda' }, { id: 'c1', name: 'Router' }], pages: [], csrfToken: 'tok' });
+if (!/name="parent_id"[\s\S]*?value="c9" selected/.test(efHtml)) { console.log('FAIL components/edit: parent pre-seleccionado'); failures++; }
+if (!/name="show_children"[^>]*checked/.test(efHtml)) { console.log('FAIL components/edit: show_children pre-marcado'); failures++; }
+// list: child rows indented + "↳ parent name" tag (no new column)
+const clChild = render('components/list/child', path.join(__dirname, '../views/admin/components.ejs'), { title: 'Components', user: { name: 'u', role: 'admin' }, message: null, messageType: null, components: [{ ...comps[0], id: 'kid1', name: 'ping', parent_id: 'c1', parent_name: 'Router', show_children: 0 }, comps[1]], componentMode: 'list', groups: [], csrfToken: 'tok', searchQuery: '', sortBy: 'position_ASC' });
+if (!clChild.includes('child-cell') || !clChild.includes('&#8627; Router')) { console.log('FAIL components/list: falta etiqueta ↳ parent en fila hijo'); failures++; }
+if ((clChild.match(/<th /g) || []).length !== 8) { console.log('FAIL components/list: número de columnas alterado'); failures++; }
+// status page: children rendered indented under the parent (is-child class)
+const compKids = [
+  { id: 'c1', name: 'yoda', status: 'major_outage', current_status: 'major_outage', description: '', group_name: 'Hosts', group_id: 'g1' },
+  { id: 'c2', name: 'ping', status: 'operational', current_status: 'operational', description: '', group_name: 'Hosts', group_id: null, parent_id: 'c1', is_child: 1 },
+];
+const kidHtml = render('status-page/children', path.join(__dirname, '../views/status-page.ejs'), { ...base, components: compKids, incidents: [], incidentsByComponent: {} });
+if (!kidHtml.includes('is-child')) { console.log('FAIL status-page: fila hijo sin clase is-child'); failures++; }
+const kidGrid = render('status-page/children-grid', path.join(__dirname, '../views/status-page.ejs'), { ...base, page: mkPage('grid'), components: compKids, incidents: [], incidentsByComponent: {} });
+if (!kidGrid.includes('is-child')) { console.log('FAIL grid: tarjeta hija sin clase is-child'); failures++; }
+const kidDark = render('status-page/children-dark', path.join(__dirname, '../views/status-page.ejs'), { ...base, page: mkPage('dark'), components: compKids, incidents: [], incidentsByComponent: {} });
+if (!kidDark.includes('is-child')) { console.log('FAIL dark: item hijo sin clase is-child'); failures++; }
 
 // pages/edit: el grupo asignado debe salir PRE-MARCADO (bug reportado)
 const peHtml = render('pages/edit/group-checked', path.join(__dirname, '../views/admin/pages.ejs'), { title: 'Edit Page', user: { name: 'u', role: 'admin' }, message: null, messageType: null, pages: [mkPage('default')], pageMode: 'edit', page: mkPage('default'), components: comps, assignedComponentIds: [], groups: [{ id: 'gX', name: 'Infra' }], selectedGroupIds: ['gX'] });
