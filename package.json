@@ -1,6 +1,6 @@
 {
   "name": "statusfe",
-  "version": "2.2.5",
+  "version": "2.2.6",
   "description": "Open source status page system",
   "main": "src/app.js",
   "scripts": {
@@ -26,7 +26,6 @@
     "helmet": "^8.0.0",
     "nodemailer": "^8.0.9",
     "otpauth": "^9.5.1",
-    "pg": "^8.21.0",
     "qrcode": "^1.5.4",
     "uuid": "^10.0.0"
   }

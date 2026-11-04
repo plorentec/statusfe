@@ -36,3 +36,9 @@ rendimiento/seguridad de bajo riesgo. Rama de feature, commits por unidad.
 
 - L1 (verbatim): "Arreglalo todo y mete todo sobre mejoras y haz todas las pruebas que puedas"
 - L2: El árbol tenía ~433 líneas sin commitear de la feature composite components (odd/tasks/composite-components.md), con los 11 arneses en verde. Decisión: commitearla primero como unidad propia antes de tocar nada.
+- L3: El parche masivo de requireAdmin via script falló en silencio la primera vez (subcadena `(async` inexistente) — re-hecho con `, async (req` y verificado por conteo (16 rutas). Lección: un parche por script siempre se verifica por su efecto, no por su exit code.
+- L4 (bug NUEVO encontrado por el arnés, S3): `maintenance.create` comparaba `new Date('YYYY-MM-DD HH:MM:SS')` (hora LOCAL) contra stamps UTC — en un server no-UTC una ventana que terminaba en 50 min nacía `completed`. Fix: `parseUtcStamp` con `Z` explícito.
+- L5 (bug NUEVO encontrado por el arnés): ventanas de mantenimiento creadas por la API REST no tenían fila en `maintenance_notice_pages` y JAMÁS aparecían en la página pública (sólo el form del admin pasaba `notice_page_ids`). El modelo ahora defaultea a la página de la ventana.
+- L6 (mejora de portabilidad): la subquery correlacionada del dashboard (`pageStatuses`) reescrita como DISTINCT ON + LEFT JOIN — pg-mem no la soporta (limitación documentada) y en PostgreSQL real es equivalente.
+- L7: Suite final: 11 arneses existentes + verify_review_fixes.js (52 checks) — todos en verde tras el bump a 2.2.6.
+- L8: Fuera de alcance (quedan para después): cifrado de la password SMTP en settings, paginación de listas admin, uptime por intervalos en vez de por día. Razón: cambios de datos/esquema o de semántica visible que merecen decisión propia.

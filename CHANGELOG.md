@@ -9,6 +9,29 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [2.2.6] — 2026-11-05
+
+### Fixed
+- **`/admin/check-update` never reported real updates** — the inline version comparison was inverted (`hasUpdate` was only true when the CURRENT version was newer than the latest release). Comparison extracted to `src/utils/version.js` (`isNewerVersion`) and the direction fixed.
+- **Finished maintenance windows stayed on the public page forever** — `maintenance.updateStatuses()` existed but was never called (status stuck at `'ongoing'`), and `getUpcomingForPage` did not filter `ends_at`. Now it filters `ends_at > now`, and statuses transition on boot and in the daily cron.
+- **Maintenance windows created via the REST API never appeared publicly** — the model created no `maintenance_notice_pages` row unless the caller passed `notice_page_ids` (only the admin form did). The model now defaults to the window's own page.
+- **Maintenance status computed in local time** — `new Date('YYYY-MM-DD HH:MM:SS')` parses as LOCAL time but stored stamps are UTC; on a non-UTC server a window ending in 50 minutes was classified `completed` at creation. Parsing now pins `Z` (`parseUtcStamp`).
+- **Custom incident statuses were silently dropped** — the config UI lets admins create incident statuses, but the model only accepted the 4 fixed lifecycle ones. `incidents.validStatuses()` now unions the `incident_statuses` table; the `'same'` cascade only writes statuses that are valid COMPONENT statuses (`validComponentStatuses()`), so a custom status can never corrupt a public page (the original 2.2.4 concern).
+- **API keys scoped to a page could act on any page** — the `page_id` scope was only honored on webhooks. A scoped key can now only touch its own page (pages, components assigned to it, incidents, maintenance, webhooks); it cannot create pages, mutate groups/dependencies, and key minting is forced to its own page.
+- **`role=user` could create/edit/delete all content** — pages, components (incl. bulk delete), incidents, groups and maintenance mutations had no `requireAdmin` gate. 16 routes gated; `role=user` keeps read access to the dashboard/lists.
+- **`PUT/POST /api/v1/pages` accepted invalid slugs** — slug regex (`^[a-z0-9-]+$`) enforced at the API too (400).
+- **Self-update accepted downgrades** — `requestUpdate` now rejects `latest <= current` (400) instead of queueing an older release.
+- **`incidents.visible="false"` counted as visible** — normalized through `toBool01`.
+- **Redirect flash codes without text** — `invalid_reset`, `password_set`, `status_updated`, `invalid_status`, `last_admin`, `self_dep`, `cycle`, `exists`, `dep_deleted`, `system`, `invalid_retention` now have readable messages; deleting a dependency no longer shows "Component deleted successfully.".
+- **Dashboard `pageStatuses` correlated subquery** — rewritten as `DISTINCT ON` + `LEFT JOIN` (portable to pg-mem per the documented limitation, same result on real PostgreSQL).
+
+### Changed / improved
+- **`getForPage` dependency resolution batched** — was 2 queries per component (N+1); now 2 batched `IN` queries total (pg-mem portable).
+- **CSP enabled** — explicit `Content-Security-Policy` (inline scripts/styles kept, Chart.js CDN allowed); `frame-ancestors 'self'` everywhere except `/embed/:slug` (`*`, so the widget is iframeable again — helmet's default `X-Frame-Options: SAMEORIGIN` silently blocked external embeds).
+- **Session/flash/CSRF/2FA cookies carry `secure:'auto'`** (Secure over HTTPS, honors `X-Forwarded-Proto`); the raw `session_id` Set-Cookie adds `Secure` when `req.secure`.
+- **TOTP replay guard** — `verifyDetailed()` rejects codes from already-accepted timesteps; the accepted counter is stored in the session.
+- Dead code removed: unused signed `_2fa_verified` cookie, debug `console.log` in the docs route, duplicate `"pg"` entry in package.json.
+
 ## [2.2.4] — 2026-09-22
 
 ### Fixed (crashes / availability)
