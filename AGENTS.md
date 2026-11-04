@@ -141,7 +141,8 @@ Improvement ideas not yet implemented live in `ROADMAP.md`.
 - App listens on **3080** (Apache on :80 proxies `/` → `127.0.0.1:3080`, vhost `cachet-le-ssl.conf`). The port is pinned via **`docker-compose.override.yml`** (untracked — do NOT delete it; the repo compose says PORT=3000 which is taken by another container's docker-proxy).
 - **Real database = PostgreSQL native on the host** at 127.0.0.1:5432 (db `statusfe`). The `statusfe-postgres` container is REDUNDANT and sits in a permanent crash loop (cannot bind 5432 — already owned by host postgres). Safe to `docker stop statusfe-postgres` if desired; the app never uses it.
 - Volume `statusfe-data` → `/app/data` (session secret, audit CSVs) persists across container recreations.
-- **Deploy command**: `cd /root/statusfe && git fetch && git reset --hard origin/main && docker compose build statusfe && docker compose up -d --no-deps statusfe`.
+- **Deploy command**: `cd /root/statusfe && git pull --ff-only && docker build --network host -t statusfe-statusfe . && docker compose up -d --no-deps --no-build statusfe`.
+  > **2.2.6**: `docker compose build statusfe` YA NO FUNCIONA en el Docker de yoda — el `network: host` del bloque `build:` exige entitlement (`pass "--allow=network.host"`). Se/build directo con `docker build --network host -t statusfe-statusfe .` (el nombre de imagen que espera compose) y `up -d --no-build`.
 - `systemd/statusfe.service` in the repo is legacy/alternative (bare node as `www-data`) — production uses Docker.
 - Version on the admin panel (`/admin/check-update`) compares `package.json` against the latest GitHub release tag — publish a release after bumping so the banner clears.
 
