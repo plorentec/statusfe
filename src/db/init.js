@@ -539,6 +539,17 @@ async function migrate() {
     // Column already exists or the wording differs — safe to proceed.
   }
 
+  // SMTP password at rest: encrypt any legacy plaintext row (idempotent —
+  // encrypted values keep their enc:v1: prefix and are skipped).
+  try {
+    const row = await queryOne("SELECT value FROM settings WHERE key='smtp_pass'");
+    if (row && row.value && !row.value.startsWith('enc:v1:')) {
+      const models = require('./models');
+      const enc = models.__encryptSecretForMigration(row.value);
+      if (enc) await run("UPDATE settings SET value=$1 WHERE key='smtp_pass'", [enc]);
+    }
+  } catch(e) { /* settings table may not exist yet on a broken boot */ }
+
   // is_global on component_groups: add the column if the table predates it
   // (older installs), then backfill existing global groups. "Global" previously
   // meant "no rows in group_pages"; we keep that meaning for existing data so

@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { queryOne, queryAll, run } = require('../db/database');
 const { pages, components, componentGroups, incidents, apiKeys, webhooks, maintenance, notifications, analytics, dependencies, settings } = require('../db/models');
-const { auth, requirePerm } = require('../middleware/auth');
+const { auth, requirePerm, enforceKeyRateLimit } = require('../middleware/auth');
 const { destroyUserSessions } = require('../middleware/session');
 const { deliver: triggerWebhook } = require('../utils/webhooks');
 
@@ -10,12 +10,22 @@ const { deliver: triggerWebhook } = require('../utils/webhooks');
 // pages and the full (unfiltered) listing, while anonymous callers keep the
 // public-only view. Previously the authenticated variants were registered
 // after the public handlers and were therefore unreachable (route shadowing).
-async function optionalAuth(req) {
-  const authHeader = req.headers.authorization;
-  const apiKey = req.query.api_key || req.headers['x-api-key'];
-  const key = (authHeader && authHeader.startsWith('Bearer ')) ? authHeader.slice(7) : apiKey;
-  if (!key) return null;
-  try { return await apiKeys.authenticate(key); } catch { return null; }
+// Middleware form (2.2.7) so a key that exceeds its rate_limit gets a real 429
+// instead of silently degrading to the public view.
+function optionalAuthMw(req, res, next) {
+  (async () => {
+    const authHeader = req.headers.authorization;
+    const apiKey = req.query.api_key || req.headers['x-api-key'];
+    const key = (authHeader && authHeader.startsWith('Bearer ')) ? authHeader.slice(7) : apiKey;
+    if (key) {
+      const user = await apiKeys.authenticate(key).catch(() => null);
+      if (user && !enforceKeyRateLimit(res, user)) return; // 429 already sent
+      req.user = user || null;
+    } else {
+      req.user = null;
+    }
+    next();
+  })().catch(next);
 }
 
 // ===== PUBLIC (no auth) =====
@@ -34,8 +44,8 @@ router.get('/pages/admin', auth, async (req, res) => {
 });
 
 // Public: list pages (public only unless authenticated)
-router.get('/pages', async (req, res) => {
-  const user = await optionalAuth(req);
+router.get('/pages', optionalAuthMw, async (req, res) => {
+  const user = req.user;
   if (req.query.external_id) {
     const p = await pages.getByExternalId(req.query.external_id);
     // Never expose a private page (custom_css/custom_html included) anonymously.
@@ -47,8 +57,8 @@ router.get('/pages', async (req, res) => {
 
 // Public: get page by slug with components and incidents (private pages require
 // a valid API key; accepts a UUID id as well)
-router.get('/pages/:slug', async (req, res) => {
-  const user = await optionalAuth(req);
+router.get('/pages/:slug', optionalAuthMw, async (req, res) => {
+  const user = req.user;
   let page = await pages.getBySlug(req.params.slug);
   if (!page && user) page = await pages.getById(req.params.slug);
   if (!page) return res.status(404).json({ error: 'Not found' });

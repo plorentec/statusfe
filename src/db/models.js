@@ -3,6 +3,37 @@ const { v4: uuidv4 } = require('uuid');
 const { sanitizeCss, sanitizeHtml } = require('../utils/sanitize');
 const crypto = require('crypto');
 
+// ===== SMTP password encryption at rest (2.2.7) =====
+// The SMTP password used to sit in the settings table in PLAINTEXT. It is now
+// stored as AES-256-GCM with a key derived from SESSION_SECRET (fixed context
+// label — rotating SESSION_SECRET invalidates stored SMTP passwords; the
+// operator re-enters them once). Format: enc:v1:<iv>:<tag>:<ciphertext> (b64).
+// Legacy plaintext rows are re-encrypted by migrate() at boot; reads accept
+// both formats so a failed migration never locks the operator out.
+const ENC_PREFIX = 'enc:v1:';
+function smtpEncryptionKey() {
+  return crypto.createHash('sha256').update('statusfe:smtp-credentials:v1:' + (process.env.SESSION_SECRET || '')).digest();
+}
+function encryptSecret(plain) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', smtpEncryptionKey(), iv);
+  const enc = Buffer.concat([cipher.update(String(plain), 'utf8'), cipher.final()]);
+  return ENC_PREFIX + [iv.toString('base64'), cipher.getAuthTag().toString('base64'), enc.toString('base64')].join(':');
+}
+function decryptSecret(stored) {
+  try {
+    const parts = String(stored).slice(ENC_PREFIX.length).split(':');
+    if (parts.length !== 3) return stored;
+    const decipher = crypto.createDecipheriv('aes-256-gcm', smtpEncryptionKey(), Buffer.from(parts[0], 'base64'));
+    decipher.setAuthTag(Buffer.from(parts[1], 'base64'));
+    return Buffer.concat([decipher.update(Buffer.from(parts[2], 'base64')), decipher.final()]).toString('utf8');
+  } catch (e) {
+    // Wrong key (rotated SESSION_SECRET) or tampered row: surface nothing.
+    return null;
+  }
+}
+function isEncryptedSecret(v) { return typeof v === 'string' && v.startsWith(ENC_PREFIX); }
+
 let customizationCache = null;
 
 function isUUID(str) {
@@ -286,10 +317,15 @@ module.exports.components = {
         .some(v => v != null && String(v).toLowerCase().includes(needle));
       rows = rows.filter(hit);
     }
-    // Group filter matches ANY of the component's groups (membership or legacy name)
+    // Group filter matches ANY of the component's groups (membership or legacy name);
+    // the value may be a group NAME or a group ID (2.2.7).
     if (filters.group) {
       const target = String(filters.group).toLowerCase();
-      rows = rows.filter(r => String(r.group_name || '').toLowerCase() === target || r.groups.some(g => String(g.name).toLowerCase() === target));
+      rows = rows.filter(r =>
+        r.group_id === filters.group ||
+        String(r.group_name || '').toLowerCase() === target ||
+        r.groups.some(g => g.id === filters.group || String(g.name).toLowerCase() === target)
+      );
     }
     return rows;
   },
@@ -1438,11 +1474,15 @@ module.exports.settings = {
     return true;
   },
   async getSMTP() {
+    const pass = await this.get('smtp_pass');
     return {
       host: await this.get('smtp_host'),
       port: await this.get('smtp_port'),
       user: await this.get('smtp_user'),
-      pass: await this.get('smtp_pass'),
+      // Decrypt at rest; legacy plaintext rows pass through (and migrate()
+      // re-encrypts them on the next boot). A rotated SESSION_SECRET yields
+      // null — the operator re-enters the password.
+      pass: pass ? (isEncryptedSecret(pass) ? decryptSecret(pass) : pass) : null,
       secure: await this.get('smtp_secure'),
       from: await this.get('smtp_from'),
       from_name: await this.get('smtp_from_name'),
@@ -1451,7 +1491,13 @@ module.exports.settings = {
   async setSMTP(data) {
     const fields = ['smtp_host','smtp_port','smtp_user','smtp_pass','smtp_secure','smtp_from','smtp_from_name'];
     for (const k of fields) {
-      await this.set(k, data[k] !== undefined ? data[k] : '');
+      let val = data[k] !== undefined ? data[k] : '';
+      if (k === 'smtp_pass' && val) {
+        // Never persist the SMTP password in plaintext. An already-encrypted
+        // value round-tripping from the form is preserved as-is.
+        val = isEncryptedSecret(val) ? val : encryptSecret(val);
+      }
+      await this.set(k, val);
     }
     return true;
   },
@@ -1913,3 +1959,7 @@ module.exports.auditLog = {
 module.exports.recomputeAncestorChain = recomputeAncestorChain;
 module.exports.worstStatus = worstStatus;
 module.exports.severity = severity;
+// Secret encryption exposed for the boot migration (init.js) and harnesses.
+module.exports.__encryptSecretForMigration = encryptSecret;
+module.exports.__isEncryptedSecret = isEncryptedSecret;
+module.exports.__decryptSecretForHarness = decryptSecret;
