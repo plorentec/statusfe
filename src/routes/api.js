@@ -107,19 +107,54 @@ router.get('/status/:slug', async (req, res) => {
 // ===== PROTECTED (requires auth) =====
 router.use(auth);
 
+// ===== Page scoping for API keys =====
+// A key with page_id set (scoped key) may only act inside its own page.
+// Previously the scope was only honored on webhook routes, so a scoped write
+// key could edit any page/component/incident and even mint a global key.
+function scopeDenied(req, pageId) {
+  return !!(req.user.page_id && String(pageId) !== String(req.user.page_id));
+}
+async function componentInScope(req, componentId) {
+  if (!req.user.page_id) return true;
+  const row = await queryOne(
+    'SELECT 1 AS ok FROM page_components WHERE component_id=$1 AND page_id=$2',
+    [componentId, req.user.page_id]
+  );
+  return !!row;
+}
+
 router.get('/info', (req, res) => res.json({ name: 'StatusFe API', version: '1.0', user: req.user.name, permissions: req.user.permissions }));
 
 // Pages (write/admin). Listing is handled by the auth-aware public routes above.
 router.post('/pages', requirePerm('write'), async (req, res) => {
+  // A scoped key cannot create pages: any new page is outside its scope.
+  if (req.user.page_id) return res.status(403).json({ error: 'Scoped keys cannot create pages' });
   const { name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public, external_id } = req.body;
   if (!name || !slug) return res.status(400).json({ error: 'name and slug required' });
+  // Same slug rule as the admin UI (missing here previously — an API key could
+  // save slugs with spaces/uppercase that broke /status/:slug URLs).
+  if (!/^[a-z0-9-]+$/.test(slug)) return res.status(400).json({ error: 'slug must match ^[a-z0-9-]+$' });
   const existing = await pages.getBySlug(slug);
   if (existing) return res.status(409).json({ error: 'Slug exists' });
   const page = await pages.create({ name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public, external_id });
   res.status(201).json({ page });
 });
-router.put('/pages/:id', requirePerm('write'), async (req, res) => { res.json({ page: await pages.update(req.params.id, req.body) }); });
-router.delete('/pages/:id', requirePerm('admin'), async (req, res) => { await pages.delete(req.params.id); res.json({ message: 'Deleted' }); });
+router.put('/pages/:id', requirePerm('write'), async (req, res) => {
+  if (req.body.slug !== undefined && !/^[a-z0-9-]+$/.test(req.body.slug)) {
+    return res.status(400).json({ error: 'slug must match ^[a-z0-9-]+$' });
+  }
+  const page = await pages.getById(req.params.id) || await pages.getBySlug(req.params.id);
+  if (!page) return res.status(404).json({ error: 'Not found' });
+  if (scopeDenied(req, page.id)) return res.status(403).json({ error: 'Forbidden' });
+  res.json({ page: await pages.update(page.id, req.body) });
+});
+router.delete('/pages/:id', requirePerm('admin'), async (req, res) => {
+  const page = await pages.getById(req.params.id) || await pages.getBySlug(req.params.id);
+  if (!page) return res.status(404).json({ error: 'Not found' });
+  if (scopeDenied(req, page.id)) return res.status(403).json({ error: 'Forbidden' });
+  await pages.delete(page.id);
+  res.json({ message: 'Deleted' });
+});
 
 // Components (admin - requires auth)
 router.get('/components/admin', async (req, res) => {
@@ -174,6 +209,7 @@ router.post('/components', requirePerm('write'), async (req, res) => {
   res.status(201).json({ component: c });
 });
 router.put('/components/:id', requirePerm('write'), async (req, res) => {
+  if (!(await componentInScope(req, req.params.id))) return res.status(403).json({ error: 'Forbidden' });
   const oldComp = await components.get(req.params.id);
   if (!oldComp) return res.status(404).json({ error: 'Not found' });
   const body = { ...req.body };
@@ -207,6 +243,7 @@ router.put('/components/:id', requirePerm('write'), async (req, res) => {
   res.json({ component: c });
 });
 router.delete('/components/:id', requirePerm('admin'), async (req, res) => {
+  if (!(await componentInScope(req, req.params.id))) return res.status(403).json({ error: 'Forbidden' });
   const comp = await components.get(req.params.id);
   if (comp) {
     const admins = await queryAll("SELECT id FROM users WHERE role=$1", ['admin']);
@@ -227,15 +264,20 @@ router.delete('/components/:id', requirePerm('admin'), async (req, res) => {
 // Assign component to page
 router.post('/pages/:pageId/components/:componentId', requirePerm('write'), async (req, res) => {
   try {
-    await components.assignToPage(req.params.pageId, req.params.componentId, req.body.position || 0);
     const page = await pages.getById(req.params.pageId) || await pages.getBySlug(req.params.pageId);
-    triggerWebhook(page.id, 'component.assigned', { page_id: req.params.pageId, component_id: req.params.componentId }).catch(() => {});
+    if (!page) return res.status(404).json({ error: 'Page not found' });
+    if (scopeDenied(req, page.id)) return res.status(403).json({ error: 'Forbidden' });
+    await components.assignToPage(page.id, req.params.componentId, req.body.position || 0);
+    triggerWebhook(page.id, 'component.assigned', { page_id: page.id, component_id: req.params.componentId }).catch(() => {});
     res.json({ message: 'Assigned' });
   } catch(e) { res.status(400).json({ error: e.message }); }
 });
 
 router.delete('/pages/:pageId/components/:componentId', requirePerm('write'), async (req, res) => {
-  await components.removeFromPage(req.params.pageId, req.params.componentId);
+  const page = await pages.getById(req.params.pageId) || await pages.getBySlug(req.params.pageId);
+  const effectivePageId = page ? page.id : req.params.pageId;
+  if (scopeDenied(req, effectivePageId)) return res.status(403).json({ error: 'Forbidden' });
+  await components.removeFromPage(effectivePageId, req.params.componentId);
   res.json({ message: 'Removed' });
 });
 
@@ -255,8 +297,10 @@ router.get('/groups/:id', async (req, res) => {
   res.json({ group: g, pages, components_count: componentsCount });
 });
 
-// Create group (write)
+// Create group (write). Page-scoped keys cannot mutate groups: they are
+// cross-page structures (a global group shows on every page).
 router.post('/groups', requirePerm('write'), async (req, res) => {
+  if (req.user.page_id) return res.status(403).json({ error: 'Scoped keys cannot manage groups' });
   const { name, page_ids, position, is_global } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
   const g = await componentGroups.create({ name, page_ids, position, is_global });
@@ -269,6 +313,7 @@ router.post('/groups', requirePerm('write'), async (req, res) => {
 
 // Update group (write)
 router.put('/groups/:id', requirePerm('write'), async (req, res) => {
+  if (req.user.page_id) return res.status(403).json({ error: 'Scoped keys cannot manage groups' });
   const existing = await componentGroups.get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Not found' });
   const g = await componentGroups.update(req.params.id, req.body);
@@ -280,6 +325,7 @@ router.put('/groups/:id', requirePerm('write'), async (req, res) => {
 
 // Delete group (admin)
 router.delete('/groups/:id', requirePerm('admin'), async (req, res) => {
+  if (req.user.page_id) return res.status(403).json({ error: 'Scoped keys cannot manage groups' });
   const existing = await componentGroups.get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Not found' });
   await componentGroups.delete(req.params.id);
@@ -288,6 +334,7 @@ router.delete('/groups/:id', requirePerm('admin'), async (req, res) => {
 
 // Update component status
 router.put('/components/:id/status', requirePerm('write'), async (req, res) => {
+  if (!(await componentInScope(req, req.params.id))) return res.status(403).json({ error: 'Forbidden' });
   const { status, page_id } = req.body;
   if (!status) return res.status(400).json({ error: 'status required' });
   const valid = ['operational','degraded_performance','partial_outage','major_outage','under_maintenance','investigating','identified','monitoring'];
@@ -336,7 +383,13 @@ router.get('/incidents/:id', async (req, res) => { const i = await incidents.get
 router.post('/incidents', requirePerm('write'), async (req, res) => {
   const { component_id, page_id, name, status, impact, starts_at, resolved_at, message, visible } = req.body;
   if (!name || !message) return res.status(400).json({ error: 'name and message required' });
-  if (status !== undefined && !incidents.VALID_STATUSES.includes(status)) return res.status(400).json({ error: 'invalid status' });
+  // Scoped keys may only create incidents on their own page (directly or via a
+  // component assigned to it).
+  if (req.user.page_id) {
+    if (page_id && scopeDenied(req, page_id)) return res.status(403).json({ error: 'Forbidden' });
+    if (component_id && !(await componentInScope(req, component_id))) return res.status(403).json({ error: 'Forbidden' });
+  }
+  if (status !== undefined && !(await incidents.validStatuses()).includes(status)) return res.status(400).json({ error: 'invalid status' });
   const cleanStartsAt = starts_at && starts_at.trim() !== '' ? starts_at : null;
   const cleanResolvedAt = resolved_at && resolved_at.trim() !== '' ? resolved_at : null;
   const incident = await incidents.create({ component_id, page_id, name, status, impact, starts_at: cleanStartsAt, resolved_at: cleanResolvedAt, message, visible });
@@ -358,9 +411,10 @@ router.post('/incidents', requirePerm('write'), async (req, res) => {
 router.put('/incidents/:id', requirePerm('write'), async (req, res) => {
   const incident = await incidents.get(req.params.id);
   if (!incident) return res.status(404).json({ error: 'Not found' });
+  if (scopeDenied(req, incident.page_id)) return res.status(403).json({ error: 'Forbidden' });
   const oldStatus = incident.status;
   const body = { ...req.body };
-  if (body.status !== undefined && !incidents.VALID_STATUSES.includes(body.status)) return res.status(400).json({ error: 'invalid status' });
+  if (body.status !== undefined && !(await incidents.validStatuses()).includes(body.status)) return res.status(400).json({ error: 'invalid status' });
   if (body.starts_at && body.starts_at.trim() === '') body.starts_at = null;
   if (body.resolved_at && body.resolved_at.trim() === '') body.resolved_at = null;
   const updated = await incidents.update(req.params.id, body);
@@ -382,6 +436,7 @@ router.put('/incidents/:id', requirePerm('write'), async (req, res) => {
 router.delete('/incidents/:id', requirePerm('admin'), async (req, res) => {
   const incident = await incidents.get(req.params.id);
   if (!incident) return res.status(404).json({ error: 'Not found' });
+  if (scopeDenied(req, incident.page_id)) return res.status(403).json({ error: 'Forbidden' });
   await incidents.delete(req.params.id);
   triggerWebhook(incident.page_id, 'incident.deleted', { incident_id: req.params.id }).catch(() => {});
   res.json({ message: 'Deleted' });
@@ -395,10 +450,19 @@ router.get('/api-keys', requirePerm('admin'), async (req, res) => {
 router.post('/api-keys', requirePerm('admin'), async (req, res) => {
   const { name, permissions, page_id, rate_limit, expires_at } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
-  const key = await apiKeys.create({ name, permissions, page_id: page_id || req.user.page_id, rate_limit, expires_at });
+  // A scoped admin key can only mint keys for its OWN page (previously the
+  // body's page_id won and a scoped key could mint a global key).
+  const effectivePageId = req.user.page_id || page_id || null;
+  const key = await apiKeys.create({ name, permissions, page_id: effectivePageId, rate_limit, expires_at });
   res.status(201).json({ api_key: key });
 });
-router.delete('/api-keys/:id', requirePerm('admin'), async (req, res) => { await apiKeys.revoke(req.params.id); res.json({ message: 'Revoked' }); });
+router.delete('/api-keys/:id', requirePerm('admin'), async (req, res) => {
+  const target = await apiKeys.getFull(req.params.id);
+  if (!target) return res.status(404).json({ error: 'Not found' });
+  if (scopeDenied(req, target.page_id)) return res.status(403).json({ error: 'Forbidden' });
+  await apiKeys.revoke(req.params.id);
+  res.json({ message: 'Revoked' });
+});
 
 // Webhooks (secrets are only returned to admin-permission keys)
 router.get('/pages/:pageId/webhooks', requirePerm('read'), async (req, res) => {
@@ -416,14 +480,24 @@ router.post('/pages/:pageId/webhooks', requirePerm('write'), async (req, res) =>
   if (!validateWebhookUrl(url)) return res.status(400).json({ error: 'Invalid webhook URL. Only http/https URLs to public hosts are allowed.' });
   const page = await pages.getById(req.params.pageId) || await pages.getBySlug(req.params.pageId);
   if (!page) return res.status(404).json({ error: 'Not found' });
+  if (scopeDenied(req, page.id)) return res.status(403).json({ error: 'Forbidden' });
   res.status(201).json({ webhook: await webhooks.create({ page_id: page.id, url, events, secret }) });
 });
 router.put('/webhooks/:id', requirePerm('write'), async (req, res) => {
+  const wh = await queryOne('SELECT * FROM webhooks WHERE id=$1', [req.params.id]);
+  if (!wh) return res.status(404).json({ error: 'Not found' });
+  if (scopeDenied(req, wh.page_id)) return res.status(403).json({ error: 'Forbidden' });
   const w = await webhooks.update(req.params.id, req.body);
   if (!w) return res.status(404).json({ error: 'Not found' });
   res.json({ webhook: w });
 });
-router.delete('/webhooks/:id', requirePerm('admin'), async (req, res) => { await webhooks.delete(req.params.id); res.json({ message: 'Deleted' }); });
+router.delete('/webhooks/:id', requirePerm('admin'), async (req, res) => {
+  const wh = await queryOne('SELECT * FROM webhooks WHERE id=$1', [req.params.id]);
+  if (!wh) return res.status(404).json({ error: 'Not found' });
+  if (scopeDenied(req, wh.page_id)) return res.status(403).json({ error: 'Forbidden' });
+  await webhooks.delete(req.params.id);
+  res.json({ message: 'Deleted' });
+});
 
 // Settings (placeholder)
 router.get('/settings', requirePerm('admin'), (req, res) => { res.json({ settings: {} }); });
@@ -466,6 +540,7 @@ router.get('/maintenance/:id', requirePerm('read'), async (req, res) => {
 router.post('/maintenance', requirePerm('write'), async (req, res) => {
   const { page_id, component_id, title, description, starts_at, ends_at } = req.body;
   if (!title || !starts_at || !ends_at) return res.status(400).json({ error: 'title, starts_at and ends_at required' });
+  if (scopeDenied(req, page_id)) return res.status(403).json({ error: 'Forbidden' });
   let m;
   try {
     m = await maintenance.create({ page_id, component_id, title, description, starts_at, ends_at });
@@ -476,11 +551,18 @@ router.post('/maintenance', requirePerm('write'), async (req, res) => {
   res.status(201).json({ maintenance: m });
 });
 router.put('/maintenance/:id', requirePerm('write'), async (req, res) => {
+  const existing = await maintenance.get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Not found' });
+  if (scopeDenied(req, existing.page_id)) return res.status(403).json({ error: 'Forbidden' });
+  if (req.body.page_id !== undefined && scopeDenied(req, req.body.page_id)) return res.status(403).json({ error: 'Forbidden' });
   const m = await maintenance.update(req.params.id, req.body);
   if (!m) return res.status(404).json({ error: 'Not found' });
   res.json({ maintenance: m });
 });
 router.delete('/maintenance/:id', requirePerm('admin'), async (req, res) => {
+  const existing = await maintenance.get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Not found' });
+  if (scopeDenied(req, existing.page_id)) return res.status(403).json({ error: 'Forbidden' });
   await maintenance.delete(req.params.id);
   res.json({ message: 'Deleted' });
 });
@@ -522,6 +604,7 @@ router.get('/dependencies', requirePerm('read'), async (req, res) => {
   res.json({ dependencies: allDeps, total: allDeps.length, components: allComponents });
 });
 router.post('/dependencies', requirePerm('write'), async (req, res) => {
+  if (req.user.page_id) return res.status(403).json({ error: 'Scoped keys cannot manage dependencies' });
   const { component_id, depends_on, cascade_status } = req.body;
   if (!component_id || !depends_on) return res.status(400).json({ error: 'component_id and depends_on required' });
   if (component_id === depends_on) return res.status(400).json({ error: 'Cannot depend on itself' });
@@ -532,6 +615,7 @@ router.post('/dependencies', requirePerm('write'), async (req, res) => {
   res.status(201).json({ dependency: dep });
 });
 router.delete('/dependencies/:id', requirePerm('admin'), async (req, res) => {
+  if (req.user.page_id) return res.status(403).json({ error: 'Scoped keys cannot manage dependencies' });
   await dependencies.delete(req.params.id);
   res.json({ message: 'Deleted' });
 });

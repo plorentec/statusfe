@@ -28,9 +28,15 @@ router.get('/', async (req, res) => {
   `);
 
   const pageStatuses = await queryAll(`
-    SELECT p.name, p.slug, p.status,
-      (SELECT new_status FROM status_history WHERE page_id=p.id ORDER BY created_at DESC LIMIT 1) as latest_status
-    FROM pages p ORDER BY p.name
+    SELECT p.name, p.slug, p.status, sh.new_status as latest_status
+    FROM pages p
+    LEFT JOIN (
+      SELECT DISTINCT ON (page_id) page_id, new_status
+      FROM status_history
+      WHERE page_id IS NOT NULL
+      ORDER BY page_id, created_at DESC
+    ) sh ON sh.page_id = p.id
+    ORDER BY p.name
   `);
 
   const unread = await notifications.listUnread(req.user.id);
@@ -118,7 +124,7 @@ router.get('/pages/new', async (req, res) => {
   });
 });
 
-router.post('/pages', async (req, res) => {
+router.post('/pages', requireAdmin, async (req, res) => {
   const { name, slug, description, status, template, is_public, refresh_interval, custom_layout, custom_layout_css, custom_layout_html, custom_css, custom_html, external_id } = req.body;
   if (!name || !slug) {
     return res.redirect('/admin/pages/new?msg=error&type=error');
@@ -193,7 +199,7 @@ router.get('/pages/:id/edit', async (req, res) => {
   });
 });
 
-router.put('/pages/:id', async (req, res) => {
+router.put('/pages/:id', requireAdmin, async (req, res) => {
   const page = await pages.getById(req.params.id);
   if (!page) {
     return res.redirect('/admin/pages?msg=error&type=error');
@@ -235,7 +241,7 @@ router.put('/pages/:id', async (req, res) => {
   res.redirect('/admin/pages?msg=success&type=success');
 });
 
-router.delete('/pages/:id', async (req, res) => {
+router.delete('/pages/:id', requireAdmin, async (req, res) => {
   const page = await pages.getById(req.params.id) || await pages.getBySlug(req.params.id);
   if (!page) {
     return res.redirect('/admin/pages?msg=error&type=error');
@@ -298,7 +304,7 @@ router.get('/components/new', async (req, res) => {
   });
 });
 
-router.post('/components', async (req, res) => {
+router.post('/components', requireAdmin, async (req, res) => {
   const { name, description, status, position, external_id } = req.body;
   if (!name) {
     return res.redirect('/admin/components/new?msg=error&type=error');
@@ -334,7 +340,7 @@ router.post('/components', async (req, res) => {
 // so there is no method+path collision with the routes below.
 // Mirrors the single DELETE /components/:id handler: same admin notification, same
 // components.delete() cascade, session-auth only (the single delete has no requireAdmin).
-router.post('/components/bulk-delete', async (req, res) => {
+router.post('/components/bulk-delete', requireAdmin, async (req, res) => {
   // Accept component_ids as a string or an array; a single checkbox arrives as a
   // string, repeated keys as an array, and some clients comma-join the values.
   var raw = req.body.component_ids;
@@ -399,7 +405,7 @@ router.get('/components/:id/edit', async (req, res) => {
   });
 });
 
-router.put('/components/:id', async (req, res) => {
+router.put('/components/:id', requireAdmin, async (req, res) => {
   const comp = await components.get(req.params.id);
   if (!comp) {
     return res.redirect('/admin/components/' + req.params.id + '/edit?msg=error&type=error');
@@ -468,7 +474,7 @@ router.post('/components/:id/status', async (req, res) => {
   res.redirect('/admin/components?msg=status_updated&type=success');
 });
 
-router.delete('/components/:id', async (req, res) => {
+router.delete('/components/:id', requireAdmin, async (req, res) => {
   const comp = await components.get(req.params.id);
   if (!comp) {
     return res.redirect('/admin/components?msg=error&type=error');
@@ -515,7 +521,7 @@ router.get('/incidents/new', async (req, res) => {
   });
 });
 
-router.post('/incidents', async (req, res) => {
+router.post('/incidents', requireAdmin, async (req, res) => {
   const { component_id, name, status, impact, starts_at, resolved_at, message, visible } = req.body;
   if (!component_id || !name || !message) {
     return res.redirect('/admin/incidents/new?msg=error&type=error');
@@ -578,7 +584,7 @@ router.get('/groups/new', async (req, res) => {
   });
 });
 
-router.post('/groups', async (req, res) => {
+router.post('/groups', requireAdmin, async (req, res) => {
   const { name, page_ids, position } = req.body;
   if (!name) {
     return res.redirect('/admin/groups/new?msg=error&type=error');
@@ -620,7 +626,7 @@ router.get('/groups/:id/edit', async (req, res) => {
   });
 });
 
-router.put('/groups/:id', async (req, res) => {
+router.put('/groups/:id', requireAdmin, async (req, res) => {
   const group = await componentGroups.get(req.params.id);
   if (!group) {
     return res.redirect('/admin/groups?msg=error&type=error');
@@ -641,7 +647,7 @@ router.put('/groups/:id', async (req, res) => {
   res.redirect('/admin/groups?msg=success&type=success');
 });
 
-router.delete('/groups/:id', async (req, res) => {
+router.delete('/groups/:id', requireAdmin, async (req, res) => {
   await componentGroups.delete(req.params.id);
   res.redirect('/admin/groups?msg=success&type=success');
 });
@@ -664,7 +670,7 @@ router.get('/incidents/:id/edit', async (req, res) => {
   });
 });
 
-router.put('/incidents/:id', async (req, res) => {
+router.put('/incidents/:id', requireAdmin, async (req, res) => {
   const inc = await incidents.get(req.params.id);
   if (!inc) {
     return res.redirect('/admin/incidents?msg=error&type=error');
@@ -689,7 +695,7 @@ router.put('/incidents/:id', async (req, res) => {
   res.redirect('/admin/incidents?msg=success&type=success');
 });
 
-router.delete('/incidents/:id', async (req, res) => {
+router.delete('/incidents/:id', requireAdmin, async (req, res) => {
   const inc = await incidents.get(req.params.id);
   if (!inc) {
     return res.redirect('/admin/incidents?msg=error&type=error');
@@ -755,7 +761,6 @@ router.get('/docs', async (req, res) => {
     return res.redirect('/admin?msg=admin&type=error');
   }
   const allKeys = await apiKeys.list();
-  console.log('RENDERING docs.ejs from:', res.app.get('views'));
   res.send(layout(res, 'docs', {
     title: 'API Docs',
     user: req.user,
@@ -796,7 +801,7 @@ router.get('/maintenance/new', async (req, res) => {
   });
 });
 
-router.post('/maintenance', async (req, res) => {
+router.post('/maintenance', requireAdmin, async (req, res) => {
   const { page_id, component_id, title, description, starts_at, ends_at, advance_notice_minutes, notice_page_ids } = req.body;
   if (!page_id || !title || !starts_at || !ends_at) {
     return res.redirect('/admin/maintenance/new?msg=error&type=error');
@@ -839,7 +844,7 @@ router.get('/maintenance/:id/edit', async (req, res) => {
   });
 });
 
-router.put('/maintenance/:id', async (req, res) => {
+router.put('/maintenance/:id', requireAdmin, async (req, res) => {
   const win = await maintenance.get(req.params.id);
   if (!win) {
     return res.redirect('/admin/maintenance?msg=error&type=error');
@@ -860,7 +865,7 @@ router.put('/maintenance/:id', async (req, res) => {
   res.redirect('/admin/maintenance?msg=success&type=success');
 });
 
-router.delete('/maintenance/:id', async (req, res) => {
+router.delete('/maintenance/:id', requireAdmin, async (req, res) => {
   const win = await maintenance.get(req.params.id);
   if (!win) {
     return res.redirect('/admin/maintenance?msg=error&type=error');
@@ -1015,8 +1020,12 @@ router.post('/2fa/verify', async (req, res) => {
   const code = req.body.code;
   const user = await queryOne('SELECT totp_secret FROM users WHERE id=$1', [req.user.id]);
   if (!user || !user.totp_secret) return res.redirect('/admin');
-  const { verify } = require('../utils/totp');
-  if (!verify(code, user.totp_secret, 'StatusFe', req.user.email)) {
+  // Anti-replay: reject a code from an already-accepted timestep within this
+  // session and record the accepted counter for next time.
+  const { verifyDetailed } = require('../utils/totp');
+  const prev = (req.session && req.session._2fa_last_counter) || 0;
+  const verdict = verifyDetailed(code, user.totp_secret, 'StatusFe', req.user.email, prev);
+  if (!verdict.ok) {
     return res.redirect('/admin/2fa/verify?msg=invalid&type=error');
   }
   // Mark 2FA verified in session data (persists across requests and survives browser close)
@@ -1027,6 +1036,7 @@ router.post('/2fa/verify', async (req, res) => {
       if (row) {
         const store = JSON.parse(row.data);
         store._2fa_verified = true;
+        store._2fa_last_counter = verdict.counter;
         store.updatedAt = Date.now();
         await run('UPDATE sessions SET data=$1, created_at=NOW() WHERE id=$2', [JSON.stringify(store), req.session.id]);
       }
@@ -1034,8 +1044,7 @@ router.post('/2fa/verify', async (req, res) => {
   }
   if (!req.session) req.session = {};
   req.session._2fa_verified = true;
-  // Also set cookie as fallback
-  res.cookie('_2fa_verified', '1', { httpOnly: true, maxAge: 8 * 60 * 60 * 1000, sameSite: 'lax', signed: true });
+  req.session._2fa_last_counter = verdict.counter;
   res.redirect('/admin');
 });
 
@@ -1103,8 +1112,7 @@ router.post('/2fa/setup', async (req, res) => {
     }
     if (!req.session) req.session = {};
     req.session._2fa_verified = true;
-    res.cookie('_2fa_verified', '1', { httpOnly: true, maxAge: 8 * 60 * 60 * 1000, sameSite: 'lax', signed: true });
-  } else if (action === 'disable') {
+    } else if (action === 'disable') {
     if (!verify(code, user.totp_secret, 'StatusFe', user.email)) {
       return res.redirect('/admin/2fa/setup?msg=invalid&type=error');
     }
@@ -1191,21 +1199,11 @@ router.get('/check-update', requireAuth, async (req, res) => {
           // than current (prevents downgrade warnings like "update to 2.2.4" when
           // already running 2.2.5). Falls back to string !== when either version
           // is malformed.
-          function compareVersions(a, b) {
-            try {
-              const pa = a.split('.').map(Number);
-              const pb = b.split('.').map(Number);
-              for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-                const ca = pa[i] || 0;
-                const cb = pb[i] || 0;
-                if (ca !== cb) return cb > ca ? 1 : -1;
-              }
-              return 0;
-            } catch { return null; }
-          }
-          const cmp = compareVersions(latestTag, currentVersion);
-          const hasUpdate = (cmp === null) ? latestTag !== currentVersion : cmp > 0;
-          res.json({ currentVersion, latestVersion: latestTag, hasUpdate, url: release.html_url, publishedAt: release.published_at });
+          // REGRESSION FIX (2.2.6): the old inline comparison returned
+          // cb > ca ? 1 : -1, so hasUpdate was only true when the CURRENT version
+          // was NEWER than the latest release — a real update was never flagged.
+          const { isNewerVersion } = require('../utils/version');
+          res.json({ currentVersion, latestVersion: latestTag, hasUpdate: isNewerVersion(latestTag, currentVersion), url: release.html_url, publishedAt: release.published_at });
         } catch(e) {
           res.json({ currentVersion, latestVersion: currentVersion, hasUpdate: false, error: e.message });
         }
