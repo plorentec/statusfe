@@ -55,6 +55,7 @@ function csrfMiddleware(req, res, next) {
     res.cookie('_csrf', token, {
       httpOnly: true,
       sameSite: 'lax',
+      secure: 'auto',
       maxAge: 24 * 60 * 60 * 1000
     });
     res.locals.csrfToken = token;

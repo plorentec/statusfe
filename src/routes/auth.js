@@ -34,14 +34,17 @@ router.post('/login', async (req, res) => {
       'INSERT INTO sessions (id, data, created_at) VALUES ($1, $2, NOW())',
       ['_2fa_' + tempId, JSON.stringify({ userId: user.id, email: user.email, name: user.name, role: user.role })]
     );
-    res.cookie('_2fa_token', tempId, { httpOnly: true, maxAge: 10 * 60 * 1000, sameSite: 'lax' });
+    res.cookie('_2fa_token', tempId, { httpOnly: true, maxAge: 10 * 60 * 1000, sameSite: 'lax', secure: 'auto' });
     return res.redirect('/auth/2fa');
   }
   console.log('[2FA] Skipping for user', user.email, 'totp_enabled=', user.totp_enabled, 'has_secret=', !!user.totp_secret);
 
   await auditLog.create({ user_id: user.id, action: 'login', details: 'Login successful', ip: req.ip, user_agent: req.get('User-Agent') || '' });
   const signedValue = await createSession(user);
-  res.setHeader('Set-Cookie', `session_id=${signedValue}; HttpOnly; Max-Age=${24*60*60}; SameSite=Lax; Path=/`);
+  // secure:'auto' equivalent for the raw Set-Cookie: only over HTTPS (honors
+  // X-Forwarded-Proto because the app sets 'trust proxy').
+  const securePart = req.secure ? '; Secure' : '';
+  res.setHeader('Set-Cookie', `session_id=${signedValue}; HttpOnly; Max-Age=${24*60*60}; SameSite=Lax; Path=/${securePart}`);
   res.redirect('/admin?msg=success');
 });
 
@@ -68,7 +71,12 @@ router.post('/2fa', async (req, res) => {
   const user = await queryOne('SELECT * FROM users WHERE id=$1', [data.userId]);
   if (!user || !user.totp_secret) return res.redirect('/login?msg=error&type=error');
 
-  if (!verify(code, user.totp_secret, 'StatusFe', data.email)) {
+  // Anti-replay: a code from an already-accepted timestep is rejected (the
+  // temp 2FA session records the last accepted counter).
+  const { verifyDetailed } = require('../utils/totp');
+  const prev = JSON.parse(sessionData.data)._2fa_last_counter || 0;
+  const verdict = verifyDetailed(code, user.totp_secret, 'StatusFe', data.email, prev);
+  if (!verdict.ok) {
     await auditLog.create({ user_id: data.userId, action: '2fa_failed', details: 'Invalid 2FA code', ip: req.ip, user_agent: req.get('User-Agent') || '' });
     return res.redirect('/auth/2fa?msg=invalid&type=error');
   }
@@ -86,19 +94,18 @@ router.post('/2fa', async (req, res) => {
   if (newSession && newSession.id) {
     try {
       // Keep `id` so updateSession()/req.session.id keep working for this session.
-      const store = { id: newSession.id, userId: user.id, name: user.name, email: user.email, role: user.role, createdAt: Date.now(), _2fa_verified: true };
+      const store = { id: newSession.id, userId: user.id, name: user.name, email: user.email, role: user.role, createdAt: Date.now(), _2fa_verified: true, _2fa_last_counter: verdict.counter };
       await run('UPDATE sessions SET data=$1, created_at=NOW() WHERE id=$2', [JSON.stringify(store), newSession.id]);
     } catch(e) {}
   }
   // Single Set-Cookie header carrying both the new session and the temp-token
   // deletion (setHeader would otherwise overwrite the clearCookie above).
   res.setHeader('Set-Cookie', [
-    `session_id=${signedValue}; HttpOnly; Max-Age=${24*60*60}; SameSite=Lax; Path=/`,
+    `session_id=${signedValue}; HttpOnly; Max-Age=${24*60*60}; SameSite=Lax; Path=/${req.secure ? '; Secure' : ''}`,
     '_2fa_token=; HttpOnly; Path=/; Max-Age=0'
   ]);
   if (!req.session) req.session = {};
   req.session._2fa_verified = true;
-  res.cookie('_2fa_verified', '1', { httpOnly: true, maxAge: 8 * 60 * 60 * 1000, sameSite: 'lax', signed: true });
   res.redirect('/admin?msg=success');
 });
 

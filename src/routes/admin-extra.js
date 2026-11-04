@@ -131,7 +131,7 @@ router.post('/analytics/retention', requireAdmin, async (req, res) => {
   const { retention_days } = req.body;
   const val = parseInt(retention_days);
   if (!val || val < 30 || val > 3650) {
-    return res.redirect('/admin/analytics?msg=invalid&type=error');
+    return res.redirect('/admin/analytics?msg=invalid_retention&type=error');
   }
   await settings.set('analytics_retention_days', String(val));
   res.redirect('/admin/analytics?msg=success&type=success');
@@ -326,7 +326,9 @@ router.post('/dependencies', requireAdmin, async (req, res) => {
 
 router.delete('/dependencies/:id', requireAdmin, async (req, res) => {
   await dependencies.delete(req.params.id);
-  res.redirect('/admin/dependencies?msg=deleted&type=success');
+  // 'deleted' showed the components flash text ("Component deleted successfully.")
+  // after deleting a DEPENDENCY — use its own code.
+  res.redirect('/admin/dependencies?msg=dep_deleted&type=success');
 });
 
 // ===== PAGE CUSTOMIZATION =====

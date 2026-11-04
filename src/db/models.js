@@ -346,6 +346,31 @@ module.exports.components = {
       }
     }
 
+    // Dependency cascade inputs, BATCHED (was: 2 queries per component — an N+1
+    // that dominated load time on pages with many components). All queries use
+    // IN placeholder lists (pg-mem portable).
+    const rowIds = rows.map(r => r.id);
+    const depsByComponent = new Map();
+    const depCompById = new Map();
+    if (rowIds.length) {
+      const depRows = await queryAll(
+        `SELECT component_id, depends_on, cascade_status FROM component_dependencies WHERE component_id IN (${rowIds.map((_, i) => '$' + (i + 1)).join(',')})`,
+        rowIds
+      );
+      for (const d of depRows) {
+        if (!depsByComponent.has(d.component_id)) depsByComponent.set(d.component_id, []);
+        depsByComponent.get(d.component_id).push(d);
+      }
+      const depIds = [...new Set(depRows.map(d => d.depends_on))];
+      if (depIds.length) {
+        const depComps = await queryAll(
+          `SELECT id, status FROM components WHERE id IN (${depIds.map((_, i) => '$' + (i + 1)).join(',')})`,
+          depIds
+        );
+        for (const dc of depComps) depCompById.set(dc.id, dc);
+      }
+    }
+
     const result = [];
     for (const c of rows) {
       // Resolve effective status once per component (override / dependency cascade)
@@ -353,10 +378,9 @@ module.exports.components = {
       if (c.override_status) {
         currentStatus = c.override_status;
       } else {
-        const deps = await module.exports.dependencies.listDependsOnComponent(c.id);
-        for (const dep of deps) {
+        for (const dep of (depsByComponent.get(c.id) || [])) {
           if (!dep.cascade_status) continue;
-          const depComp = await module.exports.components.get(dep.depends_on);
+          const depComp = depCompById.get(dep.depends_on);
           if (depComp && depComp.status !== 'operational') {
             currentStatus = depComp.status;
             break;
@@ -789,12 +813,37 @@ module.exports.components = {
 };
 
 // ===== INCIDENTS =====
-// Fixed lifecycle statuses. Arbitrary values used to cascade straight into
-// components.status (cascade_status='same'), corrupting public status pages.
+// Base lifecycle statuses. Custom statuses created via the admin config UI are
+// ALSO accepted (union with the incident_statuses table) — previously any
+// custom status was silently dropped on save, making that UI a trap.
 const INCIDENT_STATUSES = ['investigating', 'identified', 'monitoring', 'resolved'];
+// Component statuses a cascade is allowed to WRITE. An incident status that is
+// not a valid component status must never flow into components.status
+// ('same' cascade with a custom incident status would corrupt public pages).
+const COMPONENT_STATUSES = ['operational', 'under_maintenance', 'degraded_performance', 'partial_outage', 'major_outage'];
 
 module.exports.incidents = {
   VALID_STATUSES: INCIDENT_STATUSES,
+
+  // Fixed lifecycle statuses + custom ones from the config UI.
+  async validStatuses() {
+    try {
+      const rows = await queryAll('SELECT value FROM incident_statuses');
+      return [...new Set([...INCIDENT_STATUSES, ...rows.map(r => r.value)])];
+    } catch(e) {
+      return INCIDENT_STATUSES;
+    }
+  },
+
+  // Component statuses a cascade may write (fixed 5 + custom component statuses).
+  async validComponentStatuses() {
+    try {
+      const rows = await queryAll('SELECT value FROM component_statuses');
+      return [...new Set([...COMPONENT_STATUSES, ...rows.map(r => r.value)])];
+    } catch(e) {
+      return COMPONENT_STATUSES;
+    }
+  },
 
   async list(filters = {}) {
     let q = 'SELECT * FROM incidents WHERE 1=1';
@@ -819,8 +868,12 @@ module.exports.incidents = {
 
   async create({ component_id, page_id, name, status, impact, starts_at, resolved_at, message, visible, cascade_status }) {
     const id = uuidv4();
-    // Never let an unknown status flow through the cascade below.
-    const validStatus = INCIDENT_STATUSES.includes(status) ? status : 'investigating';
+    // Accept custom incident statuses (config UI) but never let an unknown one
+    // flow through the cascade below.
+    const validStatuses = await this.validStatuses();
+    const validStatus = validStatuses.includes(status) ? status : 'investigating';
+    // 'false'/0/'0' must mean NOT visible (plain truthiness made "false" visible).
+    const visibleFlag = toBool01(visible);
     let resolvedPageId = page_id;
     if (component_id && !page_id) {
       const pageComp = await queryOne('SELECT page_id FROM page_components WHERE component_id=$1 LIMIT 1', [component_id]);
@@ -832,7 +885,7 @@ module.exports.incidents = {
     const serverTZ = await module.exports.settings.get('server_timezone') || 'UTC';
     await run(
       'INSERT INTO incidents (id,component_id,page_id,name,status,impact,starts_at,resolved_at,message,visible,cascade_status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
-      [id, component_id||null, resolvedPageId, name, validStatus, impact||'none', starts_at||nowInTZ(serverTZ), resolved_at||null, message, visible ? 1 : 0, cs]
+      [id, component_id||null, resolvedPageId, name, validStatus, impact||'none', starts_at||nowInTZ(serverTZ), resolved_at||null, message, visibleFlag, cs]
     );
 
     if (component_id && validStatus !== 'resolved' && cs !== 'none') {
@@ -840,7 +893,10 @@ module.exports.incidents = {
       const comp = await this.get(component_id);
       let newStatus;
       if (cs === 'same') {
-        newStatus = incidentStatus;
+        // Only copy the incident status into the component when it is a valid
+        // COMPONENT status; a custom incident status must not corrupt the page.
+        const compValid = await this.validComponentStatuses();
+        newStatus = compValid.includes(incidentStatus) ? incidentStatus : null;
       } else if (cs === 'criticality') {
         // resolve() is async — without the await a Promise (always truthy) was
         // written as the component status, so the fallback below never ran.
@@ -876,8 +932,9 @@ module.exports.incidents = {
 
   async update(id, data) {
     data = { ...data };
-    // Drop unknown statuses so they never reach the component cascade.
-    if (data.status !== undefined && !INCIDENT_STATUSES.includes(data.status)) delete data.status;
+    // Accept custom incident statuses; drop only truly unknown ones so they
+    // never reach the component cascade.
+    if (data.status !== undefined && !(await this.validStatuses()).includes(data.status)) delete data.status;
     const fields = [];
     const params = [];
     const allowed = ['name','status','impact','starts_at','resolved_at','message','visible','component_id','cascade_status'];
@@ -900,7 +957,10 @@ module.exports.incidents = {
       if (data.status && data.status !== 'resolved' && cs !== 'none') {
         let newStatus;
         if (cs === 'same') {
-          newStatus = data.status;
+          // Same guard as create(): a custom incident status is not a component
+          // status and must not be copied into components.status.
+          const compValid = await this.validComponentStatuses();
+          newStatus = compValid.includes(data.status) ? data.status : null;
         } else {
           newStatus = await module.exports.statusMappings.resolve(data.status);
           if (!newStatus) {
@@ -1075,6 +1135,17 @@ module.exports.webhooks = {
 };
 
 // ===== MAINTENANCE =====
+// Timestamps are stored as UTC wall-clock strings ('YYYY-MM-DD HH:MM:SS').
+// new Date('... ...') parses that format as LOCAL time — on a non-UTC server a
+// window ending in 50 minutes was classified 'completed' at creation (the
+// local offset shifted the parse). Parse with an explicit Z.
+function parseUtcStamp(s) {
+  const str = String(s || '');
+  if (!str) return new Date(NaN);
+  if (/[zZ]|[+-]\d\d:?\d\d$/.test(str)) return new Date(str);
+  return new Date(str.replace(' ', 'T') + 'Z');
+}
+
 module.exports.maintenance = {
   async list(filters = {}) {
     let q = 'SELECT * FROM maintenance_windows WHERE 1=1';
@@ -1096,7 +1167,7 @@ module.exports.maintenance = {
   async create({ page_id, component_id, title, description, starts_at, ends_at, advance_notice_minutes, notice_page_ids }) {
     const id = uuidv4();
     const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
-    const status = new Date(starts_at) > new Date() ? 'upcoming' : (new Date(ends_at) > new Date() ? 'ongoing' : 'completed');
+    const status = parseUtcStamp(starts_at) > new Date() ? 'upcoming' : (parseUtcStamp(ends_at) > new Date() ? 'ongoing' : 'completed');
     await run(
       'INSERT INTO maintenance_windows (id,page_id,component_id,title,description,starts_at,ends_at,status,advance_notice_minutes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
       [id, page_id, component_id||null, title, description||'', starts_at, ends_at, status, advance_notice_minutes||0]
@@ -1104,6 +1175,13 @@ module.exports.maintenance = {
     if (notice_page_ids && normalizeIds(notice_page_ids).length) {
       for (const pid of normalizeIds(notice_page_ids)) {
         await run('INSERT INTO maintenance_notice_pages (id,maintenance_id,page_id) VALUES ($1,$2,$3)', [uuidv4(), id, pid]);
+      }
+    } else {
+      // No explicit notice pages => notify the window's own page. Without this,
+      // API-created windows (which never pass notice_page_ids) got NO row here
+      // and NEVER appeared on the public status page.
+      if (page_id) {
+        await run('INSERT INTO maintenance_notice_pages (id,maintenance_id,page_id) VALUES ($1,$2,$3)', [uuidv4(), id, page_id]);
       }
     }
     return this.get(id);
@@ -1143,6 +1221,7 @@ module.exports.maintenance = {
     let q = `SELECT m.* FROM maintenance_windows m
       INNER JOIN maintenance_notice_pages mnp ON mnp.maintenance_id = m.id
       WHERE mnp.page_id = $1 AND m.status IN ('upcoming','ongoing')
+        AND m.ends_at > $2
         AND (m.starts_at <= $2 OR m.starts_at - (COALESCE(m.advance_notice_minutes, 0)::text || ' minutes')::interval <= $2)
       ORDER BY m.starts_at ASC`;
     return await queryAll(q, [pageId, now]);

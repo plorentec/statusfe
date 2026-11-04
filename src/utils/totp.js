@@ -45,15 +45,24 @@ function decodeSecret(secret) {
 }
 
 function verify(token, secret, issuer, account) {
-  if (!token || !secret) return false;
+  return verifyDetailed(token, secret, issuer, account).ok;
+}
+
+// Replay-aware verification: rejects codes from counters at or before
+// lastCounter (the previously-accepted step for this session). Returns the
+// accepted counter so callers can persist it.
+function verifyDetailed(token, secret, issuer, account, lastCounter) {
+  if (!token || !secret) return { ok: false };
   const totpPeriod = 30;
   const now = Math.floor(Date.now() / 1000);
   const timeStep = Math.floor(now / totpPeriod);
+  const minCounter = Number(lastCounter) || 0;
   for (let offset = -1; offset <= 1; offset++) {
     const counter = timeStep + offset;
-    if (simpleHOTP(secret, counter, token)) return true;
+    if (counter <= minCounter) continue;
+    if (simpleHOTP(secret, counter, token)) return { ok: true, counter };
   }
-  return false;
+  return { ok: false };
 }
 
 function simpleHOTP(secret, counter, token) {
@@ -83,4 +92,4 @@ function getURI(secret, email, issuer) {
   return `otpauth://totp/${issuer}:${email}?secret=${normalized}&issuer=${issuer}&algorithm=SHA1&digits=6&period=30`;
 }
 
-module.exports = { generateSecret, verify, getURI, simpleHOTP, base32Encode, base32Decode, decodeSecret, normalizeSecret };
+module.exports = { generateSecret, verify, verifyDetailed, getURI, simpleHOTP, base32Encode, base32Decode, decodeSecret, normalizeSecret };

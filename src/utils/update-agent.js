@@ -13,6 +13,7 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const https = require('https');
+const { compareVersions } = require('./version');
 const pkg = require('../../package.json');
 
 const DATA_DIR = path.join(__dirname, '..', '..', 'data');
@@ -125,8 +126,12 @@ async function requestUpdate(user) {
   if (!latest) {
     return { code: 502, body: { error: 'Could not determine the latest published version.' } };
   }
-  if (latest === pkg.version) {
-    return { code: 400, body: { error: `Already running the latest version (${latest}).` } };
+  // Equal OR older than the running version is a downgrade: never queue one
+  // (previously only equality was rejected, so running 2.2.5 with latest 2.2.4
+  // would downgrade the deployment).
+  const cmp = compareVersions(latest, pkg.version);
+  if (cmp === 0 || (cmp !== null && cmp < 0)) {
+    return { code: 400, body: { error: `Already running the latest version (${pkg.version}).` } };
   }
   // A fresh in_progress result means an update is genuinely running; a stale
   // one means the agent died mid-update → allowed to re-trigger.

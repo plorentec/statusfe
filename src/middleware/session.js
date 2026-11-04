@@ -133,6 +133,18 @@ async function session(req, res, next) {
       bulk_deleted: 'Selected components deleted.',
       invalid_parent: 'Invalid parent: a component cannot be its own parent or one of its own descendants.',
       parent_missing: 'The selected parent component does not exist.',
+      // Codes added in 2.2.6: every ?msg= emitted by a redirect now has readable text
+      invalid_reset: 'Invalid or expired reset link.',
+      password_set: 'Password updated. Log in with your new password.',
+      status_updated: 'Status updated.',
+      invalid_status: 'Invalid status.',
+      last_admin: 'You cannot delete the last admin account.',
+      self_dep: 'A component cannot depend on itself.',
+      cycle: 'Circular dependency detected.',
+      exists: 'That dependency already exists.',
+      dep_deleted: 'Dependency deleted.',
+      system: 'System statuses cannot be deleted.',
+      invalid_retention: 'Retention must be between 30 and 3650 days.',
       default: flashMsg
     };
     res.locals.message = msgs[flashMsg] || flashMsg;
@@ -196,7 +208,7 @@ async function session(req, res, next) {
     type = type || 'success';
     const key = crypto.randomBytes(8).toString('hex');
     run('INSERT INTO sessions (id, data, created_at) VALUES ($1, $2, NOW())', ['_flash_' + key, JSON.stringify({ message, type, extra: extra || null })]).catch(() => {});
-    res.cookie('_flash_key', key, { httpOnly: true, maxAge: 10000, sameSite: 'lax' });
+    res.cookie('_flash_key', key, { httpOnly: true, maxAge: 10000, sameSite: 'lax', secure: 'auto' });
   };
 
   next();

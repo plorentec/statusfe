@@ -62,6 +62,13 @@ process.on('unhandledRejection', (reason) => {
 // Daily cleanup of old analytics data and audit log rotation
 setInterval(async () => {
   try {
+    // Maintenance windows must transition upcoming -> ongoing -> completed or a
+    // finished window stays 'ongoing' forever (REGRESSION FIX 2.2.6).
+    const { maintenance } = require('./db/models');
+    await maintenance.updateStatuses();
+  } catch(e) { /* ignore */ }
+
+  try {
     const { analytics } = require('./db/models');
     const deleted = await analytics.cleanOldData();
     if (deleted > 0) console.log(`Analytics cleanup: deleted ${deleted} old records`);
@@ -100,8 +107,25 @@ const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || null;
 const HTTPS_ENABLED = process.env.HTTPS === 'true';
 
-// Security headers
-app.use(helmet({ contentSecurityPolicy: false }));
+// Security headers. CSP is explicit because the app renders inline scripts
+// (status page auto-refresh, admin templates) and loads Chart.js from jsdelivr.
+// frameguard is off: /embed/:slug is DESIGNED to be iframed on third-party
+// sites (helmet's default X-Frame-Options: SAMEORIGIN silently blocked it).
+// The middleware below sets per-path frame-ancestors instead.
+app.use(helmet({ contentSecurityPolicy: false, frameguard: false }));
+app.use((req, res, next) => {
+  const isEmbed = req.path.startsWith('/embed/');
+  res.setHeader('Content-Security-Policy', [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data:",
+    "font-src 'self' data:",
+    "connect-src 'self' https://api.github.com",
+    isEmbed ? "frame-ancestors *" : "frame-ancestors 'self'",
+  ].join('; '));
+  next();
+});
 
 // Rate limiting wrapper — catches validation errors from express-rate-limit v7
 function safeLimiter(limiter) {
@@ -364,6 +388,10 @@ module.exports = app;
   try {
     await init();
     await require('./middleware/session').initSessionTable();
+    // Transition maintenance windows that changed state while the server was
+    // down (upcoming -> ongoing -> completed), so a window that ended offline
+    // disappears from public pages on the first request after boot.
+    await require('./db/models').maintenance.updateStatuses();
   } catch(e) {
     console.error('Startup failed:', e.message);
     process.exit(1);
