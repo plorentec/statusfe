@@ -9,6 +9,19 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [2.2.7] — 2026-11-05
+
+### Security
+- **SMTP password encrypted at rest** — the `smtp_pass` setting sat in PLAINTEXT. Now AES-256-GCM (`enc:v1:` prefix, key derived from SESSION_SECRET); `migrate()` re-encrypts legacy plaintext rows on boot; reads accept both formats (a rotated SESSION_SECRET yields null — re-enter the password).
+- **`api_keys.rate_limit` is now enforced** — the column existed since the beginning but no middleware ever applied it (dead field). Sliding window in memory per key id across all client IPs; exceeding returns 429 + `Retry-After` (default 100/min). Also enforced on public auth-aware routes (`optionalAuthMw`).
+- **Nightly database backups** — `scripts/backup-db.sh` (gzip dump + `gzip -t` integrity check, 7-day retention), installed on the production host with cron at 03:17.
+
+### Changed / improved
+- `?group=` on `GET /api/v1/components` (and the admin list) accepts a group **ID** as well as its name.
+- **CI**: GitHub Actions workflow runs every `scratch/verify_*.js` harness on push/PR.
+- `docker-compose.yml`: healthcheck for the `statusfe` service (node fetch — no curl in node:20-slim); the redundant `postgres` service removed (permanent crash loop — port 5432 owned by the host-native PostgreSQL; `postgres-data` volume kept).
+- `ROADMAP.md` refreshed (2.2.6/2.2.7 items marked done, backlog re-prioritized).
+
 ## [2.2.6] — 2026-11-05
 
 ### Fixed

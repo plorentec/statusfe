@@ -1,6 +1,6 @@
 {
   "name": "statusfe",
-  "version": "2.2.6",
+  "version": "2.2.7",
   "description": "Open source status page system",
   "main": "src/app.js",
   "scripts": {
