@@ -1,0 +1,40 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  harnesses:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # pg-mem and jsdom are ad-hoc test shims (NOT project dependencies —
+      # any later npm i --no-save prunes them, hence the explicit install).
+      - name: Install test shims
+        run: npm i --no-save pg-mem jsdom
+
+      - name: Run regression harnesses
+        run: |
+          set -e
+          fail=0
+          for t in scratch/verify_*.js; do
+            echo "::group::$t"
+            if ! node "$t"; then
+              echo "::error title=Harness failed::$t"
+              fail=1
+            fi
+            echo "::endgroup::"
+          done
+          exit $fail

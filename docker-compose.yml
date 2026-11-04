@@ -26,24 +26,19 @@ services:
       - DB_PASSWORD=statusfe-secret
     volumes:
       - statusfe-data:/app/data
-
-  postgres:
-    image: postgres:16-alpine
-    container_name: statusfe-postgres
-    restart: unless-stopped
-    network_mode: host
-    environment:
-      - POSTGRES_DB=statusfe
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=statusfe-secret
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
+    # node:20-slim has neither curl nor wget — healthcheck via node fetch.
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -h 127.0.0.1"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/v1/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+# The redundant `postgres` service was removed in 2.2.7: it sat in a permanent
+# crash loop (port 5432 is owned by the host-native PostgreSQL the app actually
+# uses) and provided nothing. The `postgres-data` volume was kept on purpose.
 
 volumes:
   statusfe-data:
-  postgres-data:
+  # postgres-data kept (unused since 2.2.7 — the service was removed; the
+  # volume is only deleted explicitly).
