@@ -56,6 +56,13 @@ async function createTables() {
       probe_enabled INTEGER DEFAULT 0,
       probe_last_checked_at TIMESTAMP,
       probe_last_ok INTEGER,
+      probe_type TEXT DEFAULT 'http',
+      probe_warn_days INTEGER,
+      probe_json_path TEXT,
+      probe_json_comparison TEXT,
+      probe_json_expected TEXT,
+      probe_command TEXT,
+      probe_output_pattern TEXT,
       position INTEGER DEFAULT 0,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -555,7 +562,7 @@ async function migrate() {
     // Column already exists — safe to proceed.
   }
 
-  // Auto-probes (2.3.0): per-component HTTP monitoring columns.
+  // Auto-probes (2.3.0/2.4.0): per-component monitoring columns.
   for (const col of [
     'probe_url TEXT',
     'probe_interval_seconds INTEGER',
@@ -564,6 +571,13 @@ async function migrate() {
     'probe_enabled INTEGER DEFAULT 0',
     'probe_last_checked_at TIMESTAMP',
     'probe_last_ok INTEGER',
+    "probe_type TEXT DEFAULT 'http'",
+    'probe_warn_days INTEGER',
+    'probe_json_path TEXT',
+    'probe_json_comparison TEXT',
+    'probe_json_expected TEXT',
+    'probe_command TEXT',
+    'probe_output_pattern TEXT',
   ]) {
     try { await run(`ALTER TABLE components ADD COLUMN IF NOT EXISTS ${col}`); } catch(e) { /* exists */ }
   }

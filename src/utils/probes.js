@@ -1,27 +1,32 @@
-// Auto-probes worker (2.3.0): StatusFe monitors ITS OWN components by sending
-// periodic HTTP requests and updating their status. This is the feature that
-// turns the status page from a manual whiteboard into a monitor.
+// Auto-probes worker (2.3.0/2.4.0): StatusFe monitors ITS OWN components.
+// Sensor types (PRTG-style):
+//   http — HTTP GET; status code === probe_expected_status -> ok
+//   cert — TLS certificate inspection: days-to-expiry vs probe_warn_days
+//          (ok > warnDays; degraded_performance when 0 < days <= warnDays;
+//          major_outage when expired or handshake fails). Chain is NOT
+//          validated on purpose: internal self-signed certs still report expiry.
+//   json — HTTP GET + JSON.parse + path resolution (a.b[0].c) + comparison
+//          (eq|ne|contains|gt|lt|exists) vs probe_json_expected
+//   cmd  — runs probe_command on the StatusFe HOST (inside the container in
+//          production, same trust model as PRTG local sensors). ok = exit 0 AND
+//          (optional) probe_output_pattern regex matches stdout+stderr.
 //
-// Design decisions (see odd/tasks/auto-probes-2.3.0.md):
-//   - Tick every PROBE_TICK_SECONDS (env, default 20); probe rows due when
-//     probe_last_checked_at + interval <= now (NULL last_checked = due now).
-//   - HTTP status === probe_expected_status (default 200) -> operational;
-//     anything else (wrong code, timeout, connection error) -> major_outage.
-//   - The result flows through components.updateStatus() so history, dependency
-//     cascade and ancestor aggregation all behave exactly like a manual change.
-//   - NEVER probes: components with override_status (an admin pin wins) and
-//     parents with children (their status is the worst-of aggregation).
-//   - Private/LAN targets are ALLOWED on purpose: the main use case is
-//     monitoring internal services. Only http/https and a bounded timeout are
-//     enforced. Configuration is admin-only (same trust level as webhooks).
+// Shared rules: due filtering in JS (portable), NEVER probes components with
+// override_status (admin pin wins) or parents with children (worst-of wins),
+// result flows through components.updateStatus (history + cascade + ancestor
+// aggregation), bookkeeping always updates.
 const { queryAll, run, queryOne } = require('../db/database');
-const net = require('net');
+const { exec } = require('child_process');
+const tls = require('tls');
 
 const TICK_MS = Math.max(5, parseInt(process.env.PROBE_TICK_SECONDS, 10) || 20) * 1000;
 const DEFAULT_INTERVAL_S = 60;
 const DEFAULT_TIMEOUT_MS = 5000;
 const MAX_PARALLEL = 5;
 const MAX_REDIRECTS = 3;
+const JSON_BODY_MAX = 256 * 1024;
+const CMD_OUTPUT_MAX = 1024 * 1024;
+const PROBE_TYPES = ['http', 'cert', 'json', 'cmd'];
 let timer = null;
 
 function normalizeProbeUrl(raw) {
@@ -36,9 +41,10 @@ function normalizeProbeUrl(raw) {
   }
 }
 
-// One probe request: bounded time, bounded redirects, no body. Resolves to
-// { ok, code, error } — never rejects.
-function probeRequest(urlString, timeoutMs) {
+// HTTP(S) GET with bounded time and redirects. Resolves
+// { ok, code, body?, error? } — never rejects. body collected only when
+// withBody (JSON sensor), capped at JSON_BODY_MAX.
+function probeRequest(urlString, timeoutMs, withBody = false) {
   return new Promise((resolve) => {
     let settled = false;
     let guard = null;
@@ -69,8 +75,15 @@ function probeRequest(urlString, timeoutMs) {
             return finish({ ok: false, error: 'bad-redirect' });
           }
         }
-        res.resume(); // drain, don't buffer the body
-        finish({ ok: true, code: res.statusCode });
+        if (!withBody) { res.resume(); return finish({ ok: true, code: res.statusCode }); }
+        let body = '';
+        let over = false;
+        res.on('data', (c) => {
+          body += c;
+          if (body.length > JSON_BODY_MAX) { over = true; req.destroy(); }
+        });
+        res.on('end', () => finish(over ? { ok: false, error: 'body-too-large' } : { ok: true, code: res.statusCode, body }));
+        res.on('error', () => finish({ ok: false, error: 'body-error' }));
       });
       req.on('timeout', () => { req.destroy(); finish({ ok: false, error: 'timeout' }); });
       req.on('error', (e) => finish({ ok: false, error: e.code || 'error' }));
@@ -80,44 +93,187 @@ function probeRequest(urlString, timeoutMs) {
   });
 }
 
-// Is `id` a parent with at least one child? (their status is derived; probing
-// them would be overwritten by recomputeAncestorChain anyway).
-async function isParentWithChildren(id) {
-  const row = await queryOne('SELECT 1 AS ok FROM components WHERE parent_id=$1 LIMIT 1', [id]);
-  return !!row;
+// TLS certificate inspection (no chain validation — internal self-signed
+// included). Resolves { ok, daysLeft?, error? }.
+function probeCert(host, port, timeoutMs) {
+  return new Promise((resolve) => {
+    let settled = false;
+    let guard = null;
+    const finish = (r) => {
+      if (settled) return;
+      settled = true;
+      if (guard) clearTimeout(guard);
+      try { socket.destroy(); } catch (e) {}
+      resolve(r);
+    };
+    guard = setTimeout(() => finish({ ok: false, error: 'timeout' }), timeoutMs + 1000);
+    const socket = tls.connect({
+      host,
+      port,
+      servername: host,
+      rejectUnauthorized: false, // expiry info is meaningful even for self-signed
+      timeout: timeoutMs,
+    }, () => {
+      try {
+        const cert = socket.getPeerCertificate();
+        if (!cert || !cert.valid_to) return finish({ ok: false, error: 'no-certificate' });
+        const daysLeft = (Date.parse(cert.valid_to) - Date.now()) / 86400000;
+        finish({ ok: true, daysLeft, validTo: cert.valid_to });
+      } catch (e) {
+        finish({ ok: false, error: 'cert-read-error' });
+      }
+    });
+    socket.on('error', (e) => finish({ ok: false, error: e.code || 'tls-error' }));
+    socket.on('timeout', () => finish({ ok: false, error: 'timeout' }));
+  });
+}
+
+// Resolve "a.b[0].c" / "a.0.c" against a parsed JSON object. Returns
+// { found, value }.
+function resolveJsonPath(obj, path) {
+  const segments = String(path || '').split('.').flatMap(s => {
+    const m = s.match(/^(.*?)\[(\d+)\]$/);
+    return m ? [m[1], m[2]] : [s];
+  }).filter(Boolean);
+  let cur = obj;
+  for (const seg of segments) {
+    if (cur == null || typeof cur !== 'object') return { found: false, value: undefined };
+    if (Array.isArray(cur)) {
+      const idx = parseInt(seg, 10);
+      if (Number.isNaN(idx) || idx >= cur.length) return { found: false, value: undefined };
+      cur = cur[idx];
+    } else if (Object.prototype.hasOwnProperty.call(cur, seg)) {
+      cur = cur[seg];
+    } else {
+      return { found: false, value: undefined };
+    }
+  }
+  return { found: true, value: cur };
+}
+
+function jsonCompare(actual, comparison, expected) {
+  switch (comparison) {
+    case 'ne': return String(actual) !== String(expected);
+    case 'contains': return String(actual).includes(String(expected));
+    case 'gt': { const a = parseFloat(actual), b = parseFloat(expected); return !Number.isNaN(a) && !Number.isNaN(b) && a > b; }
+    case 'lt': { const a = parseFloat(actual), b = parseFloat(expected); return !Number.isNaN(a) && !Number.isNaN(b) && a < b; }
+    case 'exists': return actual !== undefined;
+    case 'eq':
+    default: return String(actual) === String(expected);
+  }
+}
+
+// Local command sensor (PRTG-style local probe). Admin-configured by design —
+// runs as the StatusFe process user on the host/container. Bounded: timeout
+// kills the process, output capped at 1 MB. Resolves { ok, exitCode, output?, error? }.
+function probeCommand(command, timeoutMs, outputPattern) {
+  return new Promise((resolve) => {
+    exec(command, { timeout: timeoutMs, maxBuffer: CMD_OUTPUT_MAX, killSignal: 'SIGKILL', windowsHide: true }, (err, stdout, stderr) => {
+      if (err && err.killed) return resolve({ ok: false, error: 'timeout' });
+      const exitCode = err ? (typeof err.code === 'number' ? err.code : 1) : 0;
+      const output = String(stdout || '') + String(stderr || '');
+      if (exitCode !== 0) return resolve({ ok: false, exitCode, output: output.slice(0, 500), error: 'exit-' + exitCode });
+      if (outputPattern) {
+        let re;
+        try { re = new RegExp(outputPattern, 'm'); } catch (e) { return resolve({ ok: false, error: 'bad-pattern' }); }
+        if (!re.test(output)) return resolve({ ok: false, exitCode: 0, error: 'pattern-mismatch' });
+      }
+      resolve({ ok: true, exitCode: 0 });
+    });
+  });
+}
+
+// Per-type evaluation. Returns { ok, status } where status is the component
+// status the result maps to (operational | degraded_performance | major_outage).
+async function evaluateProbe(comp) {
+  const timeoutMs = Math.min(30000, Math.max(100, parseInt(comp.probe_timeout_ms, 10) || DEFAULT_TIMEOUT_MS));
+  const type = comp.probe_type || 'http';
+
+  if (type === 'cmd') {
+    const command = String(comp.probe_command || '').trim();
+    if (!command) return { ok: false, status: 'major_outage' };
+    const r = await probeCommand(command, Math.min(60000, timeoutMs * 3), comp.probe_output_pattern);
+    return { ok: r.ok, status: r.ok ? 'operational' : 'major_outage' };
+  }
+
+  if (type === 'cert') {
+    const raw = String(comp.probe_url || '').trim();
+    if (!raw) return { ok: false, status: 'major_outage' };
+    let host, port;
+    try {
+      if (/^https?:\/\//i.test(raw)) { const u = new URL(raw); host = u.hostname; port = parseInt(u.port, 10) || 443; }
+      else if (/^[\w.-]+:\d+$/.test(raw)) { const [h, p] = raw.split(':'); host = h; port = parseInt(p, 10); }
+      else { host = raw; port = 443; }
+    } catch (e) {
+      return { ok: false, status: 'major_outage' };
+    }
+    const warnDays = Math.max(0, parseInt(comp.probe_warn_days, 10) || 14);
+    const r = await probeCert(host, port, timeoutMs);
+    if (!r.ok) return { ok: false, status: 'major_outage' };
+    if (r.daysLeft <= 0) return { ok: false, status: 'major_outage' };           // expired
+    if (r.daysLeft <= warnDays) return { ok: false, status: 'degraded_performance' }; // expiring soon: WARNING
+    return { ok: true, status: 'operational' };
+  }
+
+  if (type === 'json') {
+    const url = normalizeProbeUrl(comp.probe_url);
+    if (!url) return { ok: false, status: 'major_outage' };
+    const r = await probeRequest(url, timeoutMs, true);
+    if (!r.ok) return { ok: false, status: 'major_outage' };
+    let parsed;
+    try { parsed = JSON.parse(r.body); } catch (e) { return { ok: false, status: 'major_outage' }; }
+    const { found, value } = resolveJsonPath(parsed, comp.probe_json_path);
+    if (!found) return { ok: false, status: 'major_outage' };
+    const comparison = String(comp.probe_json_comparison || 'eq');
+    if (comparison === 'exists') return { ok: true, status: 'operational' };
+    const match = jsonCompare(value, comparison, comp.probe_json_expected);
+    return { ok: match, status: match ? 'operational' : 'major_outage' };
+  }
+
+  // http (default)
+  const url = normalizeProbeUrl(comp.probe_url);
+  if (!url) return { ok: false, status: 'major_outage' };
+  const expected = parseInt(comp.probe_expected_status, 10) || 200;
+  const r = await probeRequest(url, timeoutMs);
+  const ok = !!(r.ok && r.code === expected);
+  return { ok, status: ok ? 'operational' : 'major_outage' };
 }
 
 async function probeComponent(comp) {
-  const url = normalizeProbeUrl(comp.probe_url);
-  const expected = parseInt(comp.probe_expected_status, 10) || 200;
-  const timeoutMs = Math.min(30000, Math.max(100, parseInt(comp.probe_timeout_ms, 10) || DEFAULT_TIMEOUT_MS));
-
-  let ok = false;
-  if (url) {
-    const res = await probeRequest(url, timeoutMs);
-    ok = !!(res.ok && res.code === expected);
-  }
+  const { ok, status } = await evaluateProbe(comp);
 
   // Bookkeeping ALWAYS updates (also when the status doesn't change) so the
   // admin can see the probe is alive.
   await run('UPDATE components SET probe_last_checked_at=NOW(), probe_last_ok=$1, updated_at=NOW() WHERE id=$2', [ok ? 1 : 0, comp.id]);
 
-  if (!ok && comp.status !== 'major_outage') {
-    await require('../db/models').components.updateStatus(comp.id, 'major_outage', null);
+  if (!ok && comp.status !== status) {
+    await require('../db/models').components.updateStatus(comp.id, status, null);
   } else if (ok && comp.status !== 'operational') {
     await require('../db/models').components.updateStatus(comp.id, 'operational', null);
   }
   return ok;
 }
 
+async function isParentWithChildren(id) {
+  const row = await queryOne('SELECT 1 AS ok FROM components WHERE parent_id=$1 LIMIT 1', [id]);
+  return !!row;
+}
+
 async function tick() {
   let due;
   try {
     due = await queryAll(`
-      SELECT c.id, c.name, c.status, c.override_status, c.probe_url, c.probe_expected_status, c.probe_timeout_ms, c.probe_interval_seconds, c.probe_last_checked_at
+      SELECT c.id, c.name, c.status, c.override_status, c.probe_type, c.probe_url,
+             c.probe_expected_status, c.probe_timeout_ms, c.probe_interval_seconds,
+             c.probe_last_checked_at, c.probe_warn_days, c.probe_json_path,
+             c.probe_json_comparison, c.probe_json_expected, c.probe_command, c.probe_output_pattern
       FROM components c
-      WHERE c.probe_enabled = 1 AND c.probe_url IS NOT NULL AND c.probe_url <> ''
+      WHERE c.probe_enabled = 1
         AND c.override_status IS NULL
+        AND (
+          (COALESCE(c.probe_type, 'http') IN ('http','cert','json') AND c.probe_url IS NOT NULL AND c.probe_url <> '')
+          OR (c.probe_type = 'cmd' AND c.probe_command IS NOT NULL AND c.probe_command <> '')
+        )
     `);
   } catch (e) {
     console.error('[probes] due query failed:', e.message);
@@ -159,4 +315,4 @@ function start() {
   timer.unref?.();
 }
 
-module.exports = { start, tick, probeComponent, normalizeProbeUrl, probeRequest };
+module.exports = { start, tick, probeComponent, evaluateProbe, probeRequest, probeCert, probeCommand, resolveJsonPath, jsonCompare, normalizeProbeUrl, PROBE_TYPES };
