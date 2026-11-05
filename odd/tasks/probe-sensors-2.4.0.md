@@ -41,3 +41,7 @@ componente, mismo worker y bookkeeping.
   servidor). SSH real queda disponible vía `ssh` en el comando si el host tiene
   el binario y las llaves; se añade openssh-client a la imagen Docker para
   habilitarlo.
+- L3: E2E en producción (5ee1521 deployado): cert probe contra 127.0.0.1:443
+  (certificado real del Apache), cmd con regex sobre la salida y json contra
+  el /api/v1/health propio — los tres operational con last_ok=1 en 2 ticks.
+  Limpieza OK. CI verde.
