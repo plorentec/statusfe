@@ -197,9 +197,19 @@ router.get('/components/:id', async (req, res) => {
   if (!c) return res.status(404).json({ error: 'Not found' });
   res.json({ component: c });
 });
+// cmd sensors EXECUTE commands on the server: configuring one requires the
+// admin permission, even for write keys (2.6.0 review — privilege escalation
+// fix; the admin UI is already gated by requireAdmin).
+function canConfigureCmd(req) {
+  return !!(req.user.permissions || []).includes('admin');
+}
+
 router.post('/components', requirePerm('write'), async (req, res) => {
   const { name, description, status, position, external_id } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
+  if ((req.body.probe_type === 'cmd' || req.body.probe_command) && !canConfigureCmd(req)) {
+    return res.status(403).json({ error: 'Admin permission required for cmd sensors (they execute commands on this server)' });
+  }
   const group = await components.resolveGroup(req.body);
   let c;
   try {
@@ -242,6 +252,9 @@ router.post('/components', requirePerm('write'), async (req, res) => {
 });
 router.put('/components/:id', requirePerm('write'), async (req, res) => {
   if (!(await componentInScope(req, req.params.id))) return res.status(403).json({ error: 'Forbidden' });
+  if ((req.body.probe_type === 'cmd' || req.body.probe_command !== undefined) && !canConfigureCmd(req)) {
+    return res.status(403).json({ error: 'Admin permission required for cmd sensors (they execute commands on this server)' });
+  }
   const oldComp = await components.get(req.params.id);
   if (!oldComp) return res.status(404).json({ error: 'Not found' });
   const body = { ...req.body };

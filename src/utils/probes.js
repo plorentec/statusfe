@@ -81,10 +81,14 @@ function probeRequest(urlString, timeoutMs, withBody = false) {
         let body = '';
         let over = false;
         res.on('data', (c) => {
+          if (over) return;
           body += c;
-          if (body.length > JSON_BODY_MAX) { over = true; req.destroy(); }
+          // Cap reached: keep what we have (truncated) and report SUCCESS with
+          // the code — the keyword check works on the first 256KB. Failing the
+          // whole sensor because a page is large would be wrong (2.6.0 review).
+          if (body.length > JSON_BODY_MAX) { over = true; try { req.destroy(); } catch (e) {} finish({ ok: true, code: res.statusCode, body, truncated: true }); }
         });
-        res.on('end', () => finish(over ? { ok: false, error: 'body-too-large' } : { ok: true, code: res.statusCode, body }));
+        res.on('end', () => finish({ ok: true, code: res.statusCode, body }));
         res.on('error', () => finish({ ok: false, error: 'body-error' }));
       });
       req.on('timeout', () => { req.destroy(); finish({ ok: false, error: 'timeout' }); });

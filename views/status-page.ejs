@@ -77,7 +77,8 @@ function uptimeBarHtml(c) {
   const bar = (typeof uptimeBars !== 'undefined' && uptimeBars && uptimeBars[c.id]) ? uptimeBars[c.id] : null;
   if (!bar || !bar.days || bar.days.length === 0) return '';
   const label = s => ({operational:'Operational',under_maintenance:'Under Maintenance',degraded_performance:'Degraded Performance',partial_outage:'Partial Outage',major_outage:'Major Outage'}[s] || s);
-  const cells = bar.days.map(d => `<span class="up-cell up-${d.status}" title="${d.date}: ${label(d.status)}"></span>`).join('');
+  const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const cells = bar.days.map(d => `<span class="up-cell up-${esc(d.status)}" title="${esc(d.date)}: ${esc(label(d.status))}"></span>`).join('');
   const detail = `/status/${page.slug}/components/${c.id}`;
   return `<a class="up-bar-wrap" href="${detail}" title="View component detail">${cells}<span class="up-pct">${bar.uptimePct}% uptime · ${uptimeDays}d</span></a>`;
 }

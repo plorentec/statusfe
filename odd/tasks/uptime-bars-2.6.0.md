@@ -43,3 +43,8 @@ página pública (datos generados por las probes) + página de detalle.
   verde (solo miraba new_status de las transiciones). Fix: el estado de
   entrada del día (carry-in) participa en el peor → los días de recuperación
   cuentan como caídos (semántica Atlassian). Harness 21/21.
+- L5: Revisión adversarial post-release cazó 3 bugs propios: (1) RCE — key
+  write podía configurar probe_command (el worker lo ejecuta); fix: permiso
+  admin exigido en POST/PUT de la API; (2) http keyword contra cuerpos >256KB
+  fallaba siempre (truncar, no destruir); (3) tooltip de las barras sin
+  escapar (status custom con comillas). +5 checks. Suite 582/0.
