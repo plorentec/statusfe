@@ -9,6 +9,29 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [2.4.0] — 2026-11-05
+
+### Added
+- **Probe sensors: de ping HTTP a mini-PRTG** — `probe_type` con 4 tipos:
+  - `http` (el de 2.3.0: código esperado);
+  - `cert` — **expiración de certificados TLS** (host o URL; días restantes vs
+    `probe_warn_days`: expirando pronto → Degraded Performance, expirado o
+    handshake fallido → Major Outage; self-signed incluidos, sin validar cadena);
+  - `json` — **aserciones sobre APIs JSON** (`probe_json_path` tipo
+    `items[0].healthy` + comparador eq/ne/contains/gt/lt/exists contra
+    `probe_json_expected`);
+  - `cmd` — **comandos en el servidor** (`probe_command`, OK = exit 0 y regex
+    opcional sobre la salida; timeout 1-60 s, salida máx 1 MB; corre como el
+    usuario del proceso, dentro del contenedor en Docker — la imagen lleva
+    openssh-client para poder hacer `ssh` a otros equipos si hay llaves
+    montadas).
+- UI: select de tipo con campos condicionales; API acepta los campos nuevos.
+
+### Security notes
+- Los sensores `cmd` ejecutan comandos configurados SOLO por admins en el host
+  del StatusFe (mismo modelo de confianza que los sensores locales de PRTG).
+- Los targets LAN/privados siguen permitidos a propósito para http/cert/json.
+
 ## [2.3.0] — 2026-11-05
 
 ### Added
