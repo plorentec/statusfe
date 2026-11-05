@@ -3,7 +3,8 @@
 Ideas y mejoras pendientes para continuar en futuras sesiones. Ninguna está
 empezada; están ordenadas por valor/esfuerzo. Última revisión: v2.2.7 (2026-11-05).
 
-## Hecho hasta v2.2.7 (contexto)
+## Hecho hasta v2.3.0 (contexto)
+- ✅ v2.3.0: **auto-probes** — StatusFe hace los pings: probes HTTP por componente (URL/intervalo/código/timeout), worker interno que pone operational/major_outage solo (historial + cascada + agregación de padres), pin del admin respETADO, UI admin + API. Además: fix "keep current" de smtp_pass, link muerto del login fuera, logo_url por página en el form.
 - ✅ v2.2.7: **seguridad/higiene** — password SMTP cifrada en reposo (AES-256-GCM, migrate re-cifra los legacy en boot), `rate_limit` de las API keys APLICADO de verdad (era un campo muerto: ventana deslizante por key, 429 + Retry-After), `?group=` acepta `group_id`, backup diario de la BD en yoda (`/usr/local/bin/statusfe-backup`, cron 03:17, retención 7 días), CI en GitHub Actions (corre los arneses de `scratch/`), healthcheck del contenedor `statusfe`, contenedor `statusfe-postgres` redundante eliminado, ROADMAP al día.
 - ✅ v2.2.6: **revisión integral** — check-update (comparación invertida), mantenimiento (ends_at, updateStatuses, timestamps UTC, notice_pages por API), autorización (`requireAdmin` en 16 rutas, scope `page_id` de API keys forzado), incident statuses custom, slug API, downgrade guard en self-update, flash codes, `getForPage` sin N+1, CSP + embed iframeable, cookies `Secure`, TOTP anti-replay.
 
@@ -37,45 +38,39 @@ empezada; están ordenadas por valor/esfuerzo. Última revisión: v2.2.7 (2026-1
 
 ## Mejoras (ordenadas por prioridad)
 
-### 1. Monitoreo automático de componentes (probes HTTP) — el salto de producto
-- Hoy el estado de cada componente es MANUAL. Añadir probes configurables por
-  componente (URL, timeout, código esperado) + worker interno (30-60 s) que
-  actualice el status y escriba `status_history` — todo el plumbing
-  (`updateStatus`, cascada, uptime) ya existe.
-
-### 2. Barras de uptime de 90 días en la página pública (estilo Atlassian/Instatus)
+### 1. Barras de uptime de 90 días en la página pública (estilo Atlassian/Instatus)
 - Fuente de datos: ya existe `analytics.getComponentUptime(componentId, days)` (por día: último `new_status` del día).
 - Falta: endpoint público por página+componente (o incrustar los datos al renderizar `/status/:slug`), CSS de la barra (90 celdas, tooltip con fecha+estado), añadirlo a las 3 plantillas.
 - Ojo rendimiento: una query agregada por página (GROUP BY date, component_id) mejor que N+1.
 
-### 3. Página pública de detalle por componente
+### 2. Página pública de detalle por componente
 - Ruta nueva `/status/:slug/component/:id` (404 si página no pública).
 - Contenido: historial de estados (ya existe `components.getHistory`), incidentes asociados (ya existe `getActiveIncidents`), barra de uptime del punto 2.
 - Enlazar el nombre del componente desde la página pública.
 
-### 4. Suscripciones por email a una página
+### 3. Suscripciones por email a una página
 - SMTP ya configurado (`utils/email.js` envía emails). Ya existen notificaciones internas para admins.
 - Falta: tabla `subscribers` (email, page_id, token confirmación), formulario público "Subscribe to updates" en `status-page.ejs`, doble opt-in, envío al crear incidente/cambio de estado (hook en `incidents.create/update` y `components.updateStatus`).
 
-### 5. Rendimiento: eliminar los N+1 restantes
+### 4. Rendimiento: eliminar los N+1 restantes
 - ~~`/status/:slug` (`getForPage`)~~ → **resuelto en v2.2.6** (dependencias batched).
 - `/admin/components` (lista) sigue haciendo 2 queries extra por componente (`getActiveIncidents`, `getActiveIncidentForComponent`).
 - La cascada de dependencias transitiva recorre el grafo con una SELECT por nodo → `WITH RECURSIVE` o recorrido batched.
 - Página de analytics admin: N+1 por página × componente.
 - Estrategia: queries batched con `IN` (portables a pg-mem, como en 2.2.6). Medir antes/después con datos reales del servidor (192.168.1.104).
 
-### 6. Reordenar componentes/grupos por drag & drop en el admin
+### 5. Reordenar componentes/grupos por drag & drop en el admin
 - Hoy: input numérico de "Position" a mano en componentes/grupos; páginas reordenan por orden de checkbox.
 - Falta: UI drag&drop (HTML5 nativo sin librerías), endpoint `POST /admin/components/reorder` (array de ids en orden → UPDATE position), respetar posición de grupos en `component_groups.position`.
 
-### 7. Cola/reintento de webhooks
+### 6. Cola/reintento de webhooks
 - La entrega es best-effort fire-and-forget (y así se mantiene el request no-bloqueante). Si se quiere entrega garantizada: tabla de cola con reintentos/backoff y marca de fallo visible en el admin.
 
-### 8. Export/import de configuración de una página
+### 7. Export/import de configuración de una página
 - JSON con page + componentes + grupos + asignaciones para clonar páginas entre instalaciones.
 - Endpoint admin `GET /admin/pages/:id/export` + `POST /admin/pages/import`.
 
-### 9. CSP más estricta a futuro
+### 8. CSP más estricta a futuro
 - Hoy lleva `'unsafe-inline'` en scripts/estilos (las vistas renderizan JS/CSS
   inline). Migrar a nonces por request cuando se toque el layout.
 

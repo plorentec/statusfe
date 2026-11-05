@@ -9,6 +9,30 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [2.3.0] — 2026-11-05
+
+### Added
+- **Auto-probes: StatusFe hace los pings** — cada componente puede llevar un
+  probe HTTP (`probe_url`, intervalo, código esperado, timeout, enabled). Un
+  worker interno (`src/utils/probes.js`, tick cada `PROBE_TICK_SECONDS`, 20 s
+  por defecto) sondea los vencidos: código esperado → `operational`; otro
+  código/timeout/error → `major_outage`. El resultado pasa por
+  `components.updateStatus` (historial + cascada a dependencias + agregación de
+  padres) y queda registro `probe_last_checked_at`/`probe_last_ok`. NO se
+  sondean componentes pineados (`override_status`) ni padres con hijos (su
+  estado es el agregado). Objetivos LAN/privados PERMITIDOS a propósito (el
+  caso de uso principal es monitorear servicios internos).
+- **UI admin**: campos de probe en el form de componente e indicador ●
+  ok/fallo en la lista; API acepta los campos en POST/PUT (write).
+
+### Fixed
+- **"Leave blank to keep current" era mentira** — guardar los ajustes de email
+  sin reingresar la password SMTP la BORRABA (ahora se conserva).
+- El link muerto "Create an account" del login (el registro está cerrado desde
+  2.2.1) — eliminado.
+- `logo_url` de página era solo-API: ahora tiene campo en el form de páginas
+  (POST/PUT del admin lo pasan).
+
 ## [2.2.7] — 2026-11-05
 
 ### Security
