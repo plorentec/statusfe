@@ -184,16 +184,57 @@ Show child components on the public status page
 <small class="text-muted">When checked, children appear indented under this component on /status/:slug. When unchecked they are hidden there — the admin list and the API always show them.</small>
 </div>
 <div class="form-group">
-<label for="probe_url">Automatic probe URL (optional — StatusFe pings it for you)</label>
-<input type="url" id="probe_url" name="probe_url" placeholder="https://service.internal/health" value="<%= component.probe_url || '' %>">
-<small class="text-muted">HTTP/HTTPS. When set, the server checks it periodically and sets Operational / Major Outage automatically. Internal/LAN addresses are allowed (that's the point) — the URL is only probed by this server.</small>
+<label for="probe_type">Probe type</label>
+<select id="probe_type" name="probe_type" onchange="sfToggleProbeFields()">
+<option value="http" <%= (component.probe_type || 'http') === 'http' ? 'selected' : '' %>>HTTP status check</option>
+<option value="cert" <%= component.probe_type === 'cert' ? 'selected' : '' %>>TLS certificate expiry</option>
+<option value="json" <%= component.probe_type === 'json' ? 'selected' : '' %>>JSON API check</option>
+<option value="cmd" <%= component.probe_type === 'cmd' ? 'selected' : '' %>>Command on this server</option>
+</select>
+</div>
+<div class="form-group probe-field probe-field-url">
+<label for="probe_url">Probe URL / host</label>
+<input type="text" id="probe_url" name="probe_url" placeholder="https://service.internal/health" value="<%= component.probe_url || '' %>">
+<small class="text-muted">HTTP/HTTPS for http & json; for cert also host[:port] (default 443). Internal/LAN addresses are allowed — the URL is only probed by this server.</small>
+</div>
+<div class="form-group probe-field probe-field-cert">
+<label for="probe_warn_days">Warn when expiring within (days)</label>
+<input type="number" id="probe_warn_days" name="probe_warn_days" min="0" max="365" value="<%= component.probe_warn_days || 14 %>">
+<small class="text-muted">Expiring within this many days → Degraded Performance (warning). Expired or unreachable → Major Outage. Self-signed certificates are inspected too (expiry only, no chain validation).</small>
+</div>
+<div class="form-group probe-field probe-field-json">
+<label for="probe_json_path">JSON path</label>
+<input type="text" id="probe_json_path" name="probe_json_path" placeholder="status.state or items[0].healthy" value="<%= component.probe_json_path || '' %>">
+</div>
+<div class="form-row probe-field probe-field-json">
+<div class="form-group">
+<label for="probe_json_comparison">Comparison</label>
+<select id="probe_json_comparison" name="probe_json_comparison">
+<% ['eq','ne','contains','gt','lt','exists'].forEach(c => { %>
+<option value="<%= c %>" <%= (component.probe_json_comparison || 'eq') === c ? 'selected' : '' %>><%= c %></option>
+<% }) %>
+</select>
+</div>
+<div class="form-group">
+<label for="probe_json_expected">Expected value</label>
+<input type="text" id="probe_json_expected" name="probe_json_expected" placeholder="ok" value="<%= component.probe_json_expected != null ? component.probe_json_expected : '' %>">
+</div>
+</div>
+<div class="form-group probe-field probe-field-cmd">
+<label for="probe_command">Command</label>
+<input type="text" id="probe_command" name="probe_command" placeholder="e.g. curl -sf http://host:9200/_cluster/health || exit 1" value="<%= component.probe_command || '' %>">
+<small class="text-muted">Runs ON THIS SERVER (as the StatusFe process user — inside the container in Docker installs; ssh available for remote checks if keys are mounted). OK = exit code 0.</small>
+</div>
+<div class="form-group probe-field probe-field-cmd probe-field-json">
+<label for="probe_output_pattern">Output must match (regex, optional)</label>
+<input type="text" id="probe_output_pattern" name="probe_output_pattern" placeholder="e.g. status.*green" value="<%= component.probe_output_pattern || '' %>">
 </div>
 <div class="form-row">
 <div class="form-group">
 <label for="probe_interval_seconds">Interval (seconds)</label>
 <input type="number" id="probe_interval_seconds" name="probe_interval_seconds" min="10" max="86400" value="<%= component.probe_interval_seconds || 60 %>">
 </div>
-<div class="form-group">
+<div class="form-group probe-field probe-field-http">
 <label for="probe_expected_status">Expected HTTP status</label>
 <input type="number" id="probe_expected_status" name="probe_expected_status" min="100" max="599" value="<%= component.probe_expected_status || 200 %>">
 </div>
@@ -211,6 +252,20 @@ Probe enabled
 <% if (componentMode === 'edit' && component.probe_last_checked_at) { %>
 <small class="text-muted">Last check: <%= new Date(component.probe_last_checked_at).toISOString().replace('T',' ').slice(0,19) %> UTC — <%= Number(component.probe_last_ok) === 1 ? 'OK' : 'FAILED' %></small>
 <% } %>
+<script>
+function sfToggleProbeFields() {
+  var sel = document.getElementById('probe_type');
+  var t = sel ? sel.value : 'http';
+  var map = { url: t !== 'cmd', cert: t === 'cert', json: t === 'json', cmd: t === 'cmd', http: t === 'http' };
+  document.querySelectorAll('.probe-field').forEach(function (el) {
+    var kinds = Array.prototype.filter.call(el.classList, function (c) { return c !== 'probe-field' && c.indexOf('probe-field-') === 0; })
+      .map(function (c) { return c.replace('probe-field-', ''); });
+    // visible unless EVERY kind attached to the element is hidden for this type
+    el.style.display = (kinds.length > 0 && kinds.every(function (k) { return map[k] === false; })) ? 'none' : '';
+  });
+}
+document.addEventListener('DOMContentLoaded', sfToggleProbeFields);
+</script>
 <div class="form-actions">
 <button type="submit" class="btn btn-primary"><%= componentMode === 'create' ? 'Create Component' : 'Save Changes' %></button>
 <% if (componentMode === 'edit') { %>

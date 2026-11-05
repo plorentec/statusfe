@@ -518,7 +518,7 @@ module.exports.components = {
     return out;
   },
 
-  async create({ name, description, status, group_name, group_id, group_ids, position, external_id, parent_id, show_children, probe_url, probe_interval_seconds, probe_expected_status, probe_timeout_ms, probe_enabled }) {
+  async create({ name, description, status, group_name, group_id, group_ids, position, external_id, parent_id, show_children, probe_url, probe_interval_seconds, probe_expected_status, probe_timeout_ms, probe_enabled, probe_type, probe_warn_days, probe_json_path, probe_json_comparison, probe_json_expected, probe_command, probe_output_pattern }) {
     const id = uuidv4();
     // Parent validation: a dangling parent_id would silently make the child
     // "standalone" everywhere, so reject it up front (no FK by design).
@@ -531,19 +531,36 @@ module.exports.components = {
         throw err;
       }
     }
-    // Probe fields (2.3.0): URL http/https obligatoria para poder habilitar;
-    // LAN permitido a propósito. Intervalo >= 1 (el form pide >= 10);
-    // timeout 100-30000 ms; código esperado 100-599.
+    // Probe fields (2.3.0/2.4.0). Requirements per type:
+    //   http/json -> probe_url (http/https)
+    //   cert      -> probe_url https URL or host[:port] (default port 443)
+    //   json      -> probe_url + probe_json_path
+    //   cmd       -> probe_command
+    // LAN targets allowed on purpose (the point is monitoring internal services).
+    const PROBE_TYPES = ['http', 'cert', 'json', 'cmd'];
+    const pType = PROBE_TYPES.includes(probe_type) ? probe_type : 'http';
     const pUrl = String(probe_url || '').trim();
-    const hasProbe = /^https?:\/\//i.test(pUrl);
+    const hasUrl = /^https?:\/\//i.test(pUrl);
+    const certHost = pType === 'cert' && /^[\w.-]+(:\d+)?$/.test(pUrl); // host[:port] sin esquema
+    const hasProbe = (pType === 'cmd' && String(probe_command || '').trim())
+      || (pType === 'json' && String(probe_json_path || '').trim() && hasUrl)
+      || ((pType === 'http' || pType === 'json') && hasUrl)
+      || certHost;
     await run(
-      'INSERT INTO components (id,name,description,status,group_name,group_id,external_id,position,parent_id,show_children,probe_url,probe_interval_seconds,probe_expected_status,probe_timeout_ms,probe_enabled) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)',
+      'INSERT INTO components (id,name,description,status,group_name,group_id,external_id,position,parent_id,show_children,probe_url,probe_interval_seconds,probe_expected_status,probe_timeout_ms,probe_enabled,probe_type,probe_warn_days,probe_json_path,probe_json_comparison,probe_json_expected,probe_command,probe_output_pattern) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)',
       [id, name, description||'', status||'operational', group_name||null, group_id||null, external_id||null, position||0, parentId, toBool01(show_children),
-       hasProbe ? pUrl : null,
+       (pType === 'cmd' ? null : (pUrl || null)),
        Math.max(1, parseInt(probe_interval_seconds, 10) || 60),
        Math.min(599, Math.max(100, parseInt(probe_expected_status, 10) || 200)),
        Math.min(30000, Math.max(100, parseInt(probe_timeout_ms, 10) || 5000)),
-       hasProbe ? toBool01(probe_enabled) : 0]
+       hasProbe ? toBool01(probe_enabled) : 0,
+       pType,
+       Math.max(0, parseInt(probe_warn_days, 10) || 14),
+       (pType === 'json') ? (String(probe_json_path || '').trim() || null) : null,
+       (pType === 'json') ? (['eq','ne','contains','gt','lt','exists'].includes(probe_json_comparison) ? probe_json_comparison : 'eq') : 'eq',
+       (pType === 'json') ? (probe_json_expected != null ? String(probe_json_expected) : null) : null,
+       (pType === 'cmd') ? (String(probe_command || '').trim() || null) : null,
+       (probe_output_pattern ? String(probe_output_pattern).trim() || null : null)]
     );
     const gids = (group_ids && group_ids.length) ? group_ids : (group_id ? [group_id] : []);
     if (gids.length) await this.setGroups(id, gids);
@@ -585,7 +602,7 @@ module.exports.components = {
     if (!oldComp) return null;
     const fields = [];
     const params = [];
-    const allowed = ['name','description','status','group_name','group_id','position','external_id','override_status','parent_id','show_children','probe_url','probe_interval_seconds','probe_expected_status','probe_timeout_ms','probe_enabled'];
+    const allowed = ['name','description','status','group_name','group_id','position','external_id','override_status','parent_id','show_children','probe_url','probe_interval_seconds','probe_expected_status','probe_timeout_ms','probe_enabled','probe_type','probe_warn_days','probe_json_path','probe_json_comparison','probe_json_expected','probe_command','probe_output_pattern'];
     // Cycle guard BEFORE any write: a component may not be its own parent nor
     // a descendant of itself (same walk style as dependencies.wouldCreateCycle).
     if (data.parent_id !== undefined && data.parent_id !== null && data.parent_id !== '') {
@@ -618,14 +635,27 @@ module.exports.components = {
         if (k === 'probe_expected_status') val = Math.min(599, Math.max(100, parseInt(val, 10) || 200));
         if (k === 'probe_timeout_ms') val = Math.min(30000, Math.max(100, parseInt(val, 10) || 5000));
         if (k === 'probe_enabled') val = toBool01(val);
+        if (k === 'probe_type') val = ['http','cert','json','cmd'].includes(val) ? val : 'http';
+        if (k === 'probe_warn_days') val = Math.max(0, parseInt(val, 10) || 14);
+        if (k === 'probe_json_path') val = String(val || '').trim() || null;
+        if (k === 'probe_json_comparison') val = ['eq','ne','contains','gt','lt','exists'].includes(val) ? val : 'eq';
+        if (k === 'probe_json_expected') val = val != null ? String(val) : null;
+        if (k === 'probe_command') val = String(val || '').trim() || null;
+        if (k === 'probe_output_pattern') val = String(val || '').trim() || null;
         fields.push(k+'=$'+(params.length+1)); params.push(val);
       }
     }
-    // A probe can only be enabled with a valid URL (otherwise the worker would
-    // just record failures for a misconfigured row).
+    // A probe can only be enabled with a valid target for its type (otherwise
+    // the worker would just record failures for a misconfigured row).
     if (fields.some(f => f.startsWith('probe_enabled'))) {
+      const t = data.probe_type !== undefined ? data.probe_type : oldComp.probe_type;
       const urlRow = data.probe_url !== undefined ? data.probe_url : oldComp.probe_url;
-      if (!/^https?:\/\//i.test(String(urlRow || '').trim())) {
+      const cmdRow = data.probe_command !== undefined ? data.probe_command : oldComp.probe_command;
+      const urlStr = String(urlRow || '').trim();
+      const okTarget = t === 'cmd'
+        ? !!String(cmdRow || '').trim()
+        : (/^https?:\/\//i.test(urlStr) || (t === 'cert' && /^[\w.-]+(:\d+)?$/.test(urlStr)));
+      if (!okTarget) {
         const idx = fields.findIndex(f => f.startsWith('probe_enabled'));
         if (idx >= 0) { fields.splice(idx, 1); params.splice(idx, 1); }
       }

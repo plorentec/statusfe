@@ -203,7 +203,14 @@ router.post('/components', requirePerm('write'), async (req, res) => {
       probe_interval_seconds: req.body.probe_interval_seconds,
       probe_expected_status: req.body.probe_expected_status,
       probe_timeout_ms: req.body.probe_timeout_ms,
-      probe_enabled: req.body.probe_enabled
+      probe_enabled: req.body.probe_enabled,
+      probe_type: req.body.probe_type,
+      probe_warn_days: req.body.probe_warn_days,
+      probe_json_path: req.body.probe_json_path,
+      probe_json_comparison: req.body.probe_json_comparison,
+      probe_json_expected: req.body.probe_json_expected,
+      probe_command: req.body.probe_command,
+      probe_output_pattern: req.body.probe_output_pattern
     });
   } catch (e) {
     // Cycle guard / missing parent (model validation) — nothing was written.
