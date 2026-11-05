@@ -2091,14 +2091,17 @@ async function getUptimeBars(pageId, days = UPTIME_DAYS) {
     let ri = 0;
     for (let i = 0; i < result[id].length; i++) {
       const date = result[id][i].date;
-      let worstS = null, worstSev = -1, lastNew = null;
+      // Day severity = worst of (state carried INTO the day, transition
+      // targets of that day) — a day that started down and recovered counts
+      // as a down day (Atlassian semantics).
+      let worstS = cur, worstSev = severity(cur), lastNew = null;
       while (ri < rowsC.length && dayKey(rowsC[ri].created_at) === date) {
         const s = severity(rowsC[ri].new_status);
         if (s > worstSev) { worstSev = s; worstS = rowsC[ri].new_status; }
         lastNew = rowsC[ri].new_status;
         ri++;
       }
-      result[id][i].status = worstS || cur;
+      result[id][i].status = worstS;
       if (lastNew !== null) cur = lastNew;
     }
   }

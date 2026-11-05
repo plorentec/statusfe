@@ -35,3 +35,11 @@ página pública (datos generados por las probes) + página de detalle.
 - L2: Semántica elegida: peor severidad del día (no última del día) — honesto
   ante caídas; día sin transiciones = operational (limite documentado: las
   probes registran en cambio de estado).
+- L3: E2E en producción (componente temporal con caída hace 3d + recuperación
+  hace 2d): barra viva, celda roja, 98.89%, enlace al detalle, detalle 200,
+  API OK, limpieza. Confirmado además que la página 'admin' de producción no
+  tenía componentes asignados (dato, no bug).
+- L4: El E2E destapó un matiz semántico: el día de la RECUPERACIÓN contaba
+  verde (solo miraba new_status de las transiciones). Fix: el estado de
+  entrada del día (carry-in) participa en el peor → los días de recuperación
+  cuentan como caídos (semántica Atlassian). Harness 21/21.
