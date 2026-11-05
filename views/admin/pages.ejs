@@ -93,6 +93,11 @@
 <small class="text-muted">Used to link this status page with external monitoring systems.</small>
 </div>
 <div class="form-group">
+<label for="logo_url">Page logo URL (optional)</label>
+<input type="url" id="logo_url" name="logo_url" value="<%= page.logo_url || '' %>" placeholder="https://.../logo.png">
+<small class="text-muted">Shown instead of the global Customize logo on this page's status page.</small>
+</div>
+<div class="form-group">
 <label for="status">Status</label>
 <select id="status" name="status">
 <option value="operational" <%= page.status === 'operational' ? 'selected' : '' %>>Operational</option>

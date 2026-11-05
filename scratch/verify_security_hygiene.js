@@ -82,6 +82,10 @@ async function waitForBoot() {
     return after.value === before;
   })());
   check('S2: el valor cifrado descifra bien tras migrate', (await settings.getSMTP()).pass === 'legacy-in-clear');
+  // "Leave blank to keep current": saving email settings WITHOUT the password
+  // must not wipe it (BUGFIX 2.3.0 — it used to overwrite with '').
+  await settings.setSMTP({ smtp_host: 'smtp.t.local', smtp_pass: '' });
+  check('S2b: setSMTP con password vacía NO borra la guardada', (await settings.getSMTP()).pass === 'legacy-in-clear', (await settings.getSMTP()).pass);
 
   // ===== 2. Per-key rate limit (S3) =====
   // NOTE: tested on a PROTECTED route (/api/v1/info) — GET /components is fully
