@@ -392,6 +392,8 @@ module.exports = app;
     // down (upcoming -> ongoing -> completed), so a window that ended offline
     // disappears from public pages on the first request after boot.
     await require('./db/models').maintenance.updateStatuses();
+    // Auto-probes: StatusFe monitors its own components (2.3.0).
+    require('./utils/probes').start();
   } catch(e) {
     console.error('Startup failed:', e.message);
     process.exit(1);

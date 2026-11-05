@@ -49,6 +49,13 @@ async function createTables() {
       external_id TEXT,
       parent_id TEXT,
       show_children INTEGER DEFAULT 0,
+      probe_url TEXT,
+      probe_interval_seconds INTEGER,
+      probe_expected_status INTEGER,
+      probe_timeout_ms INTEGER,
+      probe_enabled INTEGER DEFAULT 0,
+      probe_last_checked_at TIMESTAMP,
+      probe_last_ok INTEGER,
       position INTEGER DEFAULT 0,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -537,6 +544,19 @@ async function migrate() {
     await run(`ALTER TABLE components ADD COLUMN IF NOT EXISTS show_children INTEGER DEFAULT 0`);
   } catch(e) {
     // Column already exists or the wording differs — safe to proceed.
+  }
+
+  // Auto-probes (2.3.0): per-component HTTP monitoring columns.
+  for (const col of [
+    'probe_url TEXT',
+    'probe_interval_seconds INTEGER',
+    'probe_expected_status INTEGER',
+    'probe_timeout_ms INTEGER',
+    'probe_enabled INTEGER DEFAULT 0',
+    'probe_last_checked_at TIMESTAMP',
+    'probe_last_ok INTEGER',
+  ]) {
+    try { await run(`ALTER TABLE components ADD COLUMN IF NOT EXISTS ${col}`); } catch(e) { /* exists */ }
   }
 
   // SMTP password at rest: encrypt any legacy plaintext row (idempotent —

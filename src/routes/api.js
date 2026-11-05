@@ -198,7 +198,12 @@ router.post('/components', requirePerm('write'), async (req, res) => {
       name, description, status, group_id: group.group_id, group_name: group.group_name,
       group_ids: group.group_ids, position, external_id,
       parent_id: req.body.parent_id || null,
-      show_children: req.body.show_children
+      show_children: req.body.show_children,
+      probe_url: req.body.probe_url || null,
+      probe_interval_seconds: req.body.probe_interval_seconds,
+      probe_expected_status: req.body.probe_expected_status,
+      probe_timeout_ms: req.body.probe_timeout_ms,
+      probe_enabled: req.body.probe_enabled
     });
   } catch (e) {
     // Cycle guard / missing parent (model validation) — nothing was written.

@@ -518,7 +518,7 @@ module.exports.components = {
     return out;
   },
 
-  async create({ name, description, status, group_name, group_id, group_ids, position, external_id, parent_id, show_children }) {
+  async create({ name, description, status, group_name, group_id, group_ids, position, external_id, parent_id, show_children, probe_url, probe_interval_seconds, probe_expected_status, probe_timeout_ms, probe_enabled }) {
     const id = uuidv4();
     // Parent validation: a dangling parent_id would silently make the child
     // "standalone" everywhere, so reject it up front (no FK by design).
@@ -531,9 +531,19 @@ module.exports.components = {
         throw err;
       }
     }
+    // Probe fields (2.3.0): URL http/https obligatoria para poder habilitar;
+    // LAN permitido a propósito. Intervalo >= 1 (el form pide >= 10);
+    // timeout 100-30000 ms; código esperado 100-599.
+    const pUrl = String(probe_url || '').trim();
+    const hasProbe = /^https?:\/\//i.test(pUrl);
     await run(
-      'INSERT INTO components (id,name,description,status,group_name,group_id,external_id,position,parent_id,show_children) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
-      [id, name, description||'', status||'operational', group_name||null, group_id||null, external_id||null, position||0, parentId, toBool01(show_children)]
+      'INSERT INTO components (id,name,description,status,group_name,group_id,external_id,position,parent_id,show_children,probe_url,probe_interval_seconds,probe_expected_status,probe_timeout_ms,probe_enabled) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)',
+      [id, name, description||'', status||'operational', group_name||null, group_id||null, external_id||null, position||0, parentId, toBool01(show_children),
+       hasProbe ? pUrl : null,
+       Math.max(1, parseInt(probe_interval_seconds, 10) || 60),
+       Math.min(599, Math.max(100, parseInt(probe_expected_status, 10) || 200)),
+       Math.min(30000, Math.max(100, parseInt(probe_timeout_ms, 10) || 5000)),
+       hasProbe ? toBool01(probe_enabled) : 0]
     );
     const gids = (group_ids && group_ids.length) ? group_ids : (group_id ? [group_id] : []);
     if (gids.length) await this.setGroups(id, gids);
@@ -575,7 +585,7 @@ module.exports.components = {
     if (!oldComp) return null;
     const fields = [];
     const params = [];
-    const allowed = ['name','description','status','group_name','group_id','position','external_id','override_status','parent_id','show_children'];
+    const allowed = ['name','description','status','group_name','group_id','position','external_id','override_status','parent_id','show_children','probe_url','probe_interval_seconds','probe_expected_status','probe_timeout_ms','probe_enabled'];
     // Cycle guard BEFORE any write: a component may not be its own parent nor
     // a descendant of itself (same walk style as dependencies.wouldCreateCycle).
     if (data.parent_id !== undefined && data.parent_id !== null && data.parent_id !== '') {
@@ -603,7 +613,21 @@ module.exports.components = {
         if ((k === 'group_id' || k === 'group_name') && (val === '' || val === null)) val = null;
         if (k === 'parent_id' && (val === '' || val === null)) val = null;
         if (k === 'show_children') val = toBool01(val);
+        if (k === 'probe_url') val = String(val || '').trim() || null;
+        if (k === 'probe_interval_seconds') val = Math.max(1, parseInt(val, 10) || 60);
+        if (k === 'probe_expected_status') val = Math.min(599, Math.max(100, parseInt(val, 10) || 200));
+        if (k === 'probe_timeout_ms') val = Math.min(30000, Math.max(100, parseInt(val, 10) || 5000));
+        if (k === 'probe_enabled') val = toBool01(val);
         fields.push(k+'=$'+(params.length+1)); params.push(val);
+      }
+    }
+    // A probe can only be enabled with a valid URL (otherwise the worker would
+    // just record failures for a misconfigured row).
+    if (fields.some(f => f.startsWith('probe_enabled'))) {
+      const urlRow = data.probe_url !== undefined ? data.probe_url : oldComp.probe_url;
+      if (!/^https?:\/\//i.test(String(urlRow || '').trim())) {
+        const idx = fields.findIndex(f => f.startsWith('probe_enabled'));
+        if (idx >= 0) { fields.splice(idx, 1); params.splice(idx, 1); }
       }
     }
     const newParentId = data.parent_id !== undefined
@@ -1492,6 +1516,10 @@ module.exports.settings = {
     const fields = ['smtp_host','smtp_port','smtp_user','smtp_pass','smtp_secure','smtp_from','smtp_from_name'];
     for (const k of fields) {
       let val = data[k] !== undefined ? data[k] : '';
+      // "Leave blank to keep current" (email-settings form): an empty smtp_pass
+      // must NOT wipe the stored password. Previously every save without the
+      // password re-entered cleared it (BUGFIX 2.3.0).
+      if (k === 'smtp_pass' && (val === '' || val === undefined || val === null)) continue;
       if (k === 'smtp_pass' && val) {
         // Never persist the SMTP password in plaintext. An already-encrypted
         // value round-tripping from the form is preserved as-is.

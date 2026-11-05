@@ -78,7 +78,7 @@
 <td<% if (c.parent_id) { %> class="child-cell"<% } %>><strong><%= c.name %></strong><% if (c.parent_id) { %> <small class="child-parent-tag" title="Child of <%= c.parent_name || 'parent' %>">&#8627; <%= c.parent_name || 'parent' %></small><% } %><br><small class="text-muted"><%= c.description || '' %></small></td>
 <td><small><code><%= c.external_id || '-' %></code></small></td>
 <td><%= groupText %></td>
-<td><span class="status-badge status-<%= c.status %>"><%= c.status %></span></td>
+<td><span class="status-badge status-<%= c.status %>"><%= c.status %></span><% if (c.probe_enabled === 1 || Number(c.probe_enabled) === 1) { %> <span title="Probe: <%= c.probe_url %> — last check <%= Number(c.probe_last_ok) === 1 ? 'OK' : 'FAILED' %>">&#9679;</span><% } %></td>
 <td><%= c.position %></td>
 <td><time<% if (createdTs) { %> datetime="<%= new Date(createdTs).toISOString() %>"<% } %>><%= fmtDate(c.created_at) %></time></td>
 <td class="actions">
@@ -183,6 +183,34 @@ Show child components on the public status page
 </label>
 <small class="text-muted">When checked, children appear indented under this component on /status/:slug. When unchecked they are hidden there — the admin list and the API always show them.</small>
 </div>
+<div class="form-group">
+<label for="probe_url">Automatic probe URL (optional — StatusFe pings it for you)</label>
+<input type="url" id="probe_url" name="probe_url" placeholder="https://service.internal/health" value="<%= component.probe_url || '' %>">
+<small class="text-muted">HTTP/HTTPS. When set, the server checks it periodically and sets Operational / Major Outage automatically. Internal/LAN addresses are allowed (that's the point) — the URL is only probed by this server.</small>
+</div>
+<div class="form-row">
+<div class="form-group">
+<label for="probe_interval_seconds">Interval (seconds)</label>
+<input type="number" id="probe_interval_seconds" name="probe_interval_seconds" min="10" max="86400" value="<%= component.probe_interval_seconds || 60 %>">
+</div>
+<div class="form-group">
+<label for="probe_expected_status">Expected HTTP status</label>
+<input type="number" id="probe_expected_status" name="probe_expected_status" min="100" max="599" value="<%= component.probe_expected_status || 200 %>">
+</div>
+<div class="form-group">
+<label for="probe_timeout_ms">Timeout (ms)</label>
+<input type="number" id="probe_timeout_ms" name="probe_timeout_ms" min="100" max="30000" step="100" value="<%= component.probe_timeout_ms || 5000 %>">
+</div>
+<div class="form-group">
+<label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:26px;">
+<input type="checkbox" id="probe_enabled" name="probe_enabled" <%= Number(component.probe_enabled) === 1 ? 'checked' : '' %>>
+Probe enabled
+</label>
+</div>
+</div>
+<% if (componentMode === 'edit' && component.probe_last_checked_at) { %>
+<small class="text-muted">Last check: <%= new Date(component.probe_last_checked_at).toISOString().replace('T',' ').slice(0,19) %> UTC — <%= Number(component.probe_last_ok) === 1 ? 'OK' : 'FAILED' %></small>
+<% } %>
 <div class="form-actions">
 <button type="submit" class="btn btn-primary"><%= componentMode === 'create' ? 'Create Component' : 'Save Changes' %></button>
 <% if (componentMode === 'edit') { %>

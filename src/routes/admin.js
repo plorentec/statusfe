@@ -125,7 +125,7 @@ router.get('/pages/new', async (req, res) => {
 });
 
 router.post('/pages', requireAdmin, async (req, res) => {
-  const { name, slug, description, status, template, is_public, refresh_interval, custom_layout, custom_layout_css, custom_layout_html, custom_css, custom_html, external_id } = req.body;
+  const { name, slug, description, status, template, is_public, refresh_interval, custom_layout, custom_layout_css, custom_layout_html, custom_css, custom_html, external_id, logo_url } = req.body;
   if (!name || !slug) {
     return res.redirect('/admin/pages/new?msg=error&type=error');
   }
@@ -204,7 +204,7 @@ router.put('/pages/:id', requireAdmin, async (req, res) => {
   if (!page) {
     return res.redirect('/admin/pages?msg=error&type=error');
   }
-  const { name, slug, description, status, template, is_public, refresh_interval, custom_layout, custom_layout_css, custom_layout_html, custom_css, custom_html, external_id } = req.body;
+  const { name, slug, description, status, template, is_public, refresh_interval, custom_layout, custom_layout_css, custom_layout_html, custom_css, custom_html, external_id, logo_url } = req.body;
   if (!name || !slug) {
     return res.redirect('/admin/pages/' + req.params.id + '/edit?msg=error&type=error');
   }
@@ -316,7 +316,12 @@ router.post('/components', requireAdmin, async (req, res) => {
       name, description, status, group_id: group.group_id, group_name: group.group_name,
       group_ids: group.group_ids, position, external_id,
       parent_id: req.body.parent_id || null,
-      show_children: req.body.show_children ? 1 : 0
+      show_children: req.body.show_children ? 1 : 0,
+      probe_url: req.body.probe_url || null,
+      probe_interval_seconds: req.body.probe_interval_seconds,
+      probe_expected_status: req.body.probe_expected_status,
+      probe_timeout_ms: req.body.probe_timeout_ms,
+      probe_enabled: req.body.probe_enabled ? 1 : 0
     });
   } catch (e) {
     // Cycle guard / missing parent raised by the model — no partial create.
@@ -422,7 +427,12 @@ router.put('/components/:id', requireAdmin, async (req, res) => {
       name, description, status, group_id: group.group_id, group_name: group.group_name,
       group_ids: group.group_ids, position, external_id,
       parent_id: req.body.parent_id || null,
-      show_children: req.body.show_children ? 1 : 0
+      show_children: req.body.show_children ? 1 : 0,
+      probe_url: req.body.probe_url || null,
+      probe_interval_seconds: req.body.probe_interval_seconds,
+      probe_expected_status: req.body.probe_expected_status,
+      probe_timeout_ms: req.body.probe_timeout_ms,
+      probe_enabled: req.body.probe_enabled ? 1 : 0
     });
   } catch (e) {
     // Cycle guard / missing parent raised by the model — nothing was written.
