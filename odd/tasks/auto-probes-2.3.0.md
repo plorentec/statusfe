@@ -52,3 +52,11 @@ el estado solo. Incluye revisión de bugs/UX y quick wins.
 - L2: Decisión de diseño: fallo de probe → major_outage (v1 simple); pin del
   admin (override_status) nunca es pisado por la sonda; padres con hijos se
   saltan (agregado manda). LAN permitido: es el caso de uso principal.
+- L3: E2E en producción (componente temporal con probe al propio /health) cayó
+  con 'column override_status does not exist': MIGRATION GAP de 2.2.4 (la
+  columna solo estaba en el CREATE TABLE). Fix: ALTER idempotente en migrate()
+  (be871cc). Re-E2E: probe_last_ok=1 + timestamp, limpieza OK. Lección: toda
+  columna nueva de modelo necesita su ALTER en migrate(); los arneses pg-mem
+  (BD fresca) no pueden cazar estos gaps — solo el E2E en producción.
+- L4: Verificado en producción: worker sondeando, 0 errores de query, E2E
+  limpio. Release 2.3.0 en main (690ced9 + be871cc).
