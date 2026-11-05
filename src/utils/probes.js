@@ -18,6 +18,8 @@
 const { queryAll, run, queryOne } = require('../db/database');
 const { exec } = require('child_process');
 const tls = require('tls');
+const net = require('net');
+const dnsPromises = require('dns').promises;
 
 const TICK_MS = Math.max(5, parseInt(process.env.PROBE_TICK_SECONDS, 10) || 20) * 1000;
 const DEFAULT_INTERVAL_S = 60;
@@ -26,7 +28,7 @@ const MAX_PARALLEL = 5;
 const MAX_REDIRECTS = 3;
 const JSON_BODY_MAX = 256 * 1024;
 const CMD_OUTPUT_MAX = 1024 * 1024;
-const PROBE_TYPES = ['http', 'cert', 'json', 'cmd'];
+const PROBE_TYPES = ['http', 'cert', 'json', 'cmd', 'tcp', 'dns', 'ping', 'push'];
 let timer = null;
 
 function normalizeProbeUrl(raw) {
@@ -183,8 +185,51 @@ function probeCommand(command, timeoutMs, outputPattern) {
   });
 }
 
-// Per-type evaluation. Returns { ok, status } where status is the component
-// status the result maps to (operational | degraded_performance | major_outage).
+// TCP connect sensor: ok = connection established within the timeout.
+// Resolves { ok, error? }.
+function probeTcp(host, port, timeoutMs) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const socket = net.connect({ host, port, timeout: timeoutMs });
+    const finish = (r) => {
+      if (settled) return;
+      settled = true;
+      try { socket.destroy(); } catch (e) {}
+      resolve(r);
+    };
+    socket.on('connect', () => finish({ ok: true }));
+    socket.on('timeout', () => finish({ ok: false, error: 'timeout' }));
+    socket.on('error', (e) => finish({ ok: false, error: e.code || 'error' }));
+  });
+}
+
+// DNS sensor: hostname resolves (IPv4); optional expected IP. Resolves { ok, ips?, error? }.
+async function probeDns(hostname, expectedIp) {
+  try {
+    const ips = await dnsPromises.resolve4(hostname);
+    if (expectedIp && !ips.includes(String(expectedIp).trim())) return { ok: false, ips, error: 'ip-mismatch' };
+    return { ok: true, ips };
+  } catch (e) {
+    return { ok: false, error: e.code || 'dns-error' };
+  }
+}
+
+// ICMP ping via the system binary (needs cap or root in some environments —
+// the Docker image ships iputils-ping; non-root hosts need setcap). Parses
+// the real ICMP latency from `time=XX ms`. Resolves { ok, ms?, error? }.
+function probePing(host, timeoutMs) {
+  return new Promise((resolve) => {
+    const sec = Math.max(1, Math.round(timeoutMs / 1000));
+    exec(`ping -c 1 -W ${sec} ${host}`, { timeout: timeoutMs + 2000, killSignal: 'SIGKILL' }, (err, stdout) => {
+      if (err) return resolve({ ok: false, error: err.killed ? 'timeout' : (err.code === 1 ? 'unreachable' : 'error') });
+      const m = String(stdout).match(/time[=<]([\d.]+)\s*ms/i);
+      resolve({ ok: true, ms: m ? parseFloat(m[1]) : null });
+    });
+  });
+}
+
+// Per-type evaluation. Returns { ok, status, ms? } where status is the
+// component status the result maps to (operational | degraded_performance | major_outage).
 async function evaluateProbe(comp) {
   const timeoutMs = Math.min(30000, Math.max(100, parseInt(comp.probe_timeout_ms, 10) || DEFAULT_TIMEOUT_MS));
   const type = comp.probe_type || 'http';
@@ -194,6 +239,34 @@ async function evaluateProbe(comp) {
     if (!command) return { ok: false, status: 'major_outage' };
     const r = await probeCommand(command, Math.min(60000, timeoutMs * 3), comp.probe_output_pattern);
     return { ok: r.ok, status: r.ok ? 'operational' : 'major_outage' };
+  }
+
+  if (type === 'tcp') {
+    const raw = String(comp.probe_url || '').trim();
+    const m = raw.match(/^[\w.-]+:(\d+)$/);
+    if (!m) return { ok: false, status: 'major_outage' };
+    const r = await probeTcp(raw.split(':')[0], parseInt(m[1], 10), timeoutMs);
+    return { ok: r.ok, status: r.ok ? 'operational' : 'major_outage' };
+  }
+
+  if (type === 'dns') {
+    const hostname = String(comp.probe_url || '').trim().replace(/^https?:\/\//, '').split('/')[0].split(':')[0];
+    if (!hostname) return { ok: false, status: 'major_outage' };
+    const r = await probeDns(hostname, comp.probe_json_expected); // expected IP reuses the field
+    return { ok: r.ok, status: r.ok ? 'operational' : 'major_outage' };
+  }
+
+  if (type === 'ping') {
+    const host = String(comp.probe_url || '').trim().replace(/^https?:\/\//, '').split('/')[0].split(':')[0];
+    if (!host) return { ok: false, status: 'major_outage' };
+    const r = await probePing(host, timeoutMs);
+    return { ok: r.ok, status: r.ok ? 'operational' : 'major_outage', ms: r.ms || null };
+  }
+
+  if (type === 'push') {
+    // Push sensors are fed by POST/GET /push/<token>. The worker only ever
+    // sees them when the heartbeat went STALE (due filter) — that's a failure.
+    return { ok: false, status: 'major_outage' };
   }
 
   if (type === 'cert') {
@@ -234,17 +307,23 @@ async function evaluateProbe(comp) {
   const url = normalizeProbeUrl(comp.probe_url);
   if (!url) return { ok: false, status: 'major_outage' };
   const expected = parseInt(comp.probe_expected_status, 10) || 200;
-  const r = await probeRequest(url, timeoutMs);
-  const ok = !!(r.ok && r.code === expected);
+  const r = await probeRequest(url, timeoutMs, true);
+  let ok = !!(r.ok && r.code === expected);
+  // Keyword check: probe_output_pattern must ALSO match the body (2.5.0).
+  if (ok && comp.probe_output_pattern) {
+    try { ok = new RegExp(comp.probe_output_pattern, 'i').test(String(r.body || '')); } catch (e) { ok = false; }
+  }
   return { ok, status: ok ? 'operational' : 'major_outage' };
 }
 
 async function probeComponent(comp) {
-  const { ok, status } = await evaluateProbe(comp);
+  const started = Date.now();
+  const { ok, status, ms } = await evaluateProbe(comp);
+  const durationMs = ms != null ? Math.round(ms) : Date.now() - started;
 
   // Bookkeeping ALWAYS updates (also when the status doesn't change) so the
-  // admin can see the probe is alive.
-  await run('UPDATE components SET probe_last_checked_at=NOW(), probe_last_ok=$1, updated_at=NOW() WHERE id=$2', [ok ? 1 : 0, comp.id]);
+  // admin can see the probe is alive. Latency (probe_last_ms) for every type.
+  await run('UPDATE components SET probe_last_checked_at=NOW(), probe_last_ok=$1, probe_last_ms=$2, updated_at=NOW() WHERE id=$3', [ok ? 1 : 0, durationMs, comp.id]);
 
   if (!ok && comp.status !== status) {
     await require('../db/models').components.updateStatus(comp.id, status, null);
@@ -272,7 +351,9 @@ async function tick() {
         AND c.override_status IS NULL
         AND (
           (COALESCE(c.probe_type, 'http') IN ('http','cert','json') AND c.probe_url IS NOT NULL AND c.probe_url <> '')
+          OR (c.probe_type IN ('tcp','dns','ping') AND c.probe_url IS NOT NULL AND c.probe_url <> '')
           OR (c.probe_type = 'cmd' AND c.probe_command IS NOT NULL AND c.probe_command <> '')
+          OR (c.probe_type = 'push' AND c.probe_push_token IS NOT NULL)
         )
     `);
   } catch (e) {
@@ -315,4 +396,4 @@ function start() {
   timer.unref?.();
 }
 
-module.exports = { start, tick, probeComponent, evaluateProbe, probeRequest, probeCert, probeCommand, resolveJsonPath, jsonCompare, normalizeProbeUrl, PROBE_TYPES };
+module.exports = { start, tick, probeComponent, evaluateProbe, probeRequest, probeCert, probeCommand, probeTcp, probeDns, probePing, resolveJsonPath, jsonCompare, normalizeProbeUrl, PROBE_TYPES };

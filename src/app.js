@@ -190,11 +190,11 @@ app.use('/api/v1', apiRoutes);
 
 // CSRF protection for all routes except /api/v1 and auth routes
 app.use((req, res, next) => {
-  if (req.path.startsWith('/auth/') || req.path === '/login' || req.path === '/register') return next();
+  if (req.path.startsWith('/auth/') || req.path === '/login' || req.path === '/register' || req.path.startsWith('/push/')) return next();
   csrfMiddleware(req, res, next);
 });
 app.use((req, res, next) => {
-  if (req.path.startsWith('/auth/') || req.path === '/login' || req.path === '/register') return next();
+  if (req.path.startsWith('/auth/') || req.path === '/login' || req.path === '/register' || req.path.startsWith('/push/')) return next();
   csrfProtection(req, res, next);
 });
 
@@ -203,7 +203,7 @@ const { require2FA } = require('./middleware/require-2fa');
 app.use('/admin', require2FA);
 
 const { pages, components, incidents, analytics, dependencies, notifications, maintenance, settings } = require('./db/models');
-const { queryAll } = require('./db/database');
+const { queryAll, queryOne, run } = require('./db/database');
 
 // Make unread notification count and csrfToken available to all admin views
 app.use((req, res, next) => {
@@ -270,6 +270,29 @@ app.use(function(req, res, next) {
 
 console.log('Views path:', app.get('views'));
 console.log('__dirname:', __dirname);
+
+// HTTP-push sensor endpoint (2.5.0, PRTG-style): crons/backups heartbeat with
+// GET/POST /push/<token>. The token IS the secret (uuid); endpoint is public
+// (CSRF-exempt above) and only updates bookkeeping + flips a DOWN component
+// back to operational. Staleness (no push within the interval) is detected by
+// the probes worker, which then marks the component major_outage.
+app.all('/push/:token', async (req, res) => {
+  try {
+    const comp = await queryOne(
+      "SELECT id, status, override_status FROM components WHERE probe_push_token=$1 AND probe_type='push' AND probe_enabled=1",
+      [req.params.token]
+    );
+    if (!comp) return res.status(404).json({ error: 'Unknown push token' });
+    await run("UPDATE components SET probe_last_checked_at=NOW(), probe_last_ok=1, updated_at=NOW() WHERE id=$1", [comp.id]);
+    if (!comp.override_status && comp.status !== 'operational') {
+      await require('./db/models').components.updateStatus(comp.id, 'operational', null);
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[push] error:', e.message);
+    res.status(500).json({ error: 'push failed' });
+  }
+});
 
 // Public status page with analytics tracking
 app.get('/status/:slug', async (req, res) => {

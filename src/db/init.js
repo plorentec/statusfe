@@ -63,6 +63,8 @@ async function createTables() {
       probe_json_expected TEXT,
       probe_command TEXT,
       probe_output_pattern TEXT,
+      probe_push_token TEXT,
+      probe_last_ms INTEGER,
       position INTEGER DEFAULT 0,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -578,6 +580,8 @@ async function migrate() {
     'probe_json_expected TEXT',
     'probe_command TEXT',
     'probe_output_pattern TEXT',
+    'probe_push_token TEXT',
+    'probe_last_ms INTEGER',
   ]) {
     try { await run(`ALTER TABLE components ADD COLUMN IF NOT EXISTS ${col}`); } catch(e) { /* exists */ }
   }

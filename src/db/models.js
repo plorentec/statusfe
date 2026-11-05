@@ -518,7 +518,7 @@ module.exports.components = {
     return out;
   },
 
-  async create({ name, description, status, group_name, group_id, group_ids, position, external_id, parent_id, show_children, probe_url, probe_interval_seconds, probe_expected_status, probe_timeout_ms, probe_enabled, probe_type, probe_warn_days, probe_json_path, probe_json_comparison, probe_json_expected, probe_command, probe_output_pattern }) {
+  async create({ name, description, status, group_name, group_id, group_ids, position, external_id, parent_id, show_children, probe_url, probe_interval_seconds, probe_expected_status, probe_timeout_ms, probe_enabled, probe_type, probe_warn_days, probe_json_path, probe_json_comparison, probe_json_expected, probe_command, probe_output_pattern, probe_push_token }) {
     const id = uuidv4();
     // Parent validation: a dangling parent_id would silently make the child
     // "standalone" everywhere, so reject it up front (no FK by design).
@@ -531,25 +531,34 @@ module.exports.components = {
         throw err;
       }
     }
-    // Probe fields (2.3.0/2.4.0). Requirements per type:
+    // Probe fields (2.3.0/2.4.0/2.5.0). Requirements per type:
     //   http/json -> probe_url (http/https)
     //   cert      -> probe_url https URL or host[:port] (default port 443)
     //   json      -> probe_url + probe_json_path
     //   cmd       -> probe_command
+    //   tcp       -> probe_url host:port
+    //   dns/ping  -> probe_url hostname (expected IP for dns in probe_json_expected)
+    //   push      -> nothing; token minted on enable
     // LAN targets allowed on purpose (the point is monitoring internal services).
-    const PROBE_TYPES = ['http', 'cert', 'json', 'cmd'];
+    const PROBE_TYPES = ['http', 'cert', 'json', 'cmd', 'tcp', 'dns', 'ping', 'push'];
     const pType = PROBE_TYPES.includes(probe_type) ? probe_type : 'http';
     const pUrl = String(probe_url || '').trim();
     const hasUrl = /^https?:\/\//i.test(pUrl);
-    const certHost = pType === 'cert' && /^[\w.-]+(:\d+)?$/.test(pUrl); // host[:port] sin esquema
+    const certHost = pType === 'cert' && /^[\w.-]+(:\d+)?$/.test(pUrl);
+    const tcpHost = pType === 'tcp' && /^[\w.-]+:\d+$/.test(pUrl);
+    const bareHost = (pType === 'dns' || pType === 'ping') && /^[\w.-]+$/.test(pUrl);
     const hasProbe = (pType === 'cmd' && String(probe_command || '').trim())
       || (pType === 'json' && String(probe_json_path || '').trim() && hasUrl)
       || ((pType === 'http' || pType === 'json') && hasUrl)
-      || certHost;
+      || certHost || tcpHost || bareHost
+      || pType === 'push';
+    // Push sensor: token minted here (or kept if resubmitted). The token IS the
+    // secret of the public /push/<token> endpoint.
+    const pushToken = pType === 'push' ? (String(probe_push_token || '').trim() || uuidv4()) : null;
     await run(
-      'INSERT INTO components (id,name,description,status,group_name,group_id,external_id,position,parent_id,show_children,probe_url,probe_interval_seconds,probe_expected_status,probe_timeout_ms,probe_enabled,probe_type,probe_warn_days,probe_json_path,probe_json_comparison,probe_json_expected,probe_command,probe_output_pattern) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)',
+      'INSERT INTO components (id,name,description,status,group_name,group_id,external_id,position,parent_id,show_children,probe_url,probe_interval_seconds,probe_expected_status,probe_timeout_ms,probe_enabled,probe_type,probe_warn_days,probe_json_path,probe_json_comparison,probe_json_expected,probe_command,probe_output_pattern,probe_push_token) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)',
       [id, name, description||'', status||'operational', group_name||null, group_id||null, external_id||null, position||0, parentId, toBool01(show_children),
-       (pType === 'cmd' ? null : (pUrl || null)),
+       (pType === 'cmd' || pType === 'push' ? null : (pUrl || null)),
        Math.max(1, parseInt(probe_interval_seconds, 10) || 60),
        Math.min(599, Math.max(100, parseInt(probe_expected_status, 10) || 200)),
        Math.min(30000, Math.max(100, parseInt(probe_timeout_ms, 10) || 5000)),
@@ -558,9 +567,10 @@ module.exports.components = {
        Math.max(0, parseInt(probe_warn_days, 10) || 14),
        (pType === 'json') ? (String(probe_json_path || '').trim() || null) : null,
        (pType === 'json') ? (['eq','ne','contains','gt','lt','exists'].includes(probe_json_comparison) ? probe_json_comparison : 'eq') : 'eq',
-       (pType === 'json') ? (probe_json_expected != null ? String(probe_json_expected) : null) : null,
+       (pType === 'json' || pType === 'dns') ? (probe_json_expected != null ? String(probe_json_expected) : null) : null,
        (pType === 'cmd') ? (String(probe_command || '').trim() || null) : null,
-       (probe_output_pattern ? String(probe_output_pattern).trim() || null : null)]
+       (probe_output_pattern ? String(probe_output_pattern).trim() || null : null),
+       pushToken]
     );
     const gids = (group_ids && group_ids.length) ? group_ids : (group_id ? [group_id] : []);
     if (gids.length) await this.setGroups(id, gids);
@@ -602,7 +612,7 @@ module.exports.components = {
     if (!oldComp) return null;
     const fields = [];
     const params = [];
-    const allowed = ['name','description','status','group_name','group_id','position','external_id','override_status','parent_id','show_children','probe_url','probe_interval_seconds','probe_expected_status','probe_timeout_ms','probe_enabled','probe_type','probe_warn_days','probe_json_path','probe_json_comparison','probe_json_expected','probe_command','probe_output_pattern'];
+    const allowed = ['name','description','status','group_name','group_id','position','external_id','override_status','parent_id','show_children','probe_url','probe_interval_seconds','probe_expected_status','probe_timeout_ms','probe_enabled','probe_type','probe_warn_days','probe_json_path','probe_json_comparison','probe_json_expected','probe_command','probe_output_pattern','probe_push_token'];
     // Cycle guard BEFORE any write: a component may not be its own parent nor
     // a descendant of itself (same walk style as dependencies.wouldCreateCycle).
     if (data.parent_id !== undefined && data.parent_id !== null && data.parent_id !== '') {
@@ -654,10 +664,20 @@ module.exports.components = {
       const urlStr = String(urlRow || '').trim();
       const okTarget = t === 'cmd'
         ? !!String(cmdRow || '').trim()
-        : (/^https?:\/\//i.test(urlStr) || (t === 'cert' && /^[\w.-]+(:\d+)?$/.test(urlStr)));
+        : t === 'push' || (t === 'tcp' && /^[\w.-]+:\d+$/.test(urlStr))
+          || ((t === 'dns' || t === 'ping') && /^[\w.-]+$/.test(urlStr))
+          || /^https?:\/\//i.test(urlStr)
+          || (t === 'cert' && /^[\w.-]+(:\d+)?$/.test(urlStr));
       if (!okTarget) {
         const idx = fields.findIndex(f => f.startsWith('probe_enabled'));
         if (idx >= 0) { fields.splice(idx, 1); params.splice(idx, 1); }
+      } else if (t === 'push') {
+        // Mint the push token if this push sensor doesn't have one yet.
+        const hasTokenField = fields.some(f => f.startsWith('probe_push_token'));
+        const currentToken = data.probe_push_token !== undefined ? data.probe_push_token : oldComp.probe_push_token;
+        if (!hasTokenField && !currentToken) {
+          fields.push('probe_push_token=$' + (params.length + 1)); params.push(uuidv4());
+        }
       }
     }
     const newParentId = data.parent_id !== undefined
