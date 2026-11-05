@@ -26,6 +26,7 @@ All notable changes to StatusFe.
   ok/fallo en la lista; API acepta los campos en POST/PUT (write).
 
 ### Fixed
+- **MIGRATION GAP: `components.override_status` missing on upgraded installs** — the column shipped in 2.2.4 only in the CREATE TABLE, so databases created before it (like the production host) never received it: API-key pins and the whole composite ancestor recompute broke with `column "override_status" does not exist` on real PostgreSQL (fresh pg-mem harnesses never hit it). `migrate()` now adds it idempotently. Caught by the production end-to-end probe test.
 - **"Leave blank to keep current" era mentira** — guardar los ajustes de email
   sin reingresar la password SMTP la BORRABA (ahora se conserva).
 - El link muerto "Create an account" del login (el registro está cerrado desde

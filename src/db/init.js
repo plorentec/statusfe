@@ -545,6 +545,15 @@ async function migrate() {
   } catch(e) {
     // Column already exists or the wording differs — safe to proceed.
   }
+  // MIGRATION GAP FIX (2.3.0): override_status shipped in 2.2.4 but only in the
+  // CREATE TABLE — installs whose components table predates it (like the
+  // production host) never got the column, breaking the pin and the ancestor
+  // recompute on every real PostgreSQL instance upgraded from <= 2.2.3.
+  try {
+    await run(`ALTER TABLE components ADD COLUMN IF NOT EXISTS override_status TEXT`);
+  } catch(e) {
+    // Column already exists — safe to proceed.
+  }
 
   // Auto-probes (2.3.0): per-component HTTP monitoring columns.
   for (const col of [
