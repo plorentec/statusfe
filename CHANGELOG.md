@@ -9,6 +9,24 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [2.5.0] — 2026-11-05
+
+### Added
+- **Más sensores estilo PRTG** (sobre el motor de probes):
+  - `tcp` — conexión TCP a `host:port` (OK = conectar);
+  - `dns` — resolución IPv4 del hostname, con **IP esperada** opcional;
+  - `ping` — **ICMP vía binario del sistema** (la imagen lleva iputils-ping),
+    con latencia ICMP real parseada;
+  - `push` — **HTTP-push / heartbeats**: `POST|GET /push/<token>` público
+    (el token uuid es el secreto); ideal para crons y backups — sin push
+    dentro del intervalo el worker marca Major Outage, con push vuelve a
+    Operational;
+  - **keyword HTTP**: `probe_output_pattern` ahora también matchea el CUERPO
+    de los sensores http (200 con cuerpo incorrecto = caída).
+- **Latencia** (`probe_last_ms`) registrada en TODOS los sensores.
+- UI: condicionales por tipo + URL de push visible al editar; API acepta los
+  campos nuevos.
+
 ## [2.4.0] — 2026-11-05
 
 ### Added

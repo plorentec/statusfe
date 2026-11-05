@@ -71,8 +71,9 @@ empezada; están ordenadas por valor/esfuerzo. Última revisión: v2.2.7 (2026-1
 - Endpoint admin `GET /admin/pages/:id/export` + `POST /admin/pages/import`.
 
 ### 8. Más tipos de sensor (estilo PRTG avanzado)
-- Implementados en 2.4.0: http, cert (TLS), json, cmd (local/ssh). No
-  implementados: SNMP, WMI, ICMP ping, DNS checks, push agents.
+- Implementados: 2.4.0 (http, cert TLS, json, cmd local/ssh) y 2.5.0 (tcp,
+  dns, ping ICMP, http-push heartbeats, keyword HTTP, latencia). No
+  implementados: SNMP, WMI, checks DNS avanzados (TXT/MX), push agents.
 
 ### 9. CSP más estricta a futuro
 - Hoy lleva `'unsafe-inline'` en scripts/estilos (las vistas renderizan JS/CSS

@@ -190,12 +190,16 @@ Show child components on the public status page
 <option value="cert" <%= component.probe_type === 'cert' ? 'selected' : '' %>>TLS certificate expiry</option>
 <option value="json" <%= component.probe_type === 'json' ? 'selected' : '' %>>JSON API check</option>
 <option value="cmd" <%= component.probe_type === 'cmd' ? 'selected' : '' %>>Command on this server</option>
+<option value="tcp" <%= component.probe_type === 'tcp' ? 'selected' : '' %>>TCP port check</option>
+<option value="dns" <%= component.probe_type === 'dns' ? 'selected' : '' %>>DNS resolution</option>
+<option value="ping" <%= component.probe_type === 'ping' ? 'selected' : '' %>>ICMP ping</option>
+<option value="push" <%= component.probe_type === 'push' ? 'selected' : '' %>>HTTP push (heartbeats from crons)</option>
 </select>
 </div>
 <div class="form-group probe-field probe-field-url">
 <label for="probe_url">Probe URL / host</label>
 <input type="text" id="probe_url" name="probe_url" placeholder="https://service.internal/health" value="<%= component.probe_url || '' %>">
-<small class="text-muted">HTTP/HTTPS for http & json; for cert also host[:port] (default 443). Internal/LAN addresses are allowed — the URL is only probed by this server.</small>
+<small class="text-muted">http & json: URL. cert: URL or host[:port]. tcp: host:port. dns/ping: hostname. Internal/LAN allowed — probed only by this server.</small>
 </div>
 <div class="form-group probe-field probe-field-cert">
 <label for="probe_warn_days">Warn when expiring within (days)</label>
@@ -215,9 +219,10 @@ Show child components on the public status page
 <% }) %>
 </select>
 </div>
-<div class="form-group">
-<label for="probe_json_expected">Expected value</label>
+<div class="form-group probe-field probe-field-json probe-field-dns">
+<label for="probe_json_expected">Expected value<% if ((component.probe_type || '') === 'dns') { %> (DNS IP)<% } %></label>
 <input type="text" id="probe_json_expected" name="probe_json_expected" placeholder="ok" value="<%= component.probe_json_expected != null ? component.probe_json_expected : '' %>">
+<% if ((component.probe_type || '') === 'dns') { %><small class="text-muted">Optional: the resolved IPv4 must include this IP.</small><% } %>
 </div>
 </div>
 <div class="form-group probe-field probe-field-cmd">
@@ -228,6 +233,15 @@ Show child components on the public status page
 <div class="form-group probe-field probe-field-cmd probe-field-json">
 <label for="probe_output_pattern">Output must match (regex, optional)</label>
 <input type="text" id="probe_output_pattern" name="probe_output_pattern" placeholder="e.g. status.*green" value="<%= component.probe_output_pattern || '' %>">
+</div>
+<div class="form-group probe-field probe-field-push">
+<label>Push endpoint (heartbeat from your cron)</label>
+<% if (componentMode === 'edit' && component.probe_push_token) { %>
+<code id="push-url">/push/<%= component.probe_push_token %></code>
+<small class="text-muted">GET or POST to it (with your server's public URL) every &lt;interval. No push within the interval &rarr; Major Outage. The token is the secret: anyone holding it can report health.</small>
+<% } else { %>
+<small class="text-muted">The endpoint URL is generated when you save with the probe enabled.</small>
+<% } %>
 </div>
 <div class="form-row">
 <div class="form-group">
@@ -256,7 +270,7 @@ Probe enabled
 function sfToggleProbeFields() {
   var sel = document.getElementById('probe_type');
   var t = sel ? sel.value : 'http';
-  var map = { url: t !== 'cmd', cert: t === 'cert', json: t === 'json', cmd: t === 'cmd', http: t === 'http' };
+  var map = { url: ['http','cert','json','tcp','dns','ping'].includes(t), cert: t === 'cert', json: t === 'json', cmd: t === 'cmd', http: t === 'http', dns: t === 'dns', push: t === 'push' };
   document.querySelectorAll('.probe-field').forEach(function (el) {
     var kinds = Array.prototype.filter.call(el.classList, function (c) { return c !== 'probe-field' && c.indexOf('probe-field-') === 0; })
       .map(function (c) { return c.replace('probe-field-', ''); });

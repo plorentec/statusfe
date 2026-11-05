@@ -328,7 +328,8 @@ router.post('/components', requireAdmin, async (req, res) => {
       probe_json_comparison: req.body.probe_json_comparison,
       probe_json_expected: req.body.probe_json_expected,
       probe_command: req.body.probe_command,
-      probe_output_pattern: req.body.probe_output_pattern
+      probe_output_pattern: req.body.probe_output_pattern,
+      probe_push_token: req.body.probe_push_token
     });
   } catch (e) {
     // Cycle guard / missing parent raised by the model — no partial create.
@@ -446,7 +447,8 @@ router.put('/components/:id', requireAdmin, async (req, res) => {
       probe_json_comparison: req.body.probe_json_comparison,
       probe_json_expected: req.body.probe_json_expected,
       probe_command: req.body.probe_command,
-      probe_output_pattern: req.body.probe_output_pattern
+      probe_output_pattern: req.body.probe_output_pattern,
+      probe_push_token: req.body.probe_push_token
     });
   } catch (e) {
     // Cycle guard / missing parent raised by the model — nothing was written.
