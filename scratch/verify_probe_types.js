@@ -181,7 +181,10 @@ const httpMock = http.createServer((rq, rs) => {
 
   // ===== cuerpo grande (>256KB) no rompe el sensor http ni el keyword =====
   const NEEDLE = 'NEEDLE';
-  const big = http.createServer((rq, rs) => { rs.writeHead(200); rs.end('x'.repeat(300 * 1024) + NEEDLE + 'x'.repeat(1024)); });
+  // Needle DENTRO del tope de 256KB: el corte por chunks depende del socket
+  // (en CI llegan chunks más chicos y un needle tras 300KB salía del tramo
+  // conservado — test no determinista, arreglado).
+  const big = http.createServer((rq, rs) => { rs.writeHead(200); rs.end('x'.repeat(200 * 1024) + NEEDLE + 'x'.repeat(100 * 1024)); });
   await new Promise(r => big.listen(3993, r));
   const bigOk = await components.create({ name: 'big-body', group_ids: [grp.id], probe_type: 'http', probe_url: 'http://127.0.0.1:3993/', probe_output_pattern: NEEDLE, probe_enabled: 1, probe_interval_seconds: 1 });
   check('BIG BODY: 200 con 300KB y keyword en el tope -> operational (truncado, no fallo)',

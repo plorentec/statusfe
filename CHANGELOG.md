@@ -1,0 +1,346 @@
+# Changelog
+
+All notable changes to StatusFe.
+
+## [Unreleased]
+
+### Added
+- **Self-update button** (`/admin/changelog`) — one-click update to the latest GitHub release. The app writes a trigger file (`data/update_request.json`); a host-side systemd agent (`/usr/local/bin/statusfe-self-update`) reads it, checks out the tag, rebuilds, and health-checks with automatic rollback on failure. The UI polls for phases, handles `no_agent`, `failed`, and `rolled_back` states gracefully.
+- **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
+- **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
+
+## [2.6.0] — 2026-11-05 (revisión adversarial post-release)
+
+### Security
+- **RCE vía API keys de escritura** — `POST/PUT /api/v1/components` aceptaba
+  `probe_command` (sensor `cmd`) con permiso `write`: el worker ejecuta ese
+  comando en el servidor, así que una key de escritura escalaba a ejecución de
+  código como el usuario del proceso. Configurar sensores `cmd` exige ahora
+  permiso `admin` en la API (el panel ya lo exigía con `requireAdmin`).
+- **Inyección de atributo en el tooltip de las barras** — los valores de estado
+  custom se interpolaban crudos en `title="..."`; van escapados.
+
+### Fixed
+- **Sensor http contra páginas grandes (>256 KB)** — el worker destruía la
+  conexión al superar el tope del cuerpo y marcaba caída un servicio sano
+  respondiendo 200. Ahora trunca el cuerpo y el keyword check funciona sobre
+  lo recolectado.
+
+### Tests
+- +5 checks: guard RCE (POST/PUT con key write → 403, comando no persiste,
+  admin → 201) y big-body con keyword.
+
+## [2.6.0] — 2026-11-05
+
+### Added
+- **Barras de uptime de 90 días** en la página pública (estilo Atlassian):
+  una celda por día coloreada por la PEOR severidad de ese día, tooltip con
+  fecha + estado, % de uptime — en las 3 plantillas. UNA query agregada por
+  página (sin N+1).
+- **Carry-forward de caídas**: una caída abierta persiste en los días
+  siguientes hasta su transición de recuperación (no hay días verdes dentro
+  de una caída en curso).
+- **Página de detalle por componente** (`/status/:slug/components/:id`):
+  barra 90d, %, últimas 20 transiciones, incidentes activos, último check de
+  probe (OK/latencia). 404 si la página no es pública o el componente no
+  pertenece a ella. Los nombres de la página pública enlazan al detalle.
+- **API pública** `GET /api/v1/status/:slug/uptime` (JSON con las barras).
+
+### Fixed
+- El agrupado de componentes de las 3 plantillas públicas perdía el `id` del
+  componente (los objetos agrupados no lo arrastraban) — los enlaces al
+  detalle no podían funcionar.
+
+## [2.5.0] — 2026-11-05
+
+### Added
+- **Más sensores estilo PRTG** (sobre el motor de probes):
+  - `tcp` — conexión TCP a `host:port` (OK = conectar);
+  - `dns` — resolución IPv4 del hostname, con **IP esperada** opcional;
+  - `ping` — **ICMP vía binario del sistema** (la imagen lleva iputils-ping),
+    con latencia ICMP real parseada;
+  - `push` — **HTTP-push / heartbeats**: `POST|GET /push/<token>` público
+    (el token uuid es el secreto); ideal para crons y backups — sin push
+    dentro del intervalo el worker marca Major Outage, con push vuelve a
+    Operational;
+  - **keyword HTTP**: `probe_output_pattern` ahora también matchea el CUERPO
+    de los sensores http (200 con cuerpo incorrecto = caída).
+- **Latencia** (`probe_last_ms`) registrada en TODOS los sensores.
+- UI: condicionales por tipo + URL de push visible al editar; API acepta los
+  campos nuevos.
+
+## [2.4.0] — 2026-11-05
+
+### Added
+- **Probe sensors: de ping HTTP a mini-PRTG** — `probe_type` con 4 tipos:
+  - `http` (el de 2.3.0: código esperado);
+  - `cert` — **expiración de certificados TLS** (host o URL; días restantes vs
+    `probe_warn_days`: expirando pronto → Degraded Performance, expirado o
+    handshake fallido → Major Outage; self-signed incluidos, sin validar cadena);
+  - `json` — **aserciones sobre APIs JSON** (`probe_json_path` tipo
+    `items[0].healthy` + comparador eq/ne/contains/gt/lt/exists contra
+    `probe_json_expected`);
+  - `cmd` — **comandos en el servidor** (`probe_command`, OK = exit 0 y regex
+    opcional sobre la salida; timeout 1-60 s, salida máx 1 MB; corre como el
+    usuario del proceso, dentro del contenedor en Docker — la imagen lleva
+    openssh-client para poder hacer `ssh` a otros equipos si hay llaves
+    montadas).
+- UI: select de tipo con campos condicionales; API acepta los campos nuevos.
+
+### Security notes
+- Los sensores `cmd` ejecutan comandos configurados SOLO por admins en el host
+  del StatusFe (mismo modelo de confianza que los sensores locales de PRTG).
+- Los targets LAN/privados siguen permitidos a propósito para http/cert/json.
+
+## [2.3.0] — 2026-11-05
+
+### Added
+- **Auto-probes: StatusFe hace los pings** — cada componente puede llevar un
+  probe HTTP (`probe_url`, intervalo, código esperado, timeout, enabled). Un
+  worker interno (`src/utils/probes.js`, tick cada `PROBE_TICK_SECONDS`, 20 s
+  por defecto) sondea los vencidos: código esperado → `operational`; otro
+  código/timeout/error → `major_outage`. El resultado pasa por
+  `components.updateStatus` (historial + cascada a dependencias + agregación de
+  padres) y queda registro `probe_last_checked_at`/`probe_last_ok`. NO se
+  sondean componentes pineados (`override_status`) ni padres con hijos (su
+  estado es el agregado). Objetivos LAN/privados PERMITIDOS a propósito (el
+  caso de uso principal es monitorear servicios internos).
+- **UI admin**: campos de probe en el form de componente e indicador ●
+  ok/fallo en la lista; API acepta los campos en POST/PUT (write).
+
+### Fixed
+- **MIGRATION GAP: `components.override_status` missing on upgraded installs** — the column shipped in 2.2.4 only in the CREATE TABLE, so databases created before it (like the production host) never received it: API-key pins and the whole composite ancestor recompute broke with `column "override_status" does not exist` on real PostgreSQL (fresh pg-mem harnesses never hit it). `migrate()` now adds it idempotently. Caught by the production end-to-end probe test.
+- **"Leave blank to keep current" era mentira** — guardar los ajustes de email
+  sin reingresar la password SMTP la BORRABA (ahora se conserva).
+- El link muerto "Create an account" del login (el registro está cerrado desde
+  2.2.1) — eliminado.
+- `logo_url` de página era solo-API: ahora tiene campo en el form de páginas
+  (POST/PUT del admin lo pasan).
+
+## [2.2.7] — 2026-11-05
+
+### Security
+- **SMTP password encrypted at rest** — the `smtp_pass` setting sat in PLAINTEXT. Now AES-256-GCM (`enc:v1:` prefix, key derived from SESSION_SECRET); `migrate()` re-encrypts legacy plaintext rows on boot; reads accept both formats (a rotated SESSION_SECRET yields null — re-enter the password).
+- **`api_keys.rate_limit` is now enforced** — the column existed since the beginning but no middleware ever applied it (dead field). Sliding window in memory per key id across all client IPs; exceeding returns 429 + `Retry-After` (default 100/min). Also enforced on public auth-aware routes (`optionalAuthMw`).
+- **Nightly database backups** — `scripts/backup-db.sh` (gzip dump + `gzip -t` integrity check, 7-day retention), installed on the production host with cron at 03:17.
+
+### Changed / improved
+- `?group=` on `GET /api/v1/components` (and the admin list) accepts a group **ID** as well as its name.
+- **CI**: GitHub Actions workflow runs every `scratch/verify_*.js` harness on push/PR.
+- `docker-compose.yml`: healthcheck for the `statusfe` service (node fetch — no curl in node:20-slim); the redundant `postgres` service removed (permanent crash loop — port 5432 owned by the host-native PostgreSQL; `postgres-data` volume kept).
+- `ROADMAP.md` refreshed (2.2.6/2.2.7 items marked done, backlog re-prioritized).
+
+## [2.2.6] — 2026-11-05
+
+### Fixed
+- **`/admin/check-update` never reported real updates** — the inline version comparison was inverted (`hasUpdate` was only true when the CURRENT version was newer than the latest release). Comparison extracted to `src/utils/version.js` (`isNewerVersion`) and the direction fixed.
+- **Finished maintenance windows stayed on the public page forever** — `maintenance.updateStatuses()` existed but was never called (status stuck at `'ongoing'`), and `getUpcomingForPage` did not filter `ends_at`. Now it filters `ends_at > now`, and statuses transition on boot and in the daily cron.
+- **Maintenance windows created via the REST API never appeared publicly** — the model created no `maintenance_notice_pages` row unless the caller passed `notice_page_ids` (only the admin form did). The model now defaults to the window's own page.
+- **Maintenance status computed in local time** — `new Date('YYYY-MM-DD HH:MM:SS')` parses as LOCAL time but stored stamps are UTC; on a non-UTC server a window ending in 50 minutes was classified `completed` at creation. Parsing now pins `Z` (`parseUtcStamp`).
+- **Custom incident statuses were silently dropped** — the config UI lets admins create incident statuses, but the model only accepted the 4 fixed lifecycle ones. `incidents.validStatuses()` now unions the `incident_statuses` table; the `'same'` cascade only writes statuses that are valid COMPONENT statuses (`validComponentStatuses()`), so a custom status can never corrupt a public page (the original 2.2.4 concern).
+- **API keys scoped to a page could act on any page** — the `page_id` scope was only honored on webhooks. A scoped key can now only touch its own page (pages, components assigned to it, incidents, maintenance, webhooks); it cannot create pages, mutate groups/dependencies, and key minting is forced to its own page.
+- **`role=user` could create/edit/delete all content** — pages, components (incl. bulk delete), incidents, groups and maintenance mutations had no `requireAdmin` gate. 16 routes gated; `role=user` keeps read access to the dashboard/lists.
+- **`PUT/POST /api/v1/pages` accepted invalid slugs** — slug regex (`^[a-z0-9-]+$`) enforced at the API too (400).
+- **Self-update accepted downgrades** — `requestUpdate` now rejects `latest <= current` (400) instead of queueing an older release.
+- **`incidents.visible="false"` counted as visible** — normalized through `toBool01`.
+- **Redirect flash codes without text** — `invalid_reset`, `password_set`, `status_updated`, `invalid_status`, `last_admin`, `self_dep`, `cycle`, `exists`, `dep_deleted`, `system`, `invalid_retention` now have readable messages; deleting a dependency no longer shows "Component deleted successfully.".
+- **Dashboard `pageStatuses` correlated subquery** — rewritten as `DISTINCT ON` + `LEFT JOIN` (portable to pg-mem per the documented limitation, same result on real PostgreSQL).
+
+### Changed / improved
+- **`getForPage` dependency resolution batched** — was 2 queries per component (N+1); now 2 batched `IN` queries total (pg-mem portable).
+- **CSP enabled** — explicit `Content-Security-Policy` (inline scripts/styles kept, Chart.js CDN allowed); `frame-ancestors 'self'` everywhere except `/embed/:slug` (`*`, so the widget is iframeable again — helmet's default `X-Frame-Options: SAMEORIGIN` silently blocked external embeds).
+- **Session/flash/CSRF/2FA cookies carry `secure:'auto'`** (Secure over HTTPS, honors `X-Forwarded-Proto`); the raw `session_id` Set-Cookie adds `Secure` when `req.secure`.
+- **TOTP replay guard** — `verifyDetailed()` rejects codes from already-accepted timesteps; the accepted counter is stored in the session.
+- Dead code removed: unused signed `_2fa_verified` cookie, debug `console.log` in the docs route, duplicate `"pg"` entry in package.json.
+
+## [2.2.4] — 2026-09-22
+
+### Fixed (crashes / availability)
+- **DoS via a malformed session cookie** — `decodeURIComponent` was called without a guard on the raw `session_id`/`_flash_key`/logout cookies. A value like `%zz` threw a `URIError`; because the session middleware is `async`, Express 4 didn't catch it and the whole process crashed on `unhandledRejection`. Decoding is now guarded (malformed → anonymous). A `process.on('unhandledRejection')` logger was added as a safety net so a single rejected promise can never take the status page down.
+- **`POST /api/v1/incidents` and `PUT /api/v1/components/:id` crashed on missing/unknown resources** — `incidents.create` can return `null` (no page resolvable) and `components.update` dereferenced a missing component. Both now return `400`/`404` instead of a `TypeError`.
+- **CSRF check on unparsed bodies returned 500** — `req.body._csrf` was read unguarded, so requests with e.g. `Content-Type: text/plain` threw a `TypeError` instead of a clean `403`.
+- **2FA redirect loop** — `require2FA` skipped `/admin/2fa/verify` using an absolute path, but `req.path` is relative to the mount (`/2fa/verify`), so the skip never matched. Admins with 2FA enabled but an unverified session were bounced to `/admin/2fa/verify` forever and could not verify or log out. Paths are now relative.
+- **Notification inserts are fire-and-forget again** — the un-awaited `notifications.create` calls in the API now attach `.catch()`, so a failed insert can't reject the request.
+
+### Security
+- **Privilege escalation via admin write routes** — `require2FA` intentionally lets `role=user` into `/admin`, but `POST /admin/api-keys`, key revoke/reactivate/delete, `DELETE /admin/users/:id`, `POST /admin/email-settings` and every mutating route in `admin-extra.js` (analytics, dependencies, customize, config statuses/mappings) had no role check. A `role=user` could mint itself an `admin` API key and self-promote via `PUT /api/v1/users/:id`. All are now admin-only (new `requireAdmin` middleware).
+- **Private pages leaked through the public API** — `GET /api/v1/pages?external_id=` returned private pages (including custom CSS/HTML) without auth. Private pages are now only visible to a valid API key.
+- **Dead API routes un-shadowed** — the public `/pages` and `/pages/:slug` handlers matched before the authenticated `/pages/admin` and `/pages/:id` registrations, so authenticated clients could never list all pages or fetch a private page. The public handlers are now auth-aware (a valid key unlocks private pages / the full listing).
+- **Webhook secrets exposed to read-only keys** — `GET /api/v1/pages/:pageId/webhooks` had no permission check and returned each webhook's HMAC `secret`, ignoring page scope. It now requires `read`, enforces the key's page scope, and only returns secrets to `admin` keys.
+- **Webhook SSRF via DNS rebinding** — the hostname was resolved for validation and then resolved again for the request. Delivery now connects to the validated IP (with the original `Host`/SNI) and additionally rejects CGNAT/benchmarking/multicast ranges.
+- **Webhook timeout actually aborts** — `req.setTimeout()` only emitted an event, so a non-responding endpoint hung the promise (and the API request awaiting it) forever. The socket is now destroyed after 5 s.
+- **Sessions invalidated on user delete / role change** — live sessions cached the old role and survived account deletion for up to 24 h.
+
+### Fixed (data integrity)
+- **`statusMappings.update` corrupted/none the wrong row** — placeholders collided (`SET component_status=$1 WHERE incident_status=$1 AND component_status=$2`), so the target row was matched with the wrong values. Numbering is now explicit.
+- **Uptime was always wrong** — `DATE()` columns come back from `pg` as `Date` objects while the lookups used `'YYYY-MM-DD'` strings, so page uptime was always `0.00%` and component uptime always `100.00%`; the analytics charts were always zero. Queries now return `TO_CHAR(..., 'YYYY-MM-DD')` and the chart labels use matching keys.
+- **Legacy "global group" backfill ran on every boot** — it silently re-globalized any non-global group with no page bindings (including one just removed from its page). It now runs once (settings marker).
+- **`override_status` could never be cleared** — the quick status change pinned it and `getForPage` gave it absolute priority, so the component showed that status forever. A normal status change (API/incident/cascade) now clears it, and `components.update` accepts the field.
+- **Deleting a group left orphan `group_name`** — components kept the deleted group's name (shown as a phantom section and matched by group filters). Both group delete and clearing memberships now null it.
+- **`PUT /api/v1/components/:id` with the same `group_id` wiped other memberships** — the legacy field is now only synced when the primary group actually changes.
+- **Incident status was unvalidated** — with the default `cascade_status='same'`, an arbitrary string was copied straight into `components.status`. Only the four lifecycle statuses are accepted now (unknown → `investigating`, with a `400` at the API edge).
+- **`notice_page_ids` sent as a comma string was iterated character by character** via the API, generating FK-violating inserts. It is normalized to an id list.
+
+### Fixed (performance / responsiveness)
+- **API status updates no longer block the web/panel while webhooks deliver** — `PUT /api/v1/components/:id/status` (and the other API routes) awaited webhook delivery before responding: an unbounded `dns.lookup` (libuv threadpool, 4 threads) plus up-to-5s POSTs per webhook could starve `compression()` for *every* request and freeze the whole web app for 5–20 s. Webhook dispatch is now detached from the request (fire-and-forget everywhere), DNS resolution is bounded to 2 s and **fails closed** (a webhook whose host cannot be resolved in time is skipped, never POSTed to an unvalidated address).
+- **Webhooks now respect their configured `events`** — the `events` column was stored but never honored, so every webhook received every event. Delivery is now filtered via `shouldDeliver()` (empty/unset/invalid `events` = all events, backward compatible).
+- **Status-change emails send in parallel with SMTP timeouts** — the per-admin `email_notifications` gating (2.2.4) now filters before sending, remaining sends run in parallel, and the SMTP transport has connection/greeting/socket timeouts (5 s / 5 s / 10 s) so a dead mail host can't hold senders open.
+- **New indexes on `status_history`** — composite `(component_id, created_at DESC)` and `(page_id, created_at DESC)` keep status-page renders fast as the history table grows.
+
+### Fixed (functional / UI)
+- **Custom CSS/HTML were silently discarded by the page form** — the admin handlers never read `custom_css`/`custom_html` from the body (only the REST API persisted them).
+- **SMTP "Use SSL/TLS" never worked** — the checkbox stored `'1'` but `email.js` compared against `'true'`, so implicit TLS was always off and the checkbox never re-checked. Values are normalized on save and accepted in both forms.
+- **Group form couldn't uncheck "Global" or clear all members** — an unchecked checkbox is simply absent; the handlers now treat absence as `0` / empty list.
+- **`email_notifications=0` was ignored** — admins who disabled email notifications still received every message.
+- **Line breaks rendered as literal `<br>`** — `message.replace(/\n/g,'<br>')` ran inside `<%= %>` and got escaped. A new `nl2br` helper escapes first, then inserts the breaks.
+- **Dark theme never applied on ~20 pages** — `document.body.classList.add('dark')` ran in `<head>` (body was still `null`); it now waits for `DOMContentLoaded`.
+- **Colored status dots invisible in the default template** — the CSS expected `.component-dot.operational` but the markup emits `.dot-operational`; aliases added.
+- Smaller fixes: logout link on `/admin/2fa/verify` was a GET to a POST-only route, `key_perms` was rendered unescaped, the retention select double-submitted, the page-form inline script crashed in list mode, the advance-notice buttons had a duplicate `class` attribute, `is_public: "0"` was treated as truthy on create, and invalid user roles are rejected.
+
+## [2.2.3] — 2026-09-09
+
+### Fixed
+- **Removing a group from a page no longer re-adds it** — "global" was inferred from "no rows in `group_pages`", so removing a group from its only page left it with no rows and it silently became global (showed on every page). Groups are now explicitly global via an `is_global` column: `is_global=1` shows everywhere, `is_global=0` only on its assigned pages. Unchecking a group in the page form keeps it off that page. The page form lists only non-global groups, and a boot-time migration backfills existing page-less groups as global so nothing changes for existing data.
+
+### Security
+- **API keys are no longer stored in plaintext** — the `key` column was kept readable so `/admin/docs` could auto-inject a key into the curl examples. A DB read (dump, backup, SQLi, etc.) exposed every key. Keys are now persisted only as a bcrypt `key_hash` + `key_prefix`; the plaintext is returned once at creation (via the one-shot flash) and never stored. `getFull()` no longer exposes a key, and `/admin/docs` now relies on a pasted key instead of a stored one (the copy-curl convenience is unchanged). A boot-time migration NULLs any previously stored plaintext.
+- **Private status pages no longer leak via the public API** — `GET /api/v1/pages/:slug` omitted the `is_public` check and returned another page's components/incidents. It now returns `404` like the list and `/status/:slug` endpoints.
+- **Audit log CSV export neutralizes spreadsheet formula injection** — cells are encoded via `csvCell()` (OWASP): values starting with `=`, `+`, `-`, `@`, tab or CR are prefixed so they can't execute as formulas in Excel/Sheets. Applied to `/admin/audit/download` and the daily audit rotation.
+- **Embed widget escapes user-controlled values** — `/embed/:slug` interpolated `page.name`, slug and status into the reflected HTML without escaping (reflected XSS surface). Values are now HTML-escaped.
+
+### Added
+- **Dependency model supports many dependents on one shared hub** — the schema already allowed it, but the UI now makes it explicit: `/admin/dependencies` groups dependents under the component they rely on, and the form is labelled around a shared hub. Status changes now cascade **transitively** (`A→B→C`) instead of stopping at direct dependents, and a real **circular-dependency check** rejects cycles on create (admin + API). A component can now be declared as depending on a shared hub (e.g. DB, Cache, Auth all depend on Database).
+
+### Fixed
+- **Admin analytics page map was always empty** — the page→components query used the page id as `component_id`. It now queries `status_history` for the page's actual components (with the correct day placeholder offset).
+- **Welcome email was dead** — `sendWelcomeEmail` called `getTransporter()` without SMTP settings, throwing on `smtp.host`. It now loads SMTP via `settings.getSMTP()`.
+- **Malformed API key `permissions` could cause a 500** — `JSON.parse` in `authenticate`/`list`/`getFull` now falls back to a safe default instead of throwing.
+
+## [2.2.2] — 2026-09-03
+
+### Fixed
+- **"CSRF token missing" when adding/editing statuses** — the Component/Incident Statuses config page (`/admin/config/*-statuses`) rendered its forms without the `_csrf` field (the partial was included but nothing injected the token into the forms), so every save returned `403 CSRF token missing`. The injection script is now present; covered by e2e (POST without token → 403, with token → 302 success).
+- **Assigned groups were not pre-checked when editing a page** — `GET /admin/pages/:id/edit` passed `componentGroups.getPageIds(page.id)` (queries `group_pages WHERE group_id=$1` with the PAGE id → always empty). Now uses the new `getGroupIdsForPage(pageId)` (`WHERE page_id=$1`), so saved groups show as checked. Covered by e2e.
+
+### Added
+- **A component can belong to MULTIPLE groups** — new `component_group_members` join table (many-to-many, auto-backfilled from the legacy `components.group_id` on boot). The component form now has group CHECKBOXES (multi-select) plus the existing "New Group" field; the list shows all group names. On status pages a multi-group component appears under EACH displayed group it belongs to (a page showing 2 of its groups renders it in both sections; a page showing only one renders it once). API: `group_ids` (array or comma-joined string) on component create/update, `GET /api/v1/components?group=` now matches any of the component's groups, and group member counts use the join table. Backwards compatible: `group_id`/`group_name` remain as the primary group.
+- **Group members managed from the group form** — group create/edit now includes a searchable member picker (`member_component_ids`): check components to put them in the group (e.g. two routers → "RED CASA"), uncheck to remove them. `componentGroups.setMembers/getMembers`; removing a member keeps its other groups and re-points its primary group; a member with no groups gets this group as primary. Also on the REST API (`POST/PUT /api/v1/groups`), and `page_ids` now accepts comma-joined strings everywhere.
+- **Searchable long lists** — the Components and Groups checkbox lists on the page form, group checkboxes on the component form and the member picker all have a type-to-filter box (`sfBindFilter` in admin.js + `.filter-input` styles; lists are now scrollable with `.component-checkboxes`). No external dependencies.
+- **Group aggregated status on status pages** — every group header (default/grid/dark templates) now shows a badge with the WORST status of its components: if one member of "RED CASA" goes down, the group header goes down with it. Statuses outside the standard 5 rank as degraded.
+
+## [2.2.1] — 2026-09-03
+
+### Security
+- **API Docs page is admin-only** — `/admin/docs` displayed every API key in full plaintext to ANY logged-in user (including `role=user`). Non-admin users are now redirected; full keys are only loaded for admins.
+- **Malformed session cookies no longer cause 500s** — `verifySignedCookie` guards buffer lengths before `timingSafeEqual` (it threw on length mismatch). A garbage cookie now degrades to "anonymous" on every request.
+- **CSRF check no longer causes 500s** — the token/cookie comparison now runs on fixed-length SHA-256 digests, so wrong-length tokens get a clean `403` instead of an uncaught exception.
+- **2FA rate limits** — `/auth/2fa` and `/auth/set-password` now use the auth rate limiter (10 attempts / 15 min), preventing TOTP brute force.
+- **2FA login token lifetime reduced** — the `_2fa_token` cookie went from 5 hours to 10 minutes; stale temp 2FA sessions are cleaned hourly.
+- **SSRF hardening on webhooks** — webhook targets are DNS-resolved at delivery time and skipped if they resolve to private/loopback/link-local addresses (hostname validation at creation time alone was bypassable).
+- **Login anti-enumeration** — a bcrypt compare runs even for unknown emails, so failed logins for existing/missing users take a similar time.
+
+### Fixed
+- **Flash messages actually display now** — `res.flash(msg, type)` wrote a session row nothing ever read. The session middleware now loads and deletes the row on the next request and injects `message`/`messageType` (plus extras) into locals.
+- **API key creation no longer leaks the key via URL** — the one-time key display moved from query params (browser history + Apache logs) to the server-side flash; the key is shown once on `/admin/api-keys` and gone on reload.
+- **Cross-request data leak in layout** — `layout()` cached `res.locals` in a module-level object shared by all concurrent requests. It now always renders from the current request's `res.locals`.
+- **SMTP settings changes apply without restart** — the nodemailer transporter is cached per settings fingerprint (host/port/user/pass/secure) and rebuilt when settings change.
+- **Dead /register page removed** — the page rendered a form with no `POST /register` handler behind it (submitting = 404). `/register` now redirects to `/login`.
+- **Duplicate 2FA setup removed** — `/auth/2fa/setup` was a second, divergent implementation of `/admin/2fa/setup` (missing secret normalization + audit log). The old path redirects.
+
+### Performance
+- **API key authentication is prefix-indexed** — lookup by 8-char key prefix instead of bcrypt-comparing every active key per request; `last_used_at` is written at most once per minute per key.
+
+## [2.2.0] — 2026-09-02 (publicado: https://github.com/plorentec/statusfe/releases/tag/v2.2.0)
+
+### Added
+- **Create groups from the component form** — New "New Group" field: type a name and the group is created (or reused, case-insensitive) and linked to the component. Also available via API (`new_group_name` on component create/update).
+- **Groups with components on pages** — Page create/edit forms now have a "Groups shown on this page" selector. All components of the selected groups appear automatically on the public page (union with individually assigned components), ordered by group position. Groups with no pages assigned remain global (shown on every page).
+- **Global theme applied** — The Customize page values (colors, font, radius, logo text/color) now actually style all public status pages via CSS variables (`--bg`, `--text`, `--radius`, `--sf-primary`, `--sf-secondary`) and the logo partial.
+
+### Fixed
+- **Custom CSS/HTML not working** — `custom_css` and `custom_html` were injected HTML-escaped: CSS with quotes broke (`&quot;`) and custom HTML rendered as plain text. Both are now injected raw after sanitization (new `src/utils/sanitize.js`: strips `</style`/HTML comments from CSS, escapes `</textarea` in HTML). Same for full custom layout CSS/HTML.
+- **Customize page saved nothing** — Form inputs were outside the `<form>` tag; saving overwrote settings with literal `"undefined"` strings. Fields are now inside the form; stored `"undefined"` garbage values are ignored.
+- **Version check** — Update checker compared against hardcoded `2.0.1`; now uses `package.json` version. Public page footers show the real version too.
+- **Audit cleanup button** — Route was defined at `/admin/admin/audit/cleanup` (double prefix) so the button 404'd; fixed and the fetch now sends the CSRF header.
+- **Dashboard/Analytics DB size** — Still read the old SQLite file (`data/statusfe.db`) and always showed 0; now uses PostgreSQL `pg_database_size()`.
+- **Empty group saved as empty string** — Clearing the group on a component now stores `NULL` instead of `''`.
+- **Truncated label** — "Custom HTML (injected before" label on the page form is complete now.
+- **Schema default** — `pages.refresh_interval` DB default is now 15, matching documented behavior.
+
+### Changed
+- Status page/API component queries unified in `components.getForPage(pageId)` — public page, `/api/v1/status/:slug`, `/api/v1/pages/:slug` and the embed widget now share the same component set and status resolution (override, cascade, group-derived components).
+
+## [2.1.0] — 2026-08-19
+
+### Added
+- **External ID mapping** — `external_id` field on both Components and Pages for linking with external monitoring systems (PRTG, Nagios, etc.).
+- **API lookup by external_id** — Endpoints support filtering by `?external_id=XXX` query parameter: `GET /api/v1/components?external_id=ID` and `GET /api/v1/pages?external_id=ID`.
+- **Admin UI** — External ID column in Pages and Components list tables. Input fields in create/edit forms.
+
+### Updated
+- **Database schema** — Added `external_id TEXT` column to `components` and `pages` tables.
+- **Models** — Added `getByExternalId()` method to both components and pages modules.
+
+## [2.0.1] — 2026-06-25
+
+### Fixed
+- **Template grid** — Restored light theme (was incorrectly dark). Grid template now uses light colors consistent with default template.
+- **Status colors** — Fixed missing colors in dark template (`.dot` class missing `width`/`height`/`border-radius` making dots invisible).
+- **Template CSS loading** — Public status pages now load the correct CSS file per template (`template-grid.css` for grid, `template-dark.css` for dark).
+- **Auto-refresh** — Enforced minimum 15 second refresh interval everywhere (form, backend, template, DB default). Removed "Disabled" option.
+- **Version check** — Fixed update checker to strip 'v' prefix from GitHub release tags before comparing versions.
+- **Docker Compose** — Switched to `network_mode: host` for both services to avoid DNS issues in corporate networks. Added `network: host` to build context.
+
+## [2.0.0] — 2026-05-31
+
+### Added
+- **Two-Factor Authentication (TOTP)** — Mandatory for admin/write roles, optional for users. Setup via authenticator apps (Google Authenticator, Authy, etc.) with QR code.
+- **Audit Log** — Complete log of all admin actions with CSV export. Daily rotation to dated files. Configurable retention period.
+- **Multi-page Component Groups** — Groups can be assigned to multiple pages simultaneously via `group_pages` many-to-many table.
+- **Changelog Page** — `/admin/changelog` with version history and release notes.
+- **Update Checker** — `/admin/check-update` endpoint queries GitHub API to detect new versions.
+- **PostgreSQL Session Store** — Sessions persisted to PostgreSQL instead of in-memory. Survives restarts.
+- **Self-signed SSL** — Auto-generated HTTPS certificates with `HTTPS=true` environment variable.
+- **Auto Session Secret** — Random session secret generated on first run, persisted in `data/session_secret.txt`.
+- **Rate Limiting** — Login/register (10/15min), API (60/min), Admin (60/min).
+
+### Security
+- CSRF protection on all admin forms with auto-inject JS.
+- XSS sanitization in custom CSS/HTML/logo rendering.
+- API key expiration enforcement (`expires_at` check on every authentication).
+- Webhook URL validation (SSRF protection) — blocks localhost, private IPs, IP addresses.
+- Admin-only guards on user creation and component status changes.
+- CORS restricted to status pages and API only.
+- API keys hashed with bcrypt cost factor 10.
+
+### Technical
+- PostgreSQL database with node-postgres (`pg`) pool.
+- API key auth optimized with hash prefix indexing for faster lookups.
+- All admin views include CSRF tokens via auto-inject in master layout.
+- Daily analytics and audit log cleanup cron.
+- Custom TOTP implementation (HMAC-SHA1) avoids base32 encoding issues.
+
+### Changed
+- Component groups now support multiple pages instead of single page assignment.
+- Session store migrated from in-memory to PostgreSQL.
+- Database migrated from SQLite to PostgreSQL.
+
+### Fixed
+- API key authentication broken (bcrypt cost factor 1 → 10).
+- User creation INSERT had mismatched column/value count.
+- Logo img tags had doubled quotes causing broken HTML.
+- Components edit view missing `pages` variable.
+- 2FA verify form missing CSRF token.
+- Email settings redirect went to wrong page.
+- `require2FA` middleware crashed on unauthenticated requests.
+- Check-update route path mismatch.
+
+## [1.0.0] — Initial Release
+- Status page system with multiple templates
+- Component management with status tracking
+- Incident reporting
+- Maintenance windows
+- API with key-based authentication
+- Embed widget
+- Dark/light mode
+- Basic admin CRUD
