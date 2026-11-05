@@ -327,3 +327,15 @@ header.page-header {
 .component-row.is-child { padding-left: 22px; }
 .status-card.is-child { margin-left: 22px; }
 .dark-item.is-child { padding-left: 22px; }
+
+/* ===== Uptime bars (2.6.0) ===== */
+.up-bar-wrap { display:block; margin-top:6px; cursor:pointer; text-decoration:none; }
+.up-bar-wrap .up-cell { display:inline-block; width: calc((100% - 89px) / 90); height: 26px; margin-right: 1px; border-radius: 2px; background: #10b981; vertical-align: middle; }
+.up-bar-wrap .up-cell:last-of-type { margin-right: 0; }
+.up-cell.up-degraded_performance, .up-cell.up-partial_outage { background: #f59e0b; }
+.up-cell.up-major_outage { background: #ef4444; }
+.up-cell.up-under_maintenance { background: #3b82f6; }
+.up-pct { display:block; margin-top:3px; font-size: 11px; color: #64748b; }
+.comp-link { color: inherit; text-decoration: none; }
+.comp-link:hover { text-decoration: underline; }
+body.template-dark .up-pct, .dark-item .up-pct { color: #94a3b8; }

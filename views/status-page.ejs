@@ -71,6 +71,17 @@ body { font-family: <%- sanitizeCss(customization.font_family) %>; }
 <% } %>
 <% if (page.custom_css) { %><style><%- sanitizeCss(page.custom_css || '') %></style><% } %>
 </head>
+<%
+// Uptime bar helper (2.6.0): 90 daily cells + % + detail link markup.
+function uptimeBarHtml(c) {
+  const bar = (typeof uptimeBars !== 'undefined' && uptimeBars && uptimeBars[c.id]) ? uptimeBars[c.id] : null;
+  if (!bar || !bar.days || bar.days.length === 0) return '';
+  const label = s => ({operational:'Operational',under_maintenance:'Under Maintenance',degraded_performance:'Degraded Performance',partial_outage:'Partial Outage',major_outage:'Major Outage'}[s] || s);
+  const cells = bar.days.map(d => `<span class="up-cell up-${d.status}" title="${d.date}: ${label(d.status)}"></span>`).join('');
+  const detail = `/status/${page.slug}/components/${c.id}`;
+  return `<a class="up-bar-wrap" href="${detail}" title="View component detail">${cells}<span class="up-pct">${bar.uptimePct}% uptime · ${uptimeDays}d</span></a>`;
+}
+%>
 <body class="<%= page.custom_layout ? 'custom-layout' : 'template-' + page.template %>">
 
 <%
@@ -237,7 +248,7 @@ body { font-family: <%- sanitizeCss(customization.font_family) %>; }
 <% components.forEach(c => {
   const g = c.group_name || 'Other';
   if (!groups[g]) groups[g] = [];
-  groups[g].push({ name: c.name, status: c.current_status || c.status, description: c.description, is_child: c.is_child });
+  groups[g].push({ id: c.id, name: c.name, status: c.current_status || c.status, description: c.description, is_child: c.is_child });
 }); %>
 <% for (const [name, comps] of Object.entries(groups)) { %>
 <% const gw = worstStatus(comps); %>
@@ -248,8 +259,9 @@ body { font-family: <%- sanitizeCss(customization.font_family) %>; }
 <div class="component-row-left">
 <span class="component-dot dot-<%= c.status %>"></span>
 <div>
-<div class="component-name"><%= c.name %></div>
+<div class="component-name"><a class="comp-link" href="/status/<%= page.slug %>/components/<%= c.id %>"><%= c.name %></a></div>
 <div class="component-desc"><%= c.description || '' %></div>
+<%- uptimeBarHtml(c) %>
 </div>
 </div>
 <span class="component-badge badge-<%= c.status %>"><%= formatStatus(c.status) %></span>
@@ -326,7 +338,7 @@ body { font-family: <%- sanitizeCss(customization.font_family) %>; }
 <% components.forEach(c => {
   const g = c.group_name || 'Other';
   if (!groups[g]) groups[g] = [];
-  groups[g].push({ name: c.name, status: c.current_status || c.status, description: c.description, is_child: c.is_child });
+  groups[g].push({ id: c.id, name: c.name, status: c.current_status || c.status, description: c.description, is_child: c.is_child });
 }); %>
 <% for (const [groupName, comps] of Object.entries(groups)) { %>
 <% const gw = worstStatus(comps); %>
@@ -336,10 +348,11 @@ body { font-family: <%- sanitizeCss(customization.font_family) %>; }
 <% comps.forEach(c => { %>
 <div class="status-card <%= c.status %><%= c.is_child ? ' is-child' : '' %>">
 <div class="card-top">
-<span class="card-name"><%= c.name %></span>
+<span class="card-name"><a class="comp-link" href="/status/<%= page.slug %>/components/<%= c.id %>"><%= c.name %></a></span>
 <span class="card-status <%= c.status %>"><%= formatStatus(c.status) %></span>
 </div>
 <p class="card-desc"><%= c.description || '' %></p>
+<%- uptimeBarHtml(c) %>
 </div>
 <% }) %>
 </div>
@@ -414,7 +427,7 @@ body { font-family: <%- sanitizeCss(customization.font_family) %>; }
 <% components.forEach(c => {
   const g = c.group_name || 'Other';
   if (!groups[g]) groups[g] = [];
-  groups[g].push({ name: c.name, status: c.current_status || c.status, description: c.description, is_child: c.is_child });
+  groups[g].push({ id: c.id, name: c.name, status: c.current_status || c.status, description: c.description, is_child: c.is_child });
 }); %>
 <% for (const [groupName, comps] of Object.entries(groups)) { %>
 <% const gw = worstStatus(comps); %>
@@ -425,8 +438,9 @@ body { font-family: <%- sanitizeCss(customization.font_family) %>; }
 <div class="dark-item-left">
 <span class="dot dot-<%= c.status %>"></span>
 <div>
-<div class="dark-item-name"><%= c.name %></div>
+<div class="dark-item-name"><a class="comp-link" href="/status/<%= page.slug %>/components/<%= c.id %>"><%= c.name %></a></div>
 <div class="dark-item-desc"><%= c.description || '' %></div>
+<%- uptimeBarHtml(c) %>
 </div>
 </div>
 <div class="dark-item-right">

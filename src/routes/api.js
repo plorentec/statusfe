@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { queryOne, queryAll, run } = require('../db/database');
-const { pages, components, componentGroups, incidents, apiKeys, webhooks, maintenance, notifications, analytics, dependencies, settings } = require('../db/models');
+const { pages, components, componentGroups, incidents, apiKeys, webhooks, maintenance, notifications, analytics, dependencies, settings, getUptimeBars } = require('../db/models');
 const { auth, requirePerm, enforceKeyRateLimit } = require('../middleware/auth');
 const { destroyUserSessions } = require('../middleware/session');
 const { deliver: triggerWebhook } = require('../utils/webhooks');
@@ -93,6 +93,15 @@ router.get('/incidents', async (req, res) => {
   if (req.query.limit) f.limit = parseInt(req.query.limit);
   const list = await incidents.list(f);
   res.json({ incidents: list, total: list.length });
+});
+
+// Public: 90-day uptime bars for a page (2.6.0). Registered BEFORE
+// /status/:slug for clarity (no shadowing either way).
+router.get('/status/:slug/uptime', async (req, res) => {
+  const page = await pages.getBySlug(req.params.slug);
+  if (!page || page.is_public !== 1) return res.status(404).json({ error: 'Not found' });
+  const { bars, days } = await getUptimeBars(page.id);
+  res.json({ page: page.slug, days, bars });
 });
 
 // Public: status page data (JSON)

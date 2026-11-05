@@ -202,7 +202,7 @@ app.use((req, res, next) => {
 const { require2FA } = require('./middleware/require-2fa');
 app.use('/admin', require2FA);
 
-const { pages, components, incidents, analytics, dependencies, notifications, maintenance, settings } = require('./db/models');
+const { pages, components, incidents, analytics, dependencies, notifications, maintenance, settings, getUptimeBars, UPTIME_DAYS } = require('./db/models');
 const { queryAll, queryOne, run } = require('./db/database');
 
 // Make unread notification count and csrfToken available to all admin views
@@ -294,6 +294,34 @@ app.all('/push/:token', async (req, res) => {
   }
 });
 
+// Component detail page (2.6.0): 90-day uptime bar, recent transitions and
+// incidents for ONE component of a public page.
+app.get('/status/:slug/components/:id', async (req, res) => {
+  try {
+    const page = await pages.getBySlug(req.params.slug);
+    if (!page || page.is_public !== 1) return res.status(404).send('Not found');
+    const resolvedComps = await components.getForPage(page.id);
+    const comp = resolvedComps.find(c => c.id === req.params.id);
+    if (!comp) return res.status(404).send('Not found');
+
+    const { bars } = await getUptimeBars(page.id, UPTIME_DAYS);
+    const bar = bars[comp.id] || { days: [], uptimePct: '100.00' };
+    const history = await components.getHistory(comp.id, null, 20);
+    const activeIncidents = await incidents.list({ component_id: comp.id, visible: 1 });
+
+    const formatStatus = s => ({operational:'Operational',under_maintenance:'Under Maintenance',degraded_performance:'Degraded Performance',partial_outage:'Partial Outage',major_outage:'Major Outage',investigating:'Investigating',identified:'Identified',monitoring:'Monitoring',resolved:'Resolved'}[s] || s);
+    const customization = await settings.getCustomization();
+    res.render('component-detail', {
+      page, component: comp, bar: bar.days, uptimePct: bar.uptimePct,
+      history, incidents: activeIncidents, formatStatus, customization,
+      uptimeDays: UPTIME_DAYS, refreshInterval: 0
+    });
+  } catch (e) {
+    console.error('Component detail error:', e);
+    res.status(500).send('Internal error');
+  }
+});
+
 // Public status page with analytics tracking
 app.get('/status/:slug', async (req, res) => {
   try {
@@ -340,7 +368,9 @@ app.get('/status/:slug', async (req, res) => {
     const formatStatus = s => ({operational:'Operational',under_maintenance:'Under Maintenance',degraded_performance:'Degraded Performance',partial_outage:'Partial Outage',major_outage:'Major Outage',investigating:'Investigating',identified:'Identified',monitoring:'Monitoring',resolved:'Resolved'}[s] || s);
     const refreshInterval = page.refresh_interval || 0;
     const customization = await settings.getCustomization();
-    res.render('status-page', { page, components: resolvedComps, incidents: incs, incidentsByComponent, formatStatus, refreshInterval: refreshInterval ? parseInt(refreshInterval) : 0, groups: allGroups, upcomingMaintenance, customization });
+    // 90-day uptime bars (2.6.0) — one aggregated query for the whole page.
+    const { bars: uptimeBars } = await getUptimeBars(page.id, UPTIME_DAYS);
+    res.render('status-page', { page, components: resolvedComps, incidents: incs, incidentsByComponent, formatStatus, refreshInterval: refreshInterval ? parseInt(refreshInterval) : 0, groups: allGroups, upcomingMaintenance, customization, uptimeBars, uptimeDays: UPTIME_DAYS });
   } catch(e) {
     console.error('Status page error:', e);
     res.status(500).send('Internal error');

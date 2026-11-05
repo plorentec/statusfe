@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title><%= component.name %> - <%= page.name %> Status</title>
+<link rel="stylesheet" href="/css/status.css">
+<% if (page.template === 'grid') { %><link rel="stylesheet" href="/css/template-grid.css">
+<% } else if (page.template === 'dark') { %><link rel="stylesheet" href="/css/template-dark.css"><% } %>
+<% if (typeof customization !== 'undefined' && customization) { %>
+<style>
+:root { --bg: <%- sanitizeCss(customization.bg_color) %>; --text: <%- sanitizeCss(customization.text_color) %>; --radius: <%- sanitizeCss(String(customization.border_radius).replace(/[^0-9]/g, '')) %>px; --sf-primary: <%- sanitizeCss(customization.primary_color) %>; }
+</style>
+<% } %>
+<style>
+.detail-wrap { max-width: 860px; margin: 0 auto; padding: 32px 16px; font-family: inherit; }
+.detail-back { font-size: 13px; color: #64748b; text-decoration: none; }
+.detail-head { display:flex; align-items:center; gap:12px; margin: 14px 0 4px; }
+.detail-head h1 { margin:0; font-size: 26px; }
+.detail-section { margin-top: 26px; }
+.detail-section h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .04em; color: #64748b; margin: 0 0 10px; }
+.detail-history { width:100%; border-collapse: collapse; font-size: 13px; }
+.detail-history td, .detail-history th { text-align:left; padding: 7px 10px; border-bottom: 1px solid rgba(100,116,139,.2); }
+.detail-badge { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.detail-badge.operational { background:#dcfce7; color:#166534; }
+.detail-badge.under_maintenance { background:#dbeafe; color:#1e40af; }
+.detail-badge.degraded_performance { background:#fef3c7; color:#92400e; }
+.detail-badge.partial_outage { background:#ffedd5; color:#9a3412; }
+.detail-badge.major_outage { background:#fee2e2; color:#991b1b; }
+.detail-badge.investigating { background:#fee2e2; color:#991b1b; }
+.detail-badge.identified { background:#ffedd5; color:#9a3412; }
+.detail-badge.monitoring { background:#fef3c7; color:#92400e; }
+.detail-badge.resolved { background:#dcfce7; color:#166534; }
+.detail-ms { font-size: 12px; color: #64748b; margin-top: 4px; }
+</style>
+</head>
+<body class="<%= page.custom_layout ? 'custom-layout' : 'template-' + page.template %>">
+<div class="detail-wrap">
+<a class="detail-back" href="/status/<%= page.slug %>">&larr; <%= page.name %></a>
+<div class="detail-head">
+<h1><%= component.name %></h1>
+<span class="detail-badge <%= component.current_status || component.status %>"><%= formatStatus(component.current_status || component.status) %></span>
+</div>
+<% if (component.description) { %><p><%= component.description %></p><% } %>
+
+<div class="detail-section">
+<h2><%= uptimeDays %>-day uptime — <%= uptimePct %>%</h2>
+<div class="up-bar-wrap" style="cursor:default;">
+<% bar.forEach(d => { %><span class="up-cell up-<%= d.status %>" title="<%= d.date %>: <%= formatStatus(d.status) %>"></span><% }) %>
+</div>
+<% if (Number(component.probe_enabled) === 1) { %>
+<div class="detail-ms">Last check: <%= component.probe_last_checked_at ? new Date(component.probe_last_checked_at).toISOString().replace('T',' ').slice(0,19) + ' UTC' : '—' %> · <%= Number(component.probe_last_ok) === 1 ? 'OK' : 'FAILED' %> · <%= component.probe_last_ms != null ? component.probe_last_ms + ' ms' : '—' %></div>
+<% } %>
+</div>
+
+<div class="detail-section">
+<h2>Active incidents</h2>
+<% if (incidents.filter(i => i.status !== 'resolved').length === 0) { %>
+<p>No active incidents.</p>
+<% } else { %>
+<% incidents.filter(i => i.status !== 'resolved').forEach(i => { %>
+<div style="margin-bottom:10px;">
+<span class="detail-badge <%= i.status %>"><%= formatStatus(i.status) %></span>
+<strong><%= i.name %></strong>
+<div style="font-size:13px;color:#64748b;"><%- nl2br(i.message) %></div>
+</div>
+<% }) %>
+<% } %>
+</div>
+
+<div class="detail-section">
+<h2>Recent status changes</h2>
+<% if (history.length === 0) { %>
+<p>No status changes recorded.</p>
+<% } else { %>
+<table class="detail-history">
+<tr><th>When (UTC)</th><th>From</th><th>To</th></tr>
+<% history.forEach(h => { %>
+<tr>
+<td><%= new Date(h.created_at).toISOString().replace('T',' ').slice(0,19) %></td>
+<td><span class="detail-badge <%= h.old_status %>"><%= formatStatus(h.old_status) %></span></td>
+<td><span class="detail-badge <%= h.new_status %>"><%= formatStatus(h.new_status) %></span></td>
+</tr>
+<% }) %>
+</table>
+<% } %>
+</div>
+</div>
+</body>
+</html>

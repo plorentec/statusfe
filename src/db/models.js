@@ -2037,6 +2037,82 @@ module.exports.auditLog = {
 module.exports.recomputeAncestorChain = recomputeAncestorChain;
 module.exports.worstStatus = worstStatus;
 module.exports.severity = severity;
+
+// ===== Uptime bars (2.6.0) =====
+// 90-day daily status per component for the public page. ONE aggregated query
+// per page (GROUP BY component/date — no N+1). Per DAY the WORST severity is
+// kept (a day that went operational->major_outage counts as a down day, unlike
+// "last of day"). Days with NO transitions = operational (documented
+// limitation: probes/history only write on state changes).
+const UPTIME_DAYS = 90;
+async function getUptimeBars(pageId, days = UPTIME_DAYS) {
+  const comps = await queryAll(
+    'SELECT component_id FROM page_components WHERE page_id=$1',
+    [pageId]
+  );
+  const compIds = comps.map(c => c.component_id);
+  const result = {};
+  if (compIds.length === 0) return { bars: result, days };
+
+  const rows = await queryAll(
+    `SELECT component_id, new_status, created_at
+     FROM status_history
+     WHERE component_id IN (${compIds.map((_, i) => '$' + (i + 1)).join(',')})
+       AND created_at >= $${compIds.length + 1}
+     ORDER BY created_at ASC`,
+    [...compIds, new Date(Date.now() - days * 86400000).toISOString().slice(0, 19).replace('T', ' ')]
+  );
+
+  // dayKey in UTC (matches toISOString slicing used by the templates/tests).
+  const dayKey = (d) => new Date(d).toISOString().slice(0, 10);
+  // Pre-fill every component with the full window (oldest -> today).
+  const today = new Date();
+  const allDays = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today); d.setDate(d.getDate() - i);
+    allDays.push(dayKey(d));
+  }
+  for (const id of compIds) {
+    result[id] = allDays.map(date => ({ date, status: 'operational' }));
+  }
+
+  // Worst severity per component+day over the recorded transitions, with
+  // CARRY-FORWARD: once a component goes down, every following day stays down
+  // until a recovery transition (an outage that started 5 days ago and is
+  // still open must show 6 down days, not 1 + green gap days).
+  const byComp = {};
+  for (const r of rows) {
+    if (!byComp[r.component_id]) byComp[r.component_id] = [];
+    byComp[r.component_id].push(r); // rows already ASC by created_at
+  }
+  for (const id of compIds) {
+    const rowsC = byComp[id] || [];
+    let cur = 'operational';
+    let ri = 0;
+    for (let i = 0; i < result[id].length; i++) {
+      const date = result[id][i].date;
+      let worstS = null, worstSev = -1, lastNew = null;
+      while (ri < rowsC.length && dayKey(rowsC[ri].created_at) === date) {
+        const s = severity(rowsC[ri].new_status);
+        if (s > worstSev) { worstSev = s; worstS = rowsC[ri].new_status; }
+        lastNew = rowsC[ri].new_status;
+        ri++;
+      }
+      result[id][i].status = worstS || cur;
+      if (lastNew !== null) cur = lastNew;
+    }
+  }
+
+  // Uptime %: operational days / total window.
+  for (const id of compIds) {
+    const bar = result[id];
+    const okDays = bar.filter(x => x.status === 'operational').length;
+    result[id] = { days: bar, uptimePct: ((okDays / bar.length) * 100).toFixed(2) };
+  }
+  return { bars: result, days };
+}
+module.exports.getUptimeBars = getUptimeBars;
+module.exports.UPTIME_DAYS = UPTIME_DAYS;
 // Secret encryption exposed for the boot migration (init.js) and harnesses.
 module.exports.__encryptSecretForMigration = encryptSecret;
 module.exports.__isEncryptedSecret = isEncryptedSecret;
