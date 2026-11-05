@@ -38,15 +38,9 @@ empezada; están ordenadas por valor/esfuerzo. Última revisión: v2.2.7 (2026-1
 
 ## Mejoras (ordenadas por prioridad)
 
-### 1. Barras de uptime de 90 días en la página pública (estilo Atlassian/Instatus)
-- Fuente de datos: ya existe `analytics.getComponentUptime(componentId, days)` (por día: último `new_status` del día).
-- Falta: endpoint público por página+componente (o incrustar los datos al renderizar `/status/:slug`), CSS de la barra (90 celdas, tooltip con fecha+estado), añadirlo a las 3 plantillas.
-- Ojo rendimiento: una query agregada por página (GROUP BY date, component_id) mejor que N+1.
+### 1. ~~Barras de uptime de 90 días~~ → **hecho en 2.6.0** (peor severidad del día + carry-forward de caídas abiertas + página de detalle por componente + API /status/:slug/uptime).
 
-### 2. Página pública de detalle por componente
-- Ruta nueva `/status/:slug/component/:id` (404 si página no pública).
-- Contenido: historial de estados (ya existe `components.getHistory`), incidentes asociados (ya existe `getActiveIncidents`), barra de uptime del punto 2.
-- Enlazar el nombre del componente desde la página pública.
+### 2. ~~Página de detalle por componente~~ → **hecho en 2.6.0** (`/status/:slug/components/:id`).
 
 ### 3. Suscripciones por email a una página
 - SMTP ya configurado (`utils/email.js` envía emails). Ya existen notificaciones internas para admins.

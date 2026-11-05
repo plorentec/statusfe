@@ -9,6 +9,27 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [2.6.0] — 2026-11-05
+
+### Added
+- **Barras de uptime de 90 días** en la página pública (estilo Atlassian):
+  una celda por día coloreada por la PEOR severidad de ese día, tooltip con
+  fecha + estado, % de uptime — en las 3 plantillas. UNA query agregada por
+  página (sin N+1).
+- **Carry-forward de caídas**: una caída abierta persiste en los días
+  siguientes hasta su transición de recuperación (no hay días verdes dentro
+  de una caída en curso).
+- **Página de detalle por componente** (`/status/:slug/components/:id`):
+  barra 90d, %, últimas 20 transiciones, incidentes activos, último check de
+  probe (OK/latencia). 404 si la página no es pública o el componente no
+  pertenece a ella. Los nombres de la página pública enlazan al detalle.
+- **API pública** `GET /api/v1/status/:slug/uptime` (JSON con las barras).
+
+### Fixed
+- El agrupado de componentes de las 3 plantillas públicas perdía el `id` del
+  componente (los objetos agrupados no lo arrastraban) — los enlaces al
+  detalle no podían funcionar.
+
 ## [2.5.0] — 2026-11-05
 
 ### Added
