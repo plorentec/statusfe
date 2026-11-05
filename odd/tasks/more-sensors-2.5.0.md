@@ -35,3 +35,8 @@ Segunda tanda de sensores sobre el motor de probes (2.3.0/2.4.0).
 - L1 (verbatim): "Añadele mas como tiene prtg"
 - L2: push token público por diseño (como PRTG HTTP push): el token uuid es el
   secreto; solo escribe last_checked/last_ok y flip a operational.
+- L3: E2E en producción (268b520): tcp a 127.0.0.1:3080 (operational, 9 ms),
+  ping ICMP a 127.0.0.1 (operational; loopback sub-ms → 0), push: creada sin
+  heartbeat → staleness la marcó major_outage ✓; heartbeat curl → operational ✓
+  (el re-descenso por staleness con tick de 20 s queda cubierto por el arnés
+  con tick de 1 s). Limpieza OK. CI verde.
