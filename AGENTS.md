@@ -114,7 +114,8 @@ data/audit_logs/        ← Daily rotated CSV exports (created at runtime, `app.
 - Webhook delivery DNS-resolves the target and skips requests resolving to private/loopback/link-local IPs (`isPrivateIp` in `src/utils/webhooks.js`).
 - The nodemailer transporter is cached per SMTP settings fingerprint — changes in the admin panel apply on the next send without restart.
 - SMTP password at rest: **AES-256-GCM encrypted** (2.2.7; `enc:v1:` prefix, key derived from SESSION_SECRET; `migrate()` re-encrypts legacy plaintext on boot; rotating SESSION_SECRET invalidates the stored password — re-enter it).
-- Nightly DB backups on yoda: `/usr/local/bin/statusfe-backup` (from `scripts/backup-db.sh`) via `/etc/cron.d/statusfe-backup` at 03:17, gzip dumps in `/var/backups/statusfe/`, 7-day retention.
+- Nightly DB backups on yoda: `/usr/local/bin/statusfe-backup` (from `scripts/backup-db.sh`) via `/etc/cron.d/statusfe-backup` at 03:17, gzip dumps in `/var/backups/statusfe/`, 7-day retention. **Restorability is verified** with `/usr/local/bin/statusfe-verify-restore` (from `scripts/verify-restore.sh`, 2.7.0) — run it after any backup change; a dump nobody restored is not a backup.
+- **Probe hysteresis (2.7.0)**: `probe_confirmations` (1-10, default 1) + `probe_consecutive` — a status transition needs N consecutive same-direction probe results; push sensors stay instant. Bookkeeping (last_checked/last_ok/last_ms) updates on every probe regardless.
 - `layout(res, view, locals)` requires the `res` argument (per-request res.locals; the old module-level cache leaked data between concurrent requests).
 - `/register` redirects to `/login` (registration closed; users are created from the admin panel). `/auth/2fa/setup` redirects to `/admin/2fa/setup` (the only 2FA setup implementation).
 - `apiKeys.authenticate(key)` looks up by 8-char prefix, throttles `last_used_at` writes to 1/min.

@@ -9,6 +9,25 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [2.7.0] — 2026-11-05
+
+### Added
+- **Histéresis anti-flapping** (PRTG-style): `probe_confirmations` (1-10,
+  default 1 = retrocompatible) por componente — la transición de estado exige
+  N sondeos consecutivos en el mismo sentido; el bookkeeping corre en todos.
+  El sensor `push` queda instantáneo (una ausencia de heartbeat ES la
+  confirmación). Recomendado 2-3 en producción para no generar tormentas de
+  email con servicios que alternan.
+- **Test de restauración del backup** (`scripts/verify-restore.sh`, instalado
+  como `/usr/local/bin/statusfe-verify-restore` en el host): restaura el último
+  dump en una BD desechable, cuenta las tablas clave contra la viva y la
+  borra. Ejecutado y verificado en producción (restore OK, 1 página, 7
+  componentes, 9 transiciones).
+- **Tags y releases de GitHub** para las versiones publicadas (v2.2.6…v2.6.0)
+  — el banner de updates del panel compara contra releases reales.
+- ROADMAP reescrito con el marco "público para empresas" (suscripciones GDPR
+  → multi-tenancy → dominios/i18n/límites).
+
 ## [2.6.0] — 2026-11-05 (revisión adversarial post-release)
 
 ### Security
