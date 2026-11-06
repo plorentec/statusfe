@@ -5,7 +5,7 @@ const bcrypt = require('bcryptjs');
 const { queryOne, queryAll, run } = require('../db/database');
 const fs = require('fs');
 const path = require('path');
-const { pages, components, componentGroups, apiKeys, incidents, maintenance, notifications, settings, auditLog } = require('../db/models');
+const { pages, components, componentGroups, apiKeys, incidents, maintenance, notifications, settings, auditLog, subscribers: subscribersModel } = require('../db/models');
 const pkg = require('../../package.json');
 const { requireAuth, requireAdmin, destroyUserSessions } = require('../middleware/session');
 const { layout } = require('../middleware/layout');
@@ -1148,6 +1148,27 @@ router.post('/2fa/setup', async (req, res) => {
     await auditLog.create({ user_id: req.user.id, action: '2fa_disabled', details: '2FA disabled', ip: req.ip, user_agent: req.get('User-Agent') || '' });
   }
   res.redirect('/admin/2fa/setup');
+});
+
+// ===== SUBSCRIBERS (2.8.0) =====
+router.get('/subscribers', async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.redirect('/admin?msg=admin&type=error');
+  }
+  const rows = await subscribersModel.listAll();
+  res.render('admin/subscribers', {
+    title: 'Subscribers',
+    user: req.user,
+    message: res.locals.message,
+    messageType: res.locals.messageType,
+    rows,
+    csrfToken: res.locals.csrfToken
+  });
+});
+
+router.post('/subscribers/:id/delete', requireAdmin, async (req, res) => {
+  await subscribersModel.remove(req.params.id);
+  res.redirect('/admin/subscribers?msg=success&type=success');
 });
 
 // GET /admin/audit/download — download audit log as CSV

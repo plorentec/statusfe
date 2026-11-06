@@ -35,9 +35,7 @@ valor/camino crítico. Última revisión: v2.7.0 (2026-11-05).
 
 ## Mejoras pendientes (ordenadas)
 
-### 1. Suscripciones por email (GDPR) — 2.8.0
-Ver hito. La más visible que queda: los "consumidores" del status page hoy no
-pueden enterarse de una caída salvo mirando la página.
+### 1. ~~Suscripciones por email (GDPR)~~ → **hecho en 2.8.0** (doble opt-in, baja con enlace, purga 7d, notificaciones a confirmados, vista admin).
 
 ### 2. Histéresis ya existe; falta el resto del ciclo de alertas — 2.8.0/2.9.0
 Escalado (sigue caído X min → re-aviso), quiet hours, y silencio automático

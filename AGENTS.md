@@ -76,6 +76,11 @@ data/audit_logs/        ← Daily rotated CSV exports (created at runtime, `app.
 ## Route protection
 | Scope | How | Routes |
 |---|---|---|
+| Public + rate-limited | authLimiter (10/15min/IP) | `POST /subscribe/:slug` (respuesta genérica sin enumeración; crea fila PENDIENTE + email de confirmación) |
+| Public | none (el token es el secreto) | `GET /confirm/:token` (doble opt-in), `GET /unsubscribe/:token` (baja, GDPR) |
+
+| Scope | How | Routes |
+|---|---|---|
 | Public | none | `/status/:slug` (404 if `is_public≠1`), `/embed/:slug` (also 404 if private), `/api/v1/health`, `/api/v1/pages` + `/api/v1/pages/:slug` (auth-AWARE since 2.2.4: anonymous → public-only, valid key → private pages and full listing), `/api/v1/components`, `/api/v1/incidents` (visible=1), `/login`, `/register` (→ redirect), `/auth/*` |
 | Session | `requireAuth` (session.js) | `/admin/*` |
 | API key | `auth` middleware (auth.js) | `/api/v1/*` (after `router.use(auth)` at `api.js:108` — includes `/api/v1/groups*`, despite the stale `// Public` comment at `api.js:222`). Sub-routes may add `requirePerm`; webhook GET only returns `secret` to `admin` keys, honoring the key's `page_id` scope. **Since 2.2.6 the `page_id` scope is enforced everywhere**: a scoped key can only touch its own page (pages/components-assigned-to-it/incidents/maintenance/webhooks), cannot create pages or mutate groups/dependencies, and key minting is forced to its own page. |

@@ -29,7 +29,7 @@ const customization = { primary_color: '#10b981', secondary_color: '#059669', bg
 // Mirror app.locals.escapeHtml / app.locals.nl2br (used by status-page.ejs).
 const escapeHtml = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 const nl2br = (s) => escapeHtml(s).replace(/\n/g, '<br>');
-const base = { page: mkPage('default'), components: comps, incidents: incs, incidentsByComponent, formatStatus, refreshInterval: 15, groups: [{ id: 'g1', name: 'Infra', position: 0 }], upcomingMaintenance: [{ title: 'Mant', description: 'd', starts_at: '2026-09-02 10:00:00', ends_at: '2026-09-02 12:00:00' }], customization, version: V, sanitizeCss, sanitizeHtml, escapeHtml, nl2br, message: null, messageType: null };
+const base = { page: mkPage('default'), components: comps, incidents: incs, incidentsByComponent, formatStatus, refreshInterval: 15, csrfToken: 'tok', groups: [{ id: 'g1', name: 'Infra', position: 0 }], upcomingMaintenance: [{ title: 'Mant', description: 'd', starts_at: '2026-09-02 10:00:00', ends_at: '2026-09-02 12:00:00' }], customization, version: V, sanitizeCss, sanitizeHtml, escapeHtml, nl2br, message: null, messageType: null };
 
 // status-page: 3 templates + custom_layout + custom css/html
 for (const t of ['default', 'grid', 'dark']) {
@@ -128,4 +128,9 @@ const badgeDark = render('status-page/group-badge-dark', path.join(__dirname, '.
 if (!badgeDark.includes('dark-badge major_outage')) { console.log('FAIL dark: badge de grupo ausente'); failures++; }
 
 console.log(failures === 0 ? '\nRENDER TESTS PASSED' : `\n${failures} RENDER FAILURES`);
+
+// admin/subscribers (2.8.0)
+const subsHtml = render('admin/subscribers', path.join(__dirname, '../views/admin/subscribers.ejs'), { title: 'Subscribers', user: { name: 'u', role: 'admin' }, message: null, messageType: null, rows: [{ id: 's1', email: 'a@b.co', page_name: 'P', page_slug: 'p', confirmed: 1, created_at: '2026-11-05 10:00:00' }], csrfToken: 'tok' });
+if (!subsHtml.includes('Remove') || !subsHtml.includes('confirmed')) { console.log('FAIL admin/subscribers render'); failures++; }
+
 process.exit(failures === 0 ? 0 : 1);

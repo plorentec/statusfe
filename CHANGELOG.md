@@ -9,6 +9,22 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [2.8.0] — 2026-11-05
+
+### Added
+- **Suscripciones por email con doble opt-in (GDPR)**: formulario en el pie de
+  cada página pública → `POST /subscribe/:slug` (rate-limited 10/15 min por IP,
+  respuesta genérica sin enumeración) → email de confirmación → `/confirm/:token`.
+  Baja con `/unsubscribe/:token` incluido en cada email; los tokens se
+  refrescan en cada re-suscripción pendiente (el enlace viejo muere).
+- **Notificaciones a suscriptores confirmados**: incidentes creados/actualizados
+  (visibles) y cambios de estado de componentes — fire-and-forget, nunca
+  bloquea la request.
+- **Purga GDPR**: suscriptores sin confirmar > 7 días se eliminan en el cron
+  diario.
+- **Vista admin** `/admin/subscribers` (admin-only): suscriptores por página
+  con baja manual; enlace en ambos sidebars.
+
 ## [2.7.0] — 2026-11-05 (hotfix en producción incluido)
 
 ### Fixed
