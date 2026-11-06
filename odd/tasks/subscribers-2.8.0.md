@@ -36,3 +36,8 @@ anti-enumeración, purga de pendientes.
 
 - L1: Continuación del marco acordado (2.7.0 → 2.8.0 suscripciones GDPR →
   2.9.0 multi-tenancy → 3.0.0 dominios/i18n/límites).
+- L2: E2E en producción con CSRF completo (cookie jar + token del form):
+  suscripción → PENDIENTE → confirm → CONFIRMADO → unsubscribe → 0 filas.
+  Primer intento del E2E sin CSRF → 403 correcto del producto (el curl no
+  hacía el flujo del navegador). Tabla migrada ✓, form en la página ✓.
+  CI verde en fd40792.
