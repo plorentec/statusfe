@@ -9,6 +9,17 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [2.7.0] — 2026-11-05 (hotfix en producción incluido)
+
+### Fixed
+- **Zona horaria en el filtro de vencidos de las probes** — `NOW()` lo evalúa
+  PostgreSQL en la TZ del host mientras node lee las columnas `TIMESTAMP`
+  como UTC: en hosts no-UTC `probe_last_checked_at` quedaba ~1 h en el futuro
+  y cada componente se sondeaba UNA sola vez (la histéresis nunca avanzaba).
+  El bookkeeping escribe ahora el timestamp desde JS en UTC. Cazado en la
+  observación en producción (una sola línea de sonda en 80 s) — la condición
+  local (CET+CET) lo enmascaraba en los arneses.
+
 ## [2.7.0] — 2026-11-05
 
 ### Added

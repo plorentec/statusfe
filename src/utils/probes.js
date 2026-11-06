@@ -338,7 +338,14 @@ async function probeComponent(comp) {
   // One line per executed probe (observability; quiet enough at 20s ticks).
   console.log('[probes]', (comp.probe_type || 'http'), comp.name.slice(0, 40), '->', ok ? 'OK' : 'FAIL', durationMs + 'ms', 'consec=' + consec, 'need=' + need, '(prev=' + prevOk + ')');
 
-  await run('UPDATE components SET probe_last_checked_at=NOW(), probe_last_ok=$1, probe_last_ms=$2, probe_consecutive=$3, updated_at=NOW() WHERE id=$4', [ok ? 1 : 0, durationMs, consec, comp.id]);
+  // Bookkeeping timestamp written FROM JS in UTC (same convention as every
+  // other timestamp in the app). Do NOT use NOW() here: PostgreSQL evaluates
+  // it in the HOST timezone while node reads the TIMESTAMP column as UTC —
+  // on non-UTC hosts probe_last_checked_at landed ~1h in the future and the
+  // due filter never fired again after the first probe (caught in production,
+  // 2.7.0).
+  const checkedAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
+  await run('UPDATE components SET probe_last_checked_at=$1, probe_last_ok=$2, probe_last_ms=$3, probe_consecutive=$4, updated_at=NOW() WHERE id=$5', [checkedAt, ok ? 1 : 0, durationMs, consec, comp.id]);
 
   const target = ok ? 'operational' : status;
   if (consec >= need && comp.status !== target) {
