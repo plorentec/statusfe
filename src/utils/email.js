@@ -157,4 +157,44 @@ async function sendWelcomeEmail(email, name, resetUrl) {
   return { ok: true };
 }
 
-module.exports = { sendEmail, notifyComponentStatusChange, notifyIncident, sendWelcomeEmail };
+// Subscriber emails (2.8.0): confirmation (double opt-in) and broadcast to
+// confirmed watchers of a page. Both fire-and-forget from the caller's side.
+async function sendSubscriberConfirmation(email, pageName, confirmUrl, unsubUrl) {
+  const settings = require('../db/models').settings;
+  const smtp = await settings.getSMTP();
+  const from = smtp.from;
+  const nameFrom = smtp.from_name || 'StatusFe';
+  if (!from) return { ok: false, error: 'No SMTP from address configured' };
+  const transporter = await getTransporter(smtp);
+  if (!transporter) return { ok: false, error: 'SMTP not configured' };
+  const html = `
+    <div style="font-family:sans-serif;max-width:500px;margin:0 auto;">
+      <h2 style="color:#1e293b;">Confirm your subscription</h2>
+      <p>You (or someone) requested updates for the status page <strong>${pageName}</strong>.</p>
+      <p style="margin:24px 0;">
+        <a href="${confirmUrl}" style="display:inline-block;padding:12px 32px;background:#10b981;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;">Confirm subscription</a>
+      </p>
+      <p style="color:#64748b;font-size:13px;">If you did not request this, ignore this email — the request expires in 7 days.</p>
+      <p style="color:#94a3b8;font-size:11px;"><a href="${unsubUrl}" style="color:#94a3b8;">Unsubscribe</a></p>
+    </div>`;
+  try {
+    const info = await transporter.sendMail({ from: `"${nameFrom}" <${from}>`, to: email, subject: `[StatusFe] Confirm your subscription to ${pageName}`, html });
+    console.log('Subscriber confirmation sent to:', email, info.messageId);
+    return { ok: true };
+  } catch (err) {
+    console.error('Subscriber confirmation failed:', err.message);
+    return { ok: false, error: err.message };
+  }
+}
+
+// Broadcast to the confirmed subscribers of a page. Never throws; returns the
+// per-recipient results (used by harnesses to assert dispatch).
+async function notifySubscribers(pageId, subject, htmlBody) {
+  const { subscribers } = require('../db/models');
+  const subs = await subscribers.listConfirmedByPage(pageId);
+  // Via module.exports so tests can patch sendEmail.
+  const results = await Promise.allSettled(subs.map(s => module.exports.sendEmail(s.email, subject, htmlBody)));
+  return { recipients: subs.length, results: results.map(r => r.status) };
+}
+
+module.exports = { sendEmail, notifyComponentStatusChange, notifyIncident, sendWelcomeEmail, sendSubscriberConfirmation, notifySubscribers };

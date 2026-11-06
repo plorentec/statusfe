@@ -175,6 +175,15 @@ async function recomputeAncestorChain(componentId, includeSelf = false) {
   }
 }
 
+// Subscriber notifications (2.8.0): broadcast to confirmed watchers of a page.
+// Fire-and-forget: the email util handles batching/allSettled; callers must
+// not await it.
+function notifySubscribersOfPage(pageId, subject, htmlBody) {
+  if (!pageId) return;
+  const email = require('../utils/email');
+  email.notifySubscribers(pageId, subject, htmlBody).catch(() => {});
+}
+
 async function cascadeStatusChange(upstreamComponentId, newStatus) {
   // BFS over the dependency graph so a change to an upstream component
   // propagates transitively (A→B→C) instead of stopping after direct
@@ -860,6 +869,12 @@ module.exports.components = {
     }
     const email = require('../utils/email');
     email.notifyComponentStatusChange(comp.name, oldStatus, newStatus, pageTitle).catch(() => {});
+    // Suscriptores confirmados de las páginas donde vive el componente.
+    const subPages = await queryAll('SELECT page_id FROM page_components WHERE component_id=$1', [componentId]);
+    for (const sp of subPages) {
+      notifySubscribersOfPage(sp.page_id, `[StatusFe] ${comp.name} is now ${newStatus}`,
+        `<p>Component <strong>${comp.name}</strong> changed from ${oldStatus} to <strong>${newStatus}</strong>.</p>`);
+    }
 
     await cascadeStatusChange(componentId, newStatus);
 
@@ -1039,6 +1054,11 @@ module.exports.incidents = {
     const email = require('../utils/email');
     const compName = comp ? comp.name : 'Status Page';
     email.notifyIncident(true, name, validStatus, message, page ? page.name : compName).catch(() => {});
+    // Suscriptores confirmados de la página (visible=1): fire-and-forget.
+    if (visibleFlag === 1) {
+      notifySubscribersOfPage(page.id, `[StatusFe] New incident on ${page.name}: ${name}`,
+        `<p><strong>${name}</strong> (${validStatus}) on ${compName}.</p><p>${message || ''}</p>`);
+    }
     return inc;
   },
 
@@ -1115,6 +1135,10 @@ module.exports.incidents = {
       const compName = comp ? comp.name : 'Status Page';
       const email = require('../utils/email');
       email.notifyIncident(false, inc.name, inc.status, data.message || '', page ? page.name : compName).catch(() => {});
+      if (data.status) {
+        notifySubscribersOfPage(inc.page_id, `[StatusFe] ${inc.name} is now ${inc.status}`,
+          `<p>Incident <strong>${inc.name}</strong> on ${compName} moved to <strong>${inc.status}</strong>.</p><p>${data.message || ''}</p>`);
+      }
     }
     return inc;
   },
@@ -2030,6 +2054,86 @@ module.exports.auditLog = {
 
   async cleanOld(days) {
     await run("DELETE FROM audit_log WHERE created_at < NOW() - ($1::text || ' days')::interval", [days]);
+  }
+};
+
+// ===== SUBSCRIBERS (2.8.0) =====
+// Email watchers per status page, GDPR double opt-in: rows start unconfirmed
+// with a confirm token; only confirmed rows receive notifications; unsubscribe
+// deletes the row; unconfirmed rows are purged after 7 days (cron).
+module.exports.subscribers = {
+  EMAIL_RE: /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/,
+
+  async create(email, pageId) {
+    const id = uuidv4();
+    const confirmToken = uuidv4() + '-' + uuidv4();
+    const unsubToken = uuidv4() + '-' + uuidv4();
+    await run(
+      'INSERT INTO subscribers (id,email,page_id,confirm_token,unsubscribe_token,confirmed) VALUES ($1,$2,$3,$4,$5,0)',
+      [id, String(email).trim().toLowerCase(), pageId, confirmToken, unsubToken]
+    );
+    return { id, email: String(email).trim().toLowerCase(), confirmToken, unsubscribeToken: unsubToken };
+  },
+
+  // A confirmed subscription for this email+page must never be duplicated:
+  // returns 'new' | 'pending' | 'confirmed' | 'invalid'.
+  async subscribe(email, pageId) {
+    const clean = String(email || '').trim().toLowerCase();
+    if (!this.EMAIL_RE.test(clean)) return 'invalid';
+    const existing = await queryOne('SELECT id, confirmed FROM subscribers WHERE email=$1 AND page_id=$2', [clean, pageId]);
+    if (existing && existing.confirmed === 1) return 'confirmed';
+    if (!existing) {
+      await this.create(clean, pageId);
+      return 'new';
+    }
+    // pending: refresh the tokens (old link dies, new one works)
+    await run('UPDATE subscribers SET confirm_token=$1, unsubscribe_token=$2, created_at=NOW() WHERE id=$3', [uuidv4() + '-' + uuidv4(), uuidv4() + '-' + uuidv4(), existing.id]);
+    return 'pending';
+  },
+
+  async confirm(token) {
+    const row = await queryOne('SELECT id, email, page_id FROM subscribers WHERE confirm_token=$1 AND confirmed=0', [token]);
+    if (!row) return null;
+    await run('UPDATE subscribers SET confirmed=1, confirmed_at=NOW() WHERE id=$1', [row.id]);
+    return row;
+  },
+
+  async unsubscribe(token) {
+    const row = await queryOne('SELECT id FROM subscribers WHERE unsubscribe_token=$1', [token]);
+    if (!row) return null;
+    await run('DELETE FROM subscribers WHERE id=$1', [row.id]);
+    return row;
+  },
+
+  async listConfirmedByPage(pageId) {
+    return await queryAll('SELECT id, email, confirmed_at FROM subscribers WHERE page_id=$1 AND confirmed=1 ORDER BY confirmed_at DESC', [pageId]);
+  },
+
+  async listByPage(pageId) {
+    return await queryAll('SELECT id, email, confirmed, created_at, confirmed_at FROM subscribers WHERE page_id=$1 ORDER BY created_at DESC', [pageId]);
+  },
+
+  async countByPage(pageId) {
+    const r = await queryOne('SELECT COUNT(*) AS c FROM subscribers WHERE page_id=$1 AND confirmed=1', [pageId]);
+    return r ? parseInt(r.c) : 0;
+  },
+
+  async remove(id) { await run('DELETE FROM subscribers WHERE id=$1', [id]); return true; },
+
+  // Admin view: every subscriber with its page (bounded list).
+  async listAll(limit = 500) {
+    return await queryAll(
+      'SELECT s.id, s.email, s.confirmed, s.created_at, s.confirmed_at, p.name AS page_name, p.slug AS page_slug FROM subscribers s JOIN pages p ON p.id = s.page_id ORDER BY s.created_at DESC LIMIT $1',
+      [limit]
+    );
+  },
+
+  // GDPR purge: unconfirmed rows older than `days` (cron daily). Returns count.
+  async purgeUnconfirmed(days = 7) {
+    // Cutoff computed in JS (portable): pg-mem casts NOW() differently.
+    const cutoff = new Date(Date.now() - days * 86400000).toISOString().slice(0, 19).replace('T', ' ');
+    const r = await run('DELETE FROM subscribers WHERE confirmed=0 AND created_at < $1', [cutoff]);
+    return r.changes || 0;
   }
 };
 

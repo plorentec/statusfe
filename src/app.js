@@ -64,8 +64,11 @@ setInterval(async () => {
   try {
     // Maintenance windows must transition upcoming -> ongoing -> completed or a
     // finished window stays 'ongoing' forever (REGRESSION FIX 2.2.6).
-    const { maintenance } = require('./db/models');
+    const { maintenance, subscribers } = require('./db/models');
     await maintenance.updateStatuses();
+    // GDPR purge: unconfirmed subscriptions die after 7 days.
+    const purged = await subscribers.purgeUnconfirmed(7);
+    if (purged > 0) console.log(`Subscribers purge: removed ${purged} unconfirmed`);
   } catch(e) { /* ignore */ }
 
   try {
@@ -144,6 +147,8 @@ app.use('/auth/login', safeLimiter(authLimiter));
 app.use('/auth/register', safeLimiter(authLimiter));
 app.use('/auth/2fa', safeLimiter(authLimiter));
 app.use('/auth/set-password', safeLimiter(authLimiter));
+// Public subscribe endpoint: anti-abuse (10/15min per IP, same as auth).
+app.use('/subscribe', safeLimiter(authLimiter));
 app.use('/api/v1', safeLimiter(apiLimiter));
 
 const adminLimiter = rateLimit({
@@ -318,6 +323,60 @@ app.get('/status/:slug/components/:id', async (req, res) => {
     });
   } catch (e) {
     console.error('Component detail error:', e);
+    res.status(500).send('Internal error');
+  }
+});
+
+// TEMP DEBUG (2.8.0): body-parsing A/B for the subscribe form.
+app.post('/subscribe-test', (req, res) => res.json({ keys: Object.keys(req.body || {}) }));
+// ===== Subscriptions (2.8.0) — GDPR double opt-in =====
+// POST /subscribe/:slug: creates a PENDING subscription and emails the
+// confirmation link. The response is ALWAYS generic (no enumeration): we never
+// reveal whether an email is already subscribed.
+app.post('/subscribe/:slug', async (req, res) => {
+  try {
+    const page = await pages.getBySlug(req.params.slug);
+    if (!page || page.is_public !== 1) return res.status(404).send('Not found');
+    const email = String((req.body && req.body.email) || '').trim();
+    const { subscribers } = require('./db/models');
+    const outcome = await subscribers.subscribe(email, page.id); // 'new'|'pending'|'confirmed'|'invalid'
+    if (outcome === 'new' || outcome === 'pending') {
+      const { subscribers: subsModel } = require('./db/models');
+      const row = await require('./db/database').queryOne('SELECT confirm_token, unsubscribe_token FROM subscribers WHERE email=$1 AND page_id=$2', [email.toLowerCase(), page.id]);
+      if (row) {
+        const proto = req.secure || req.get('X-Forwarded-Proto') === 'https' ? 'https' : 'http';
+        const base = proto + '://' + req.get('Host');
+        const emailUtils = require('./utils/email');
+        emailUtils.sendSubscriberConfirmation(email.toLowerCase(), page.name, `${base}/confirm/${row.confirm_token}`, `${base}/unsubscribe/${row.unsubscribe_token}`).catch(() => {});
+      }
+    }
+    res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${page.name}</title><link rel="stylesheet" href="/css/status.css"></head><body style="font-family:sans-serif;background:${'f5f5f5'};padding:40px;"><div style="max-width:520px;margin:0 auto;background:#fff;padding:28px;border-radius:10px;"><h2>Check your inbox</h2><p>If this address is not already subscribed, a confirmation link was sent to process your request. The link expires in 7 days.</p><p style="font-size:13px;"><a href="/status/${page.slug}">&larr; Back to ${page.name}</a></p></div></body></html>`);
+  } catch (e) {
+    console.error('subscribe error:', e.message);
+    res.status(500).send('Internal error');
+  }
+});
+
+// Confirm a pending subscription (double opt-in).
+app.get('/confirm/:token', async (req, res) => {
+  try {
+    const { subscribers } = require('./db/models');
+    const row = await subscribers.confirm(req.params.token);
+    if (!row) return res.status(404).send('Invalid or expired confirmation link.');
+    res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Subscribed</title><link rel="stylesheet" href="/css/status.css"></head><body style="font-family:sans-serif;background:#f5f5f5;padding:40px;"><div style="max-width:520px;margin:0 auto;background:#fff;padding:28px;border-radius:10px;"><h2>&#10003; Subscription confirmed</h2><p>You will now receive updates for this status page.</p></div></body></html>`);
+  } catch (e) {
+    res.status(500).send('Internal error');
+  }
+});
+
+// Unsubscribe (link included in every subscriber email). Deletes the row.
+app.get('/unsubscribe/:token', async (req, res) => {
+  try {
+    const { subscribers } = require('./db/models');
+    const row = await subscribers.unsubscribe(req.params.token);
+    if (!row) return res.status(404).send('Invalid unsubscribe link.');
+    res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Unsubscribed</title><link rel="stylesheet" href="/css/status.css"></head><body style="font-family:sans-serif;background:#f5f5f5;padding:40px;"><div style="max-width:520px;margin:0 auto;background:#fff;padding:28px;border-radius:10px;"><h2>Unsubscribed</h2><p>You will no longer receive updates for this status page.</p></div></body></html>`);
+  } catch (e) {
     res.status(500).send('Internal error');
   }
 });

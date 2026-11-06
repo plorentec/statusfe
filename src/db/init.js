@@ -316,6 +316,31 @@ async function createTables() {
     )
   `);
 
+  // Subscribers (2.8.0): email watchers per page with GDPR double opt-in.
+  await run(`
+    CREATE TABLE IF NOT EXISTS subscribers (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL,
+      page_id TEXT NOT NULL,
+      confirm_token TEXT UNIQUE NOT NULL,
+      unsubscribe_token TEXT UNIQUE NOT NULL,
+      confirmed INTEGER DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      confirmed_at TIMESTAMP,
+      FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE CASCADE
+    )
+  `);
+  const subscriberIndexes = [
+    'idx_subscribers_page ON subscribers(page_id)',
+    'idx_subscribers_email_page ON subscribers(email, page_id)',
+    'idx_subscribers_confirm_token ON subscribers(confirm_token)',
+    'idx_subscribers_unsub_token ON subscribers(unsubscribe_token)',
+    'idx_subscribers_confirmed_created ON subscribers(confirmed, created_at)',
+  ];
+  for (const idx of subscriberIndexes) {
+    try { await run(`CREATE INDEX IF NOT EXISTS ${idx}`); } catch(e) { /* exists */ }
+  }
+
   await run(`
     CREATE TABLE IF NOT EXISTS audit_log (
       id TEXT PRIMARY KEY,
