@@ -41,10 +41,7 @@ valor/camino crítico. Última revisión: v2.7.0 (2026-11-05).
 Escalado (sigue caído X min → re-aviso), quiet hours, y silencio automático
 durante ventanas de mantenimiento programado.
 
-### 3. Multi-tenancy — 2.9.0/3.0.0
-Ver hitos. Diseño sugerido: tabla `organizations`, `organization_members`,
-`pages.organization_id`; aislamiento por queries (WHERE org) + API keys por
-org; el admin global mantiene la vista de todo.
+### 3. Multi-tenancy fase 1 → **hecho en 2.9.0** (organizaciones + miembros, aislamiento de keys por org, CRUD API+admin). Pendiente fase 2 (3.0.0): login con contexto de organización, dominios, i18n, límites.
 
 ### 4. Sparkline de latencia en el detalle
 `probe_last_ms` hoy solo guarda el último valor: tabla de historial de

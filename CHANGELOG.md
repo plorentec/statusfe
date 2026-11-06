@@ -9,6 +9,28 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [2.9.0] — 2026-11-05
+
+### Added
+- **Organizaciones (multi-tenancy fase 1)**: tabla `organizations` +
+  `organization_members` (owner/admin/member, CASCADE) y
+  `pages.organization_id` / `api_keys.organization_id`. La migración crea la
+  organización "Default" y asigna todas las páginas existentes (una sola vez);
+  las páginas creadas después sin org explícita quedan sin organización.
+- **Aislamiento por organización en la API**: una key ligada a una org sólo
+  puede actuar sobre páginas de su org (PUT/DELETE /pages, asignación de
+  componentes, incidents, maintenance, webhooks — 403 en cross-org);
+  `POST /pages` con key de org crea la página DENTRO de su org; las keys
+  minteadas heredan la organización.
+- **CRUD de organizaciones** por API y **panel admin**
+  (`/admin/organizations`, solo admins): listar/crear/editar/borrar con
+  gestión de miembros; select de organización en el form de páginas.
+
+### Fixed
+- **`POST /api/v1/api-keys` colgaba** — la expresión de organización usaba una
+  variable no desestructurada (ReferenceError silencioso por Express 4); el
+  arnés la cazó antes del deploy.
+
 ## [2.8.0] — 2026-11-05
 
 ### Added
