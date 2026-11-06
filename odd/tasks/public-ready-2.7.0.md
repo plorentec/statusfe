@@ -34,3 +34,13 @@ producto, la confianza operativa es el camino crítico.
   2.7.0 confianza operativa (esta) → 2.8.0 suscripciones GDPR → 2.9.0
   multi-tenancy fase 1 (organizaciones + aislamiento) → 3.0.0 fase 2
   (dominios, i18n público, límites).
+- L3: E2E en producción destapó el bug de fondo: NOW() del PostgreSQL host
+  (CET) vs lectura UTC del container → probe_last_checked_at ~1h en el futuro
+  → cada componente se sondeaba UNA sola vez. Fix: timestamp escrito desde JS
+  en UTC (467b689). Verificado en producción: consec 1→2 → major_outage con
+  confirmations=2, dos sondas en 50s (antes: una sola en 80s). Gotcha
+  sistémico documentado en AGENTS (prefiere filtrado de tiempo en JS).
+- L4: tres errores propios repetidos en los scripts de diagnóstico docker exec
+  (queryOne/queryAll mezclados entre models/database, $1 comido por el shell
+  remoto en comillas dobles) — lección: un solo script heredoc con single-quote
+  y destructures verificados.
