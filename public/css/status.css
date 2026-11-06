@@ -339,3 +339,11 @@ header.page-header {
 .comp-link { color: inherit; text-decoration: none; }
 .comp-link:hover { text-decoration: underline; }
 body.template-dark .up-pct, .dark-item .up-pct { color: #94a3b8; }
+
+/* ===== Subscribe box (2.8.0) ===== */
+.subscribe-box { margin: 18px auto 6px; max-width: 460px; text-align: center; }
+.subscribe-box h3 { margin: 0 0 8px; font-size: 15px; }
+.subscribe-box form { display: flex; gap: 8px; justify-content: center; }
+.subscribe-box input[type="email"] { flex: 1; max-width: 300px; padding: 8px 12px; border: 1px solid var(--border, #e2e8f0); border-radius: 8px; }
+.subscribe-box button { padding: 8px 16px; background: var(--sf-primary, #10b981); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; }
+.subscribe-note { font-size: 11px; color: #94a3b8; margin: 6px 0 0; }

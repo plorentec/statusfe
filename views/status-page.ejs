@@ -272,7 +272,18 @@ function uptimeBarHtml(c) {
 <% } %>
 </div>
 </div>
-<footer><p>Powered by StatusFe v<%= version %></p></footer>
+<footer>
+<div class="subscribe-box">
+<h3>Get status updates</h3>
+<form method="post" action="/subscribe/<%= page.slug %>">
+<input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+<input type="email" name="email" required placeholder="you@company.com" aria-label="Email">
+<button type="submit">Subscribe</button>
+</form>
+<p class="subscribe-note">Email confirmations and incident updates. Unsubscribe anytime.</p>
+</div>
+<p>Powered by StatusFe v<%= version %></p>
+</footer>
 
 <!-- ===== GRID TEMPLATE ===== -->
 <% } else if (page.template === 'grid') { %>
@@ -361,7 +372,18 @@ function uptimeBarHtml(c) {
 <% } %>
 </div>
 </div>
-<footer><p>Powered by StatusFe v<%= version %></p></footer>
+<footer>
+<div class="subscribe-box">
+<h3>Get status updates</h3>
+<form method="post" action="/subscribe/<%= page.slug %>">
+<input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+<input type="email" name="email" required placeholder="you@company.com" aria-label="Email">
+<button type="submit">Subscribe</button>
+</form>
+<p class="subscribe-note">Email confirmations and incident updates. Unsubscribe anytime.</p>
+</div>
+<p>Powered by StatusFe v<%= version %></p>
+</footer>
 
 <!-- ===== DARK TEMPLATE ===== -->
 <% } else { %>
@@ -453,7 +475,18 @@ function uptimeBarHtml(c) {
 <% } %>
 </div>
 </div>
-<footer><p>Powered by StatusFe v<%= version %></p></footer>
+<footer>
+<div class="subscribe-box">
+<h3>Get status updates</h3>
+<form method="post" action="/subscribe/<%= page.slug %>">
+<input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+<input type="email" name="email" required placeholder="you@company.com" aria-label="Email">
+<button type="submit">Subscribe</button>
+</form>
+<p class="subscribe-note">Email confirmations and incident updates. Unsubscribe anytime.</p>
+</div>
+<p>Powered by StatusFe v<%= version %></p>
+</footer>
 <% } %>
 
 <script>

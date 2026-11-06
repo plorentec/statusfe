@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title><%= title %> - StatusFe Admin</title>
+<link rel="stylesheet" href="/css/admin.css">
+<script>document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('dark');});</script>
+</head>
+<body>
+<div class="admin-layout">
+<%- include('../partials/_sidebar'); %>
+<main class="admin-main">
+<div class="admin-header"><h1><%= title %></h1>
+<% if (message) { %><div class="flash flash-<%= messageType %>"><%= message %></div><% } %>
+</div>
+<div class="card">
+<p>Email watchers of your status pages (double opt-in). Only confirmed subscribers receive notifications.</p>
+<table>
+<thead><tr><th>Email</th><th>Page</th><th>Status</th><th>Subscribed</th><th></th></tr></thead>
+<tbody>
+<% if (rows.length === 0) { %>
+<tr><td colspan="5">No subscribers yet.</td></tr>
+<% } %>
+<% rows.forEach(s => { %>
+<tr>
+<td><%= s.email %></td>
+<td><%= s.page_name %> (<%= s.page_slug %>)</td>
+<td><%= s.confirmed === 1 ? '<strong>confirmed</strong>' : 'pending' %></td>
+<td><%= new Date(s.created_at).toISOString().slice(0,19).replace('T',' ') %> UTC</td>
+<td>
+<form method="post" action="/admin/subscribers/<%= s.id %>/delete" onsubmit="return confirm('Remove this subscriber?')">
+<input type="hidden" name="_csrf" value="<%= csrfToken %>">
+<button type="submit" class="btn btn-sm">Remove</button>
+</form>
+</td>
+</tr>
+<% }) %>
+</tbody>
+</table>
+</div>
+</main>
+</div>
+</body>
+</html>
