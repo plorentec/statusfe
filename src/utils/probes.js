@@ -335,6 +335,8 @@ async function probeComponent(comp) {
   const need = type === 'push' ? 1 : Math.min(10, Math.max(1, parseInt(comp.probe_confirmations, 10) || 1));
   const prevOk = comp.probe_last_ok === null || comp.probe_last_ok === undefined ? null : Number(comp.probe_last_ok) === 1;
   const consec = prevOk === null || prevOk !== ok ? 1 : (parseInt(comp.probe_consecutive, 10) || 0) + 1;
+  // One line per executed probe (observability; quiet enough at 20s ticks).
+  console.log('[probes]', (comp.probe_type || 'http'), comp.name.slice(0, 40), '->', ok ? 'OK' : 'FAIL', durationMs + 'ms', 'consec=' + consec, 'need=' + need, '(prev=' + prevOk + ')');
 
   await run('UPDATE components SET probe_last_checked_at=NOW(), probe_last_ok=$1, probe_last_ms=$2, probe_consecutive=$3, updated_at=NOW() WHERE id=$4', [ok ? 1 : 0, durationMs, consec, comp.id]);
 
