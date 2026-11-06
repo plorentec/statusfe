@@ -42,3 +42,9 @@ páginas y usuarios, con aislamiento a nivel de API.
   estaba invertida (effectiveOrg && ...) → una key GLOBAL admin no podía
   asignar organization_id al crear (403 siempre). Fix: el guard sólo aplica
   cuando la KEY tiene org. +1 check en el arnés (22).
+- L4: E2E en producción COMPLETO (tras el fix): org creada con key global
+  asignando org ✓ (bug corregido), key de org mintea keys que heredan, y
+  aislamiento verificado con plaintext capturado en el create: own=200 /
+  foreign=403. Limpieza total. CI verde.
+- L5: (6d6bd9d) el fix del guard invertido + check nuevo en el arnés
+  (key global crea página asignando org).
