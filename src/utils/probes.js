@@ -325,14 +325,22 @@ async function probeComponent(comp) {
   const { ok, status, ms } = await evaluateProbe(comp);
   const durationMs = ms != null ? Math.round(ms) : Date.now() - started;
 
-  // Bookkeeping ALWAYS updates (also when the status doesn't change) so the
-  // admin can see the probe is alive. Latency (probe_last_ms) for every type.
-  await run('UPDATE components SET probe_last_checked_at=NOW(), probe_last_ok=$1, probe_last_ms=$2, updated_at=NOW() WHERE id=$3', [ok ? 1 : 0, durationMs, comp.id]);
+  // Hysteresis (2.7.0): a status transition requires N consecutive probes in
+  // the SAME direction (anti-flapping — PRTG-style confirmation count).
+  // Bookkeeping updates on EVERY probe so the admin sees the sensor is alive;
+  // probe_consecutive counts consecutive same-direction results (reset when
+  // the raw result flips). Push sensors stay instant: a stale heartbeat
+  // interval IS the confirmation.
+  const type = comp.probe_type || 'http';
+  const need = type === 'push' ? 1 : Math.min(10, Math.max(1, parseInt(comp.probe_confirmations, 10) || 1));
+  const prevOk = comp.probe_last_ok === null || comp.probe_last_ok === undefined ? null : Number(comp.probe_last_ok) === 1;
+  const consec = prevOk === null || prevOk !== ok ? 1 : (parseInt(comp.probe_consecutive, 10) || 0) + 1;
 
-  if (!ok && comp.status !== status) {
-    await require('../db/models').components.updateStatus(comp.id, status, null);
-  } else if (ok && comp.status !== 'operational') {
-    await require('../db/models').components.updateStatus(comp.id, 'operational', null);
+  await run('UPDATE components SET probe_last_checked_at=NOW(), probe_last_ok=$1, probe_last_ms=$2, probe_consecutive=$3, updated_at=NOW() WHERE id=$4', [ok ? 1 : 0, durationMs, consec, comp.id]);
+
+  const target = ok ? 'operational' : status;
+  if (consec >= need && comp.status !== target) {
+    await require('../db/models').components.updateStatus(comp.id, target, null);
   }
   return ok;
 }
@@ -349,7 +357,8 @@ async function tick() {
       SELECT c.id, c.name, c.status, c.override_status, c.probe_type, c.probe_url,
              c.probe_expected_status, c.probe_timeout_ms, c.probe_interval_seconds,
              c.probe_last_checked_at, c.probe_warn_days, c.probe_json_path,
-             c.probe_json_comparison, c.probe_json_expected, c.probe_command, c.probe_output_pattern
+             c.probe_json_comparison, c.probe_json_expected, c.probe_command, c.probe_output_pattern,
+             c.probe_last_ok, c.probe_consecutive, c.probe_confirmations
       FROM components c
       WHERE c.probe_enabled = 1
         AND c.override_status IS NULL

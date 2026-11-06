@@ -256,6 +256,11 @@ Show child components on the public status page
 <label for="probe_timeout_ms">Timeout (ms)</label>
 <input type="number" id="probe_timeout_ms" name="probe_timeout_ms" min="100" max="30000" step="100" value="<%= component.probe_timeout_ms || 5000 %>">
 </div>
+<div class="form-group probe-field probe-field-http probe-field-cert probe-field-json probe-field-tcp probe-field-dns probe-field-ping probe-field-cmd">
+<label for="probe_confirmations">Confirmations</label>
+<input type="number" id="probe_confirmations" name="probe_confirmations" min="1" max="10" value="<%= component.probe_confirmations || 1 %>">
+<small class="text-muted">Consecutive results in the same direction required before the status changes. 2-3 avoids email storms on flapping services.</small>
+</div>
 <div class="form-group">
 <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:26px;">
 <input type="checkbox" id="probe_enabled" name="probe_enabled" <%= Number(component.probe_enabled) === 1 ? 'checked' : '' %>>

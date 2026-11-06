@@ -518,7 +518,7 @@ module.exports.components = {
     return out;
   },
 
-  async create({ name, description, status, group_name, group_id, group_ids, position, external_id, parent_id, show_children, probe_url, probe_interval_seconds, probe_expected_status, probe_timeout_ms, probe_enabled, probe_type, probe_warn_days, probe_json_path, probe_json_comparison, probe_json_expected, probe_command, probe_output_pattern, probe_push_token }) {
+  async create({ name, description, status, group_name, group_id, group_ids, position, external_id, parent_id, show_children, probe_url, probe_interval_seconds, probe_expected_status, probe_timeout_ms, probe_enabled, probe_type, probe_warn_days, probe_json_path, probe_json_comparison, probe_json_expected, probe_command, probe_output_pattern, probe_push_token, probe_confirmations }) {
     const id = uuidv4();
     // Parent validation: a dangling parent_id would silently make the child
     // "standalone" everywhere, so reject it up front (no FK by design).
@@ -556,7 +556,7 @@ module.exports.components = {
     // secret of the public /push/<token> endpoint.
     const pushToken = pType === 'push' ? (String(probe_push_token || '').trim() || uuidv4()) : null;
     await run(
-      'INSERT INTO components (id,name,description,status,group_name,group_id,external_id,position,parent_id,show_children,probe_url,probe_interval_seconds,probe_expected_status,probe_timeout_ms,probe_enabled,probe_type,probe_warn_days,probe_json_path,probe_json_comparison,probe_json_expected,probe_command,probe_output_pattern,probe_push_token) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)',
+      'INSERT INTO components (id,name,description,status,group_name,group_id,external_id,position,parent_id,show_children,probe_url,probe_interval_seconds,probe_expected_status,probe_timeout_ms,probe_enabled,probe_type,probe_warn_days,probe_json_path,probe_json_comparison,probe_json_expected,probe_command,probe_output_pattern,probe_push_token,probe_confirmations) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)',
       [id, name, description||'', status||'operational', group_name||null, group_id||null, external_id||null, position||0, parentId, toBool01(show_children),
        (pType === 'cmd' || pType === 'push' ? null : (pUrl || null)),
        Math.max(1, parseInt(probe_interval_seconds, 10) || 60),
@@ -570,7 +570,8 @@ module.exports.components = {
        (pType === 'json' || pType === 'dns') ? (probe_json_expected != null ? String(probe_json_expected) : null) : null,
        (pType === 'cmd') ? (String(probe_command || '').trim() || null) : null,
        (probe_output_pattern ? String(probe_output_pattern).trim() || null : null),
-       pushToken]
+       pushToken,
+       Math.min(10, Math.max(1, parseInt(probe_confirmations, 10) || 1))]
     );
     const gids = (group_ids && group_ids.length) ? group_ids : (group_id ? [group_id] : []);
     if (gids.length) await this.setGroups(id, gids);
@@ -612,7 +613,7 @@ module.exports.components = {
     if (!oldComp) return null;
     const fields = [];
     const params = [];
-    const allowed = ['name','description','status','group_name','group_id','position','external_id','override_status','parent_id','show_children','probe_url','probe_interval_seconds','probe_expected_status','probe_timeout_ms','probe_enabled','probe_type','probe_warn_days','probe_json_path','probe_json_comparison','probe_json_expected','probe_command','probe_output_pattern','probe_push_token'];
+    const allowed = ['name','description','status','group_name','group_id','position','external_id','override_status','parent_id','show_children','probe_url','probe_interval_seconds','probe_expected_status','probe_timeout_ms','probe_enabled','probe_type','probe_warn_days','probe_json_path','probe_json_comparison','probe_json_expected','probe_command','probe_output_pattern','probe_push_token','probe_confirmations'];
     // Cycle guard BEFORE any write: a component may not be its own parent nor
     // a descendant of itself (same walk style as dependencies.wouldCreateCycle).
     if (data.parent_id !== undefined && data.parent_id !== null && data.parent_id !== '') {
@@ -652,6 +653,7 @@ module.exports.components = {
         if (k === 'probe_json_expected') val = val != null ? String(val) : null;
         if (k === 'probe_command') val = String(val || '').trim() || null;
         if (k === 'probe_output_pattern') val = String(val || '').trim() || null;
+        if (k === 'probe_confirmations') val = Math.min(10, Math.max(1, parseInt(val, 10) || 1));
         fields.push(k+'=$'+(params.length+1)); params.push(val);
       }
     }

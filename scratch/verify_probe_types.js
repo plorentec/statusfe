@@ -69,7 +69,10 @@ async function waitForBoot() {
 
 const HTTP_PORT = 3991;
 const TLS_PORT = 3992;
+let flapCount = 0;
 const httpMock = http.createServer((rq, rs) => {
+  if (rq.url === '/flap') { flapCount++; flapCount % 2 === 1 ? (rs.writeHead(200), rs.end('ok')) : (rs.writeHead(500), rs.end('boom')); return; }
+  if (rq.url === '/stable-fail') { rs.writeHead(500); return rs.end('down'); }
   if (rq.url === '/api') { rs.writeHead(200, { 'Content-Type': 'application/json' }); return rs.end('{"status":"ok","num":42,"items":[{"healthy":true}]}'); }
   if (rq.url === '/badjson') { rs.writeHead(200); return rs.end('<html>not json</html>'); }
   if (rq.url === '/wrong') { rs.writeHead(200, { 'Content-Type': 'application/json' }); return rs.end('{"status":"error"}'); }
@@ -197,6 +200,33 @@ const httpMock = http.createServer((rq, rs) => {
   await components.update(sw.id, { probe_type: 'cmd', probe_command: 'true' });
   const swRow = await components.get(sw.id);
   check('SWITCH: http->cmd mantiene la probe habilitada', Number(swRow.probe_enabled) === 1 && swRow.probe_type === 'cmd' && swRow.probe_command === 'true', `type=${swRow.probe_type} cmd=${swRow.probe_command}`);
+
+  // ===== hysteresis (2.7.0): confirmations =====
+  // Flapping alternante con confirmations=3: NUNCA debe transicionar (el
+  // contador se resetea con cada flip) ni generar major_outage.
+  const flap = await components.create({ name: 'flap-hysteresis', group_ids: [grp.id], probe_type: 'http', probe_url: `${B}/flap`, probe_confirmations: 3, probe_enabled: 1, probe_interval_seconds: 1 });
+  await new Promise(r => setTimeout(r, 7000)); // ~7 sondeos alternantes
+  const flapRow = await components.get(flap.id);
+  check('HYST: flapping con confirmations=3 NO transiciona (sigue operational)', flapRow.status === 'operational', flapRow.status + ' consec=' + flapRow.probe_consecutive);
+  check('HYST: probe_consecutive nunca llega a 3 con flapping', Number(flapRow.probe_consecutive) <= 2, flapRow.probe_consecutive);
+
+  // Fallo estable con confirmations=2: transiciona en el segundo sondeo
+  const hyst = await components.create({ name: 'hysteresis-fail', group_ids: [grp.id], probe_type: 'http', probe_url: `${B}/stable-fail`, probe_confirmations: 2, probe_enabled: 1, probe_interval_seconds: 1 });
+  const firstTick = await waitFor(async () => (await components.get(hyst.id)).probe_consecutive === 1 && (await components.get(hyst.id)).status === 'operational', 3000);
+  check('HYST: primer fallo consec=1 y SIN transición aún', firstTick === true || (await components.get(hyst.id)).probe_consecutive === 1, 'consec=' + (await components.get(hyst.id)).probe_consecutive + ' status=' + (await components.get(hyst.id)).status);
+  check('HYST: segundo fallo consecutivo -> major_outage',
+    await waitFor(async () => (await components.get(hyst.id)).status === 'major_outage' && Number((await components.get(hyst.id)).probe_consecutive) >= 2),
+    (await components.get(hyst.id)).status + ' consec=' + (await components.get(hyst.id)).probe_consecutive);
+
+  // Recuperación también requiere confirmations: apuntar a /ok
+  // /ok NO existe en este mock (404): la recuperación apunta a /api (200)
+  await components.update(hyst.id, { probe_url: `${B}/api` });
+  const recov = await waitFor(async () => {
+    const r = await components.get(hyst.id);
+    console.log('   [dbg]', 'st=' + r.status, 'ok=' + r.probe_last_ok, 'consec=' + r.probe_consecutive, 'url=' + r.probe_url, 'checked=' + (r.probe_last_checked_at ? 'yes' : 'null'));
+    return r.status === 'operational' && Number(r.probe_consecutive) >= 2;
+  });
+  check('HYST: recuperación con 2 OK consecutivos -> operational', recov, (await components.get(hyst.id)).status);
 
   mockClose(httpMock, tlsMock, certDir);
   function mockClose(h, t, dir) {

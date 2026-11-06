@@ -230,7 +230,8 @@ router.post('/components', requirePerm('write'), async (req, res) => {
       probe_json_expected: req.body.probe_json_expected,
       probe_command: req.body.probe_command,
       probe_output_pattern: req.body.probe_output_pattern,
-      probe_push_token: req.body.probe_push_token
+      probe_push_token: req.body.probe_push_token,
+      probe_confirmations: req.body.probe_confirmations
     });
   } catch (e) {
     // Cycle guard / missing parent (model validation) — nothing was written.
