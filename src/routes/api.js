@@ -159,7 +159,10 @@ router.post('/pages', requirePerm('write'), async (req, res) => {
   const { name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public, external_id, organization_id } = req.body;
   // An org-bound key creates pages INSIDE its organization (tenant isolation).
   const effectiveOrg = req.user.organization_id || organization_id || null;
-  if (effectiveOrg && req.user.organization_id !== effectiveOrg) {
+  // Only a key BOUND to an org is restricted: a global (admin) key may place
+  // the new page in ANY organization. The old condition inverted this and 403'd
+  // every global key that tried to set an org (caught in production E2E).
+  if (req.user.organization_id && effectiveOrg !== req.user.organization_id) {
     return res.status(403).json({ error: 'Organization mismatch' });
   }
   if (!name || !slug) return res.status(400).json({ error: 'name and slug required' });

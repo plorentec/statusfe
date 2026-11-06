@@ -104,6 +104,10 @@ async function waitForBoot() {
 
   // key GLOBAL sigue siendo global (control)
   check('S4: control — key global edita cualquier página', (await req('PUT', `/api/v1/pages/${globalPage.id}`, { headers: { 'x-api-key': adminKey.key }, body: { description: 'ok' } })).status === 200);
+  // key GLOBAL admin puede asignar organization_id al crear (fue el bug del E2E)
+  const orgPage = await req('POST', '/api/v1/pages', { headers: { 'x-api-key': adminKey.key }, body: { name: 'Org Page via global', slug: 'org-via-global', is_public: true, organization_id: acme.id } });
+  const orgPageBody = orgPage.status === 201 ? JSON.parse(orgPage.body).page : null;
+  check('S4: key global crea página ASIGNANDO la organización (201 + org set)', orgPage.status === 201 && orgPageBody && orgPageBody.organization_id === acme.id, orgPage.status + ' org=' + (orgPageBody && orgPageBody.organization_id));
 
   // ===== 4. miembros =====
   const user = await queryOne("SELECT id FROM users WHERE role='admin' LIMIT 1");

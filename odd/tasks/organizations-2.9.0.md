@@ -38,3 +38,7 @@ páginas y usuarios, con aislamiento a nivel de API.
 - L2: Decisión fase 1: los miembros de una organización NO entran al panel con
   contexto de org (eso es fase 2) — el panel sigue siendo de admins globales;
   el aislamiento real de fase 1 es a nivel de API keys.
+- L3: E2E en producción cazó bug: la condición de mismatch en POST /pages
+  estaba invertida (effectiveOrg && ...) → una key GLOBAL admin no podía
+  asignar organization_id al crear (403 siempre). Fix: el guard sólo aplica
+  cuando la KEY tiene org. +1 check en el arnés (22).
