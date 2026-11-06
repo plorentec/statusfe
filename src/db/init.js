@@ -23,6 +23,7 @@ async function createTables() {
       template TEXT DEFAULT 'default',
       timezone TEXT DEFAULT 'UTC',
       logo_url TEXT,
+      organization_id TEXT,
       custom_css TEXT,
       custom_html TEXT,
       is_public INTEGER DEFAULT 1,
@@ -126,6 +127,7 @@ async function createTables() {
       name TEXT NOT NULL,
       permissions TEXT DEFAULT '["read"]',
       page_id TEXT,
+      organization_id TEXT,
       rate_limit INTEGER DEFAULT 100,
       is_active INTEGER DEFAULT 1,
       last_used_at TIMESTAMP,
@@ -340,6 +342,44 @@ async function createTables() {
   for (const idx of subscriberIndexes) {
     try { await run(`CREATE INDEX IF NOT EXISTS ${idx}`); } catch(e) { /* exists */ }
   }
+  for (const idx of [
+    'idx_pages_organization ON pages(organization_id)',
+    'idx_api_keys_organization ON api_keys(organization_id)',
+    'idx_org_members_user ON organization_members(user_id)',
+  ]) {
+    try { await run(`CREATE INDEX IF NOT EXISTS ${idx}`); } catch(e) { /* exists */ }
+  }
+  for (const idx of [
+    'idx_pages_organization ON pages(organization_id)',
+    'idx_api_keys_organization ON api_keys(organization_id)',
+    'idx_org_members_user ON organization_members(user_id)',
+  ]) {
+    try { await run(`CREATE INDEX IF NOT EXISTS ${idx}`); } catch(e) { /* exists */ }
+  }
+
+  // Organizations (2.9.0): multi-tenancy fase 1.
+  await run(`
+    CREATE TABLE IF NOT EXISTS organizations (
+      id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      slug TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE (slug)
+    )
+  `);
+  await run(`
+    CREATE TABLE IF NOT EXISTS organization_members (
+      organization_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      role TEXT,
+      PRIMARY KEY (organization_id, user_id),
+      FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
 
   await run(`
     CREATE TABLE IF NOT EXISTS audit_log (
@@ -625,6 +665,21 @@ async function migrate() {
       if (enc) await run("UPDATE settings SET value=$1 WHERE key='smtp_pass'", [enc]);
     }
   } catch(e) { /* settings table may not exist yet on a broken boot */ }
+
+  // Organizations (2.9.0): multi-tenancy fase 1.
+  try { await run(`ALTER TABLE pages ADD COLUMN IF NOT EXISTS organization_id TEXT`); } catch(e) { /* exists */ }
+  try { await run(`ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS organization_id TEXT`); } catch(e) { /* exists */ }
+  // Backfill ONCE: create the "Default" organization and assign every existing
+  // page to it, so org scoping is coherent from the first boot after upgrade.
+  // Pages created AFTER this migration without an explicit org stay NULL (no org).
+  const orgsBackfilled = await queryOne("SELECT value FROM settings WHERE key='migration_orgs_backfilled'");
+  if (!orgsBackfilled) {
+    await run("INSERT INTO organizations (id,name,slug) VALUES ($1,'Default','default') ON CONFLICT (slug) DO NOTHING", [require('uuid').v4()]);
+    const org = await queryOne("SELECT id FROM organizations WHERE slug='default'");
+    await run('UPDATE pages SET organization_id=$1 WHERE organization_id IS NULL', [org.id]);
+    await run("INSERT INTO settings (key,value) VALUES ('migration_orgs_backfilled','1') ON CONFLICT (key) DO NOTHING");
+    console.log('Migrated existing pages to the Default organization');
+  }
 
   // is_global on component_groups: add the column if the table predates it
   // (older installs), then backfill existing global groups. "Global" previously

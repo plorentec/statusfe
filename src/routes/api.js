@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { queryOne, queryAll, run } = require('../db/database');
-const { pages, components, componentGroups, incidents, apiKeys, webhooks, maintenance, notifications, analytics, dependencies, settings, getUptimeBars } = require('../db/models');
+const { pages, components, componentGroups, incidents, apiKeys, webhooks, maintenance, notifications, analytics, dependencies, settings, getUptimeBars, organizations } = require('../db/models');
 const { auth, requirePerm, enforceKeyRateLimit } = require('../middleware/auth');
 const { destroyUserSessions } = require('../middleware/session');
 const { deliver: triggerWebhook } = require('../utils/webhooks');
@@ -133,6 +133,14 @@ router.use(auth);
 function scopeDenied(req, pageId) {
   return !!(req.user.page_id && String(pageId) !== String(req.user.page_id));
 }
+// Organization scope (2.9.0): a key bound to an organization may only act on
+// pages belonging to it. Keys without an org behave globally (unchanged).
+async function orgDenied(req, pageId) {
+  if (!req.user.organization_id || !pageId) return false;
+  const page = await queryOne('SELECT organization_id FROM pages WHERE id=$1', [pageId]);
+  return !page || page.organization_id !== req.user.organization_id;
+}
+
 async function componentInScope(req, componentId) {
   if (!req.user.page_id) return true;
   const row = await queryOne(
@@ -148,14 +156,19 @@ router.get('/info', (req, res) => res.json({ name: 'StatusFe API', version: '1.0
 router.post('/pages', requirePerm('write'), async (req, res) => {
   // A scoped key cannot create pages: any new page is outside its scope.
   if (req.user.page_id) return res.status(403).json({ error: 'Scoped keys cannot create pages' });
-  const { name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public, external_id } = req.body;
+  const { name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public, external_id, organization_id } = req.body;
+  // An org-bound key creates pages INSIDE its organization (tenant isolation).
+  const effectiveOrg = req.user.organization_id || organization_id || null;
+  if (effectiveOrg && req.user.organization_id !== effectiveOrg) {
+    return res.status(403).json({ error: 'Organization mismatch' });
+  }
   if (!name || !slug) return res.status(400).json({ error: 'name and slug required' });
   // Same slug rule as the admin UI (missing here previously — an API key could
   // save slugs with spaces/uppercase that broke /status/:slug URLs).
   if (!/^[a-z0-9-]+$/.test(slug)) return res.status(400).json({ error: 'slug must match ^[a-z0-9-]+$' });
   const existing = await pages.getBySlug(slug);
   if (existing) return res.status(409).json({ error: 'Slug exists' });
-  const page = await pages.create({ name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public, external_id });
+  const page = await pages.create({ name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public, external_id, organization_id: effectiveOrg });
   res.status(201).json({ page });
 });
 router.put('/pages/:id', requirePerm('write'), async (req, res) => {
@@ -165,12 +178,14 @@ router.put('/pages/:id', requirePerm('write'), async (req, res) => {
   const page = await pages.getById(req.params.id) || await pages.getBySlug(req.params.id);
   if (!page) return res.status(404).json({ error: 'Not found' });
   if (scopeDenied(req, page.id)) return res.status(403).json({ error: 'Forbidden' });
+  if (await orgDenied(req, page.id)) return res.status(403).json({ error: 'Organization mismatch' });
   res.json({ page: await pages.update(page.id, req.body) });
 });
 router.delete('/pages/:id', requirePerm('admin'), async (req, res) => {
   const page = await pages.getById(req.params.id) || await pages.getBySlug(req.params.id);
   if (!page) return res.status(404).json({ error: 'Not found' });
   if (scopeDenied(req, page.id)) return res.status(403).json({ error: 'Forbidden' });
+  if (await orgDenied(req, page.id)) return res.status(403).json({ error: 'Organization mismatch' });
   await pages.delete(page.id);
   res.json({ message: 'Deleted' });
 });
@@ -313,6 +328,7 @@ router.post('/pages/:pageId/components/:componentId', requirePerm('write'), asyn
     const page = await pages.getById(req.params.pageId) || await pages.getBySlug(req.params.pageId);
     if (!page) return res.status(404).json({ error: 'Page not found' });
     if (scopeDenied(req, page.id)) return res.status(403).json({ error: 'Forbidden' });
+    if (await orgDenied(req, page.id)) return res.status(403).json({ error: 'Organization mismatch' });
     await components.assignToPage(page.id, req.params.componentId, req.body.position || 0);
     triggerWebhook(page.id, 'component.assigned', { page_id: page.id, component_id: req.params.componentId }).catch(() => {});
     res.json({ message: 'Assigned' });
@@ -323,6 +339,7 @@ router.delete('/pages/:pageId/components/:componentId', requirePerm('write'), as
   const page = await pages.getById(req.params.pageId) || await pages.getBySlug(req.params.pageId);
   const effectivePageId = page ? page.id : req.params.pageId;
   if (scopeDenied(req, effectivePageId)) return res.status(403).json({ error: 'Forbidden' });
+  if (await orgDenied(req, effectivePageId)) return res.status(403).json({ error: 'Organization mismatch' });
   await components.removeFromPage(effectivePageId, req.params.componentId);
   res.json({ message: 'Removed' });
 });
@@ -435,6 +452,7 @@ router.post('/incidents', requirePerm('write'), async (req, res) => {
     if (page_id && scopeDenied(req, page_id)) return res.status(403).json({ error: 'Forbidden' });
     if (component_id && !(await componentInScope(req, component_id))) return res.status(403).json({ error: 'Forbidden' });
   }
+  if (page_id && await orgDenied(req, page_id)) return res.status(403).json({ error: 'Organization mismatch' });
   if (status !== undefined && !(await incidents.validStatuses()).includes(status)) return res.status(400).json({ error: 'invalid status' });
   const cleanStartsAt = starts_at && starts_at.trim() !== '' ? starts_at : null;
   const cleanResolvedAt = resolved_at && resolved_at.trim() !== '' ? resolved_at : null;
@@ -494,12 +512,14 @@ router.get('/api-keys', requirePerm('admin'), async (req, res) => {
   res.json({ api_keys: keys, total: keys.length });
 });
 router.post('/api-keys', requirePerm('admin'), async (req, res) => {
-  const { name, permissions, page_id, rate_limit, expires_at } = req.body;
+  const { name, permissions, page_id, rate_limit, expires_at, organization_id } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
   // A scoped admin key can only mint keys for its OWN page (previously the
   // body's page_id won and a scoped key could mint a global key).
   const effectivePageId = req.user.page_id || page_id || null;
-  const key = await apiKeys.create({ name, permissions, page_id: effectivePageId, rate_limit, expires_at });
+  // Org keys mint keys bound to the SAME organization (no cross-org escalation).
+  const effectiveOrgId = req.user.organization_id || organization_id || null;
+  const key = await apiKeys.create({ name, permissions, page_id: effectivePageId, rate_limit, expires_at, organization_id: effectiveOrgId });
   res.status(201).json({ api_key: key });
 });
 router.delete('/api-keys/:id', requirePerm('admin'), async (req, res) => {
@@ -527,6 +547,7 @@ router.post('/pages/:pageId/webhooks', requirePerm('write'), async (req, res) =>
   const page = await pages.getById(req.params.pageId) || await pages.getBySlug(req.params.pageId);
   if (!page) return res.status(404).json({ error: 'Not found' });
   if (scopeDenied(req, page.id)) return res.status(403).json({ error: 'Forbidden' });
+  if (await orgDenied(req, page.id)) return res.status(403).json({ error: 'Organization mismatch' });
   res.status(201).json({ webhook: await webhooks.create({ page_id: page.id, url, events, secret }) });
 });
 router.put('/webhooks/:id', requirePerm('write'), async (req, res) => {
@@ -543,6 +564,51 @@ router.delete('/webhooks/:id', requirePerm('admin'), async (req, res) => {
   if (scopeDenied(req, wh.page_id)) return res.status(403).json({ error: 'Forbidden' });
   await webhooks.delete(req.params.id);
   res.json({ message: 'Deleted' });
+});
+
+// ===== ORGANIZATIONS (2.9.0) =====
+// Multi-tenancy fase 1. Admin permission required for everything: orgs are
+// created by the instance operator (self-service org onboarding is fase 2).
+router.get('/organizations', async (req, res) => {
+  const list = await organizations.list();
+  res.json({ organizations: list, total: list.length });
+});
+router.get('/organizations/:id', async (req, res) => {
+  const org = await organizations.get(req.params.id);
+  if (!org) return res.status(404).json({ error: 'Not found' });
+  const members = await organizations.listMembers(org.id);
+  res.json({ organization: org, members });
+});
+router.post('/organizations', requirePerm('admin'), async (req, res) => {
+  try {
+    const org = await organizations.create({ name: req.body.name, slug: req.body.slug, memberIds: req.body.member_ids });
+    res.status(201).json({ organization: org, members: await organizations.listMembers(org.id) });
+  } catch (e) {
+    if (['invalid_slug', 'slug_exists', 'name_required'].includes(e.code)) return res.status(400).json({ error: e.message });
+    console.error('POST /api/v1/organizations error:', e);
+    res.status(500).json({ error: 'Internal error' });
+  }
+});
+router.put('/organizations/:id', requirePerm('admin'), async (req, res) => {
+  try {
+    const org = await organizations.update(req.params.id, { name: req.body.name, slug: req.body.slug });
+    res.json({ organization: org });
+  } catch (e) {
+    if (['invalid_slug', 'slug_exists', 'name_required'].includes(e.code)) return res.status(400).json({ error: e.message });
+    res.status(500).json({ error: 'Internal error' });
+  }
+});
+router.delete('/organizations/:id', requirePerm('admin'), async (req, res) => {
+  const org = await organizations.get(req.params.id);
+  if (!org) return res.status(404).json({ error: 'Not found' });
+  await organizations.delete(org.id);
+  res.json({ message: 'Deleted' });
+});
+router.post('/organizations/:id/members', requirePerm('admin'), async (req, res) => {
+  const org = await organizations.get(req.params.id);
+  if (!org) return res.status(404).json({ error: 'Not found' });
+  const members = await organizations.setMembers(org.id, req.body.members || []);
+  res.json({ members });
 });
 
 // Settings (placeholder)
@@ -587,6 +653,7 @@ router.post('/maintenance', requirePerm('write'), async (req, res) => {
   const { page_id, component_id, title, description, starts_at, ends_at } = req.body;
   if (!title || !starts_at || !ends_at) return res.status(400).json({ error: 'title, starts_at and ends_at required' });
   if (scopeDenied(req, page_id)) return res.status(403).json({ error: 'Forbidden' });
+  if (await orgDenied(req, page_id)) return res.status(403).json({ error: 'Organization mismatch' });
   let m;
   try {
     m = await maintenance.create({ page_id, component_id, title, description, starts_at, ends_at });

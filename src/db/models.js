@@ -239,11 +239,16 @@ module.exports.pages = {
   async getBySlug(slug) { return await queryOne('SELECT * FROM pages WHERE slug=$1', [slug]); },
   async getByExternalId(ex_id) { if (!ex_id) return null; return await queryOne('SELECT * FROM pages WHERE external_id=$1', [ex_id]); },
 
-  async create({ name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public, template, refresh_interval, custom_layout, custom_layout_css, custom_layout_html, external_id }) {
+  async create({ name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public, template, refresh_interval, custom_layout, custom_layout_css, custom_layout_html, external_id, organization_id }) {
     const id = uuidv4();
+    let orgId = String(organization_id || '').trim() || null;
+    if (orgId) {
+      const org = await queryOne('SELECT id FROM organizations WHERE id=$1', [orgId]);
+      if (!org) { const err = new Error('Organization not found'); err.code = 'org_missing'; throw err; }
+    }
     await run(
-      'INSERT INTO pages (id,name,slug,description,status,template,timezone,logo_url,custom_css,custom_html,is_public,refresh_interval,custom_layout,custom_layout_css,custom_layout_html,external_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)',
-      [id, name, slug, description||'', status||'operational', template||'default', timezone||'UTC', logo_url||null, sanitizeCss(custom_css)||null, sanitizeHtml(custom_html)||null, toBool01(is_public), refresh_interval ? Math.max(15, parseInt(refresh_interval)) : 15, toBool01(custom_layout), sanitizeCss(custom_layout_css)||null, sanitizeHtml(custom_layout_html)||null, external_id||null]
+      'INSERT INTO pages (id,name,slug,description,status,template,timezone,logo_url,organization_id,custom_css,custom_html,is_public,refresh_interval,custom_layout,custom_layout_css,custom_layout_html,external_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)',
+      [id, name, slug, description||'', status||'operational', template||'default', timezone||'UTC', logo_url||null, orgId, sanitizeCss(custom_css)||null, sanitizeHtml(custom_html)||null, toBool01(is_public), refresh_interval ? Math.max(15, parseInt(refresh_interval)) : 15, toBool01(custom_layout), sanitizeCss(custom_layout_css)||null, sanitizeHtml(custom_layout_html)||null, external_id||null]
     );
     return this.getById(id);
   },
@@ -251,10 +256,19 @@ module.exports.pages = {
   async update(id, data) {
     const fields = [];
     const params = [];
-    const allowed = ['name','slug','description','status','template','timezone','logo_url','custom_css','custom_html','is_public','refresh_interval','custom_layout','custom_layout_css','custom_layout_html','external_id'];
+    const allowed = ['name','slug','description','status','template','timezone','logo_url','custom_css','custom_html','is_public','refresh_interval','custom_layout','custom_layout_css','custom_layout_html','external_id','organization_id'];
     for (const k of allowed) {
       if (data[k] !== undefined) {
         let val = data[k];
+        if (k === 'organization_id') {
+          // Org must exist when set (no FK by design — validated here).
+          const orgId = String(val || '').trim();
+          if (orgId) {
+            const org = await queryOne('SELECT id FROM organizations WHERE id=$1', [orgId]);
+            if (!org) { const err = new Error('Organization not found'); err.code = 'org_missing'; throw err; }
+            val = orgId;
+          } else val = null;
+        }
         if (k === 'refresh_interval') val = Math.max(15, parseInt(val) || 15);
         if (k === 'is_public') val = toBool01(val);
         if (k === 'custom_layout') val = toBool01(val);
@@ -1175,7 +1189,7 @@ async function _authResult(r) {
   const page = await queryOne('SELECT slug FROM pages WHERE id=$1', [r.page_id]);
   let permissions = ['read'];
   try { permissions = JSON.parse(r.permissions); } catch(e) { /* malformed → default */ }
-  return { id: r.id, name: r.name, permissions, page_id: r.page_id, page_slug: page?.slug, rate_limit: r.rate_limit };
+  return { id: r.id, name: r.name, permissions, page_id: r.page_id, page_slug: page?.slug, rate_limit: r.rate_limit, organization_id: r.organization_id || null };
 }
 
 // ===== API KEYS =====
@@ -1196,17 +1210,17 @@ module.exports.apiKeys = {
     return r ? {...r, permissions: safeParsePermissions(r.permissions)} : null;
   },
 
-  async create({ name, permissions, page_id, rate_limit, expires_at }) {
+  async create({ name, permissions, page_id, rate_limit, expires_at, organization_id }) {
     const id = uuidv4();
     const key = uuidv4() + '-' + uuidv4();
     const hash = require('bcryptjs').hashSync(key, 10);
     // key column is NOT persisted (security: no plaintext at rest). The plaintext
     // `key` is returned once so the caller can surface it at creation time.
     await run(
-      'INSERT INTO api_keys (id,key_hash,key,key_prefix,name,permissions,page_id,rate_limit,is_active,expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
-      [id, hash, null, key.substring(0,8), name, JSON.stringify(permissions||['read']), page_id||null, rate_limit||100, 1, expires_at||null]
+      'INSERT INTO api_keys (id,key_hash,key,key_prefix,name,permissions,page_id,rate_limit,is_active,expires_at,organization_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+      [id, hash, null, key.substring(0,8), name, JSON.stringify(permissions||['read']), page_id||null, rate_limit||100, 1, expires_at||null, organization_id||null]
     );
-    return { id, key, key_prefix: key.substring(0,8), name, permissions: permissions||['read'], page_id, rate_limit: rate_limit||100, is_active: true, created_at: new Date().toISOString(), expires_at };
+    return { id, key, key_prefix: key.substring(0,8), name, permissions: permissions||['read'], page_id, rate_limit: rate_limit||100, is_active: true, created_at: new Date().toISOString(), expires_at, organization_id: organization_id||null };
   },
 
   async revoke(id) { await run('UPDATE api_keys SET is_active=0 WHERE id=$1', [id]); return true; },
@@ -2134,6 +2148,87 @@ module.exports.subscribers = {
     const cutoff = new Date(Date.now() - days * 86400000).toISOString().slice(0, 19).replace('T', ' ');
     const r = await run('DELETE FROM subscribers WHERE confirmed=0 AND created_at < $1', [cutoff]);
     return r.changes || 0;
+  }
+};
+
+// ===== ORGANIZATIONS (2.9.0) =====
+// Multi-tenancy fase 1: organizations group pages and users. Pages created
+// after the migration without an explicit org have organization_id NULL.
+module.exports.organizations = {
+  SLUG_RE: /^[a-z0-9-]{1,64}$/,
+
+  async list() {
+    return await queryAll('SELECT * FROM organizations ORDER BY created_at ASC');
+  },
+
+  async get(id) { return await queryOne('SELECT * FROM organizations WHERE id=$1', [id]); },
+  async getBySlug(slug) { return await queryOne('SELECT * FROM organizations WHERE slug=$1', [slug]); },
+
+  async create({ name, slug, memberIds }) {
+    const id = uuidv4();
+    const cleanSlug = String(slug || '').trim().toLowerCase() || String(name || '').trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-');
+    if (!this.SLUG_RE.test(cleanSlug)) { const err = new Error('Invalid org slug'); err.code = 'invalid_slug'; throw err; }
+    if (await this.getBySlug(cleanSlug)) { const err = new Error('Slug already exists'); err.code = 'slug_exists'; throw err; }
+    if (!String(name || '').trim()) { const err = new Error('Name required'); err.code = 'name_required'; throw err; }
+    await run('INSERT INTO organizations (id,name,slug) VALUES ($1,$2,$3)', [id, String(name).trim(), cleanSlug]);
+    for (const uid of (memberIds || [])) {
+      await run("INSERT INTO organization_members (organization_id,user_id,role) VALUES ($1,$2,'member') ON CONFLICT DO NOTHING", [id, uid]);
+    }
+    return this.get(id);
+  },
+
+  async update(id, { name, slug }) {
+    if (name !== undefined) {
+      if (!String(name).trim()) { const err = new Error('Name required'); err.code = 'name_required'; throw err; }
+      await run('UPDATE organizations SET name=$1, updated_at=NOW() WHERE id=$2', [String(name).trim(), id]);
+    }
+    if (slug !== undefined) {
+      const clean = String(slug).trim().toLowerCase();
+      if (!this.SLUG_RE.test(clean)) { const err = new Error('Invalid org slug'); err.code = 'invalid_slug'; throw err; }
+      const existing = await this.getBySlug(clean);
+      if (existing && existing.id !== id) { const err = new Error('Slug already exists'); err.code = 'slug_exists'; throw err; }
+      await run('UPDATE organizations SET slug=$1, updated_at=NOW() WHERE id=$2', [clean, id]);
+    }
+    return this.get(id);
+  },
+
+  // Delete: members CASCADE; pages survive WITHOUT an org (org_id NULL) and
+  // the org's API keys become global (the org no longer exists — keeping the
+  // dangling id would lock those keys out of everything).
+  async delete(id) {
+    await run('UPDATE pages SET organization_id=NULL WHERE organization_id=$1', [id]);
+    await run('UPDATE api_keys SET organization_id=NULL WHERE organization_id=$1', [id]);
+    await run('DELETE FROM organizations WHERE id=$1', [id]);
+    return true;
+  },
+
+  async listMembers(id) {
+    return await queryAll(
+      "SELECT u.id, u.email, u.name, m.role FROM organization_members m JOIN users u ON u.id = m.user_id WHERE m.organization_id=$1 ORDER BY u.name",
+      [id]
+    );
+  },
+
+  // Exact sync of members with role (default 'member'). Users must exist.
+  async setMembers(id, members) {
+    // members: [{ userId, role }] or [userId, ...]
+    await run('DELETE FROM organization_members WHERE organization_id=$1', [id]);
+    for (const m of members || []) {
+      const userId = typeof m === 'object' ? m.userId : m;
+      const role = typeof m === 'object' && ['owner', 'admin', 'member'].includes(m.role) ? m.role : 'member';
+      if (!userId) continue;
+      const u = await queryOne('SELECT id FROM users WHERE id=$1', [userId]);
+      if (!u) continue;
+      await run("INSERT INTO organization_members (organization_id,user_id,role) VALUES ($1,$2,$3) ON CONFLICT (organization_id,user_id) DO UPDATE SET role=$3", [id, userId, role]);
+    }
+    return this.listMembers(id);
+  },
+
+  async listForUser(userId) {
+    return await queryAll(
+      'SELECT o.*, m.role FROM organizations o JOIN organization_members m ON m.organization_id = o.id WHERE m.user_id=$1 ORDER BY o.name',
+      [userId]
+    );
   }
 };
 
