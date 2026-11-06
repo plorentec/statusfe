@@ -9,6 +9,22 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [3.0.0] — 2026-11-05
+
+### Added
+- **Multi-tenancy fase 2: login con contexto de organización** — al iniciar
+  sesión, un usuario no-admin con membresías recibe `org_scope` en su sesión
+  (su primera organización por nombre; los admins globales no se limitan).
+- **Panel con scope de lectura**: dashboard, páginas, componentes, incidentes
+  y ventanas de mantenimiento muestran SOLO los datos de las páginas del
+  usuario (por defecto, un `role=user` SIN organización ve el panel VACÍO —
+  aislamiento por defecto). Las mutaciones ya estaban bloqueadas (2.7.0).
+- **i18n de la página pública**: `pages.locale` (en|es) con select en el form
+  de páginas — los estados ("Operativo", "Interrupción grave"…), el chrome
+  ("Estado general", form de suscripción, incidentes activos) y la página de
+  detalle se muestran en el idioma de la página. La API sigue devolviendo los
+  estados crudos.
+
 ## [2.9.0] — 2026-11-05
 
 ### Added

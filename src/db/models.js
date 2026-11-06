@@ -239,7 +239,7 @@ module.exports.pages = {
   async getBySlug(slug) { return await queryOne('SELECT * FROM pages WHERE slug=$1', [slug]); },
   async getByExternalId(ex_id) { if (!ex_id) return null; return await queryOne('SELECT * FROM pages WHERE external_id=$1', [ex_id]); },
 
-  async create({ name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public, template, refresh_interval, custom_layout, custom_layout_css, custom_layout_html, external_id, organization_id }) {
+  async create({ name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public, template, refresh_interval, custom_layout, custom_layout_css, custom_layout_html, external_id, organization_id, locale }) {
     const id = uuidv4();
     let orgId = String(organization_id || '').trim() || null;
     if (orgId) {
@@ -247,8 +247,8 @@ module.exports.pages = {
       if (!org) { const err = new Error('Organization not found'); err.code = 'org_missing'; throw err; }
     }
     await run(
-      'INSERT INTO pages (id,name,slug,description,status,template,timezone,logo_url,organization_id,custom_css,custom_html,is_public,refresh_interval,custom_layout,custom_layout_css,custom_layout_html,external_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)',
-      [id, name, slug, description||'', status||'operational', template||'default', timezone||'UTC', logo_url||null, orgId, sanitizeCss(custom_css)||null, sanitizeHtml(custom_html)||null, toBool01(is_public), refresh_interval ? Math.max(15, parseInt(refresh_interval)) : 15, toBool01(custom_layout), sanitizeCss(custom_layout_css)||null, sanitizeHtml(custom_layout_html)||null, external_id||null]
+      'INSERT INTO pages (id,name,slug,description,status,template,timezone,logo_url,organization_id,locale,custom_css,custom_html,is_public,refresh_interval,custom_layout,custom_layout_css,custom_layout_html,external_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)',
+      [id, name, slug, description||'', status||'operational', template||'default', timezone||'UTC', logo_url||null, orgId, (['en','es'].includes(locale) ? locale : 'en'), sanitizeCss(custom_css)||null, sanitizeHtml(custom_html)||null, toBool01(is_public), refresh_interval ? Math.max(15, parseInt(refresh_interval)) : 15, toBool01(custom_layout), sanitizeCss(custom_layout_css)||null, sanitizeHtml(custom_layout_html)||null, external_id||null]
     );
     return this.getById(id);
   },
@@ -256,7 +256,7 @@ module.exports.pages = {
   async update(id, data) {
     const fields = [];
     const params = [];
-    const allowed = ['name','slug','description','status','template','timezone','logo_url','custom_css','custom_html','is_public','refresh_interval','custom_layout','custom_layout_css','custom_layout_html','external_id','organization_id'];
+    const allowed = ['name','slug','description','status','template','timezone','logo_url','custom_css','custom_html','is_public','refresh_interval','custom_layout','custom_layout_css','custom_layout_html','external_id','organization_id','locale'];
     for (const k of allowed) {
       if (data[k] !== undefined) {
         let val = data[k];
@@ -269,6 +269,7 @@ module.exports.pages = {
             val = orgId;
           } else val = null;
         }
+        if (k === 'locale') val = ['en','es'].includes(val) ? val : 'en';
         if (k === 'refresh_interval') val = Math.max(15, parseInt(val) || 15);
         if (k === 'is_public') val = toBool01(val);
         if (k === 'custom_layout') val = toBool01(val);

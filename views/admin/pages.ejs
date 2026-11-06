@@ -93,6 +93,14 @@
 <small class="text-muted">Used to link this status page with external monitoring systems.</small>
 </div>
 <div class="form-group">
+<label for="locale">Page language (public)</label>
+<select id="locale" name="locale">
+<option value="en" <%= (page.locale || 'en') === 'en' ? 'selected' : '' %>>English</option>
+<option value="es" <%= page.locale === 'es' ? 'selected' : '' %>>Español</option>
+</select>
+<small class="text-muted">Language of the public status page (labels and texts).</small>
+</div>
+<div class="form-group">
 <label for="organization_id">Organization (optional)</label>
 <select id="organization_id" name="organization_id">
 <option value="">— None —</option>

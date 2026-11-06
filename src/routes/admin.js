@@ -6,6 +6,43 @@ const { queryOne, queryAll, run } = require('../db/database');
 const fs = require('fs');
 const path = require('path');
 const { pages, components, componentGroups, apiKeys, incidents, maintenance, notifications, settings, auditLog, subscribers: subscribersModel, organizations: organizationsModel } = require('../db/models');
+
+// ===== Org scope (3.0.0) =====
+// A role=user session with org_scope sees ONLY their organization's data in
+// the admin panel (read-only — content mutations are already blocked by 2.7.0
+// requireAdmin gating). Global admins are never scoped. The helper returns
+// { pages: [pageIds], rows: {pageId: page} } or null when unscoped.
+async function orgScopeFor(req) {
+  if (!req.user || req.user.role === 'admin') return null;
+  const orgId = req.session && req.session.org_scope;
+  // Tenant isolation by default: a role=user session WITHOUT an org (or whose
+  // membership disappeared) sees an EMPTY panel, not the whole instance.
+  const emptyScope = { org: null, pageIds: [], pages: [] };
+  if (!orgId) return emptyScope;
+  const org = await organizationsModel.get(orgId);
+  if (!org) return emptyScope;
+  const members = await organizationsModel.listMembers(orgId);
+  if (!members.some(m => m.id === req.user.id)) return emptyScope; // session stale
+  const orgPages = await pages.list();
+  const scoped = orgPages.filter(pg => pg.organization_id === orgId);
+  return { org, pageIds: scoped.map(pg => pg.id), pages: scoped };
+}
+
+// IN(...)SQL helper for org/empty scopes: col IN (ids), TRUE when unscoped,
+// FALSE for an EMPTY scope (role=user without org sees nothing). Params are
+// numbered from `start`.
+function inFilter(col, ids, start = 1) {
+  if (!ids) return { sql: 'TRUE', params: [], next: start };
+  if (!ids.length) return { sql: 'FALSE', params: [], next: start };
+  return { sql: col + ' IN (' + ids.map((_, i) => '$' + (start + i)).join(',') + ')', params: ids, next: start + ids.length };
+}
+
+// Filter a list of rows that carry page_id to the scoped pages.
+function filterByOrgPages(rows, scope) {
+  if (!scope) return rows;
+  const allow = new Set(scope.pageIds);
+  return rows.filter(r => allow.has(r.page_id) || (r.pages && r.pages.some && r.pages.some(pg => allow.has(pg.id))));
+}
 const pkg = require('../../package.json');
 const { requireAuth, requireAdmin, destroyUserSessions } = require('../middleware/session');
 const { layout } = require('../middleware/layout');
@@ -16,16 +53,36 @@ router.use(requireAuth);
 // GET /admin - Dashboard
 router.get('/', async (req, res) => {
   const user = await queryOne('SELECT id, name, email, role, totp_enabled FROM users WHERE id=$1', [req.user.id]);
-  const pageCount = (await queryOne('SELECT COUNT(*) as count FROM pages', [])).count;
-  const componentCount = (await queryOne('SELECT COUNT(*) as count FROM components', [])).count;
-  const incidentCount = (await queryOne('SELECT COUNT(*) as count FROM incidents', [])).count;
+  const scope = await orgScopeFor(req);
+  // Org-scoped sessions (role=user with org_scope) only see their org's data.
+  // scope.pageIds is NULL (unscoped admin) or an array (possibly empty). The
+  // inFilter helper covers both — an empty scope yields FALSE (no rows).
+  const pF = inFilter('id', scope ? scope.pageIds : null);
+  const pcF = inFilter('page_id', scope ? scope.pageIds : null);
+  const iF = inFilter('page_id', scope ? scope.pageIds : null);
+  const pageCount = (await queryOne('SELECT COUNT(*) as count FROM pages WHERE ' + pF.sql, pF.params)).count;
+  // NOTE: no IN (SELECT ...) subqueries — pg-mem hangs on them. Flat JOIN +
+  // DISTINCT COUNT with the org filter applied to page_components (scoped) or
+  // plain full counts (unscoped admins).
+  let componentCount, operationalCount;
+  if (!scope) {
+    componentCount = (await queryOne('SELECT COUNT(*) as count FROM components', [])).count;
+    operationalCount = (await queryOne("SELECT COUNT(*) as count FROM components WHERE status='operational'", [])).count;
+  } else if (scope.pageIds.length === 0) {
+    componentCount = 0;
+    operationalCount = 0;
+  } else {
+    const ccq = (extra) => queryOne('SELECT COUNT(DISTINCT c.id) as count FROM components c JOIN page_components pc ON pc.component_id = c.id WHERE pc.' + pcF.sql + extra, pcF.params);
+    componentCount = (await ccq('')).count;
+    operationalCount = (await ccq(" AND c.status='operational'")).count;
+  }
+  // NOTE: no IN (SELECT ...) subqueries here — pg-mem hangs on them; flat IN
+  // over the org's page ids instead.
+  const incidentCount = (await queryOne('SELECT COUNT(*) as count FROM incidents WHERE ' + iF.sql, iF.params)).count;
   const userCount = (await queryOne('SELECT COUNT(*) as count FROM users', [])).count;
-  const operationalCount = (await queryOne("SELECT COUNT(*) as count FROM components WHERE status='operational'", [])).count;
-  const openIncidents = (await queryOne("SELECT COUNT(*) as count FROM incidents WHERE status != 'resolved'", [])).count;
+  const openIncidents = (await queryOne("SELECT COUNT(*) as count FROM incidents WHERE status != 'resolved' AND " + iF.sql, iF.params)).count;
 
-  const recentIncidents = await queryAll(`
-    SELECT * FROM incidents ORDER BY starts_at DESC LIMIT 5
-  `);
+  const recentIncidents = await queryAll('SELECT * FROM incidents WHERE ' + iF.sql + ' ORDER BY starts_at DESC LIMIT 5', iF.params);
 
   const pageStatuses = await queryAll(`
     SELECT p.name, p.slug, p.status, sh.new_status as latest_status
@@ -36,8 +93,9 @@ router.get('/', async (req, res) => {
       WHERE page_id IS NOT NULL
       ORDER BY page_id, created_at DESC
     ) sh ON sh.page_id = p.id
+    WHERE ${pF.sql.replace(/\bid\b/g, 'p.id')}
     ORDER BY p.name
-  `);
+  `, pF.params);
 
   const unread = await notifications.listUnread(req.user.id);
 
@@ -95,7 +153,9 @@ router.get('/', async (req, res) => {
 
 // ===== PAGES CRUD =====
 router.get('/pages', async (req, res) => {
-  const allPages = await pages.list();
+  const scope = await orgScopeFor(req);
+  let allPages = await pages.list();
+  if (scope) { const allow = new Set(scope.pageIds); allPages = allPages.filter(pg => allow.has(pg.id)); }
   res.render('admin/pages', {
     title: 'Pages',
     user: req.user,
@@ -137,7 +197,7 @@ router.post('/pages', requireAdmin, async (req, res) => {
     return res.redirect('/admin/pages/new?msg=error&type=error');
   }
   const ri = Math.max(15, parseInt(refresh_interval) || 15);
-  const page = await pages.create({ name, slug, description, status, template, is_public: req.body.is_public ? 1 : 0, refresh_interval: ri, custom_layout: req.body.custom_layout ? 1 : 0, custom_layout_css, custom_layout_html, custom_css, custom_html, external_id, organization_id: req.body.organization_id || null });
+  const page = await pages.create({ name, slug, description, status, template, is_public: req.body.is_public ? 1 : 0, refresh_interval: ri, custom_layout: req.body.custom_layout ? 1 : 0, custom_layout_css, custom_layout_html, custom_css, custom_html, external_id, organization_id: req.body.organization_id || null, locale: req.body.locale || 'en' });
   const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
   for (const a of admins) {
     await notifications.create({
@@ -218,7 +278,7 @@ router.put('/pages/:id', requireAdmin, async (req, res) => {
     return res.redirect('/admin/pages/' + req.params.id + '/edit?msg=error&type=error');
   }
   const ri = Math.max(15, parseInt(refresh_interval) || 15);
-  await pages.update(req.params.id, { name, slug, description, status, template, is_public: req.body.is_public ? 1 : 0, refresh_interval: ri, custom_layout: req.body.custom_layout ? 1 : 0, custom_layout_css, custom_layout_html, custom_css, custom_html, external_id, organization_id: req.body.organization_id || null });
+  await pages.update(req.params.id, { name, slug, description, status, template, is_public: req.body.is_public ? 1 : 0, refresh_interval: ri, custom_layout: req.body.custom_layout ? 1 : 0, custom_layout_css, custom_layout_html, custom_css, custom_html, external_id, organization_id: req.body.organization_id || null, locale: req.body.locale || 'en' });
   const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
   for (const a of admins) {
     await notifications.create({
@@ -266,7 +326,16 @@ router.get('/components', async (req, res) => {
   const filterOpts = {};
   if (req.query.q) filterOpts.search = req.query.q.trim();
   if (req.query.sort) filterOpts.sort = req.query.sort;
-  const allComponents = await components.list(filterOpts);
+  const scope = await orgScopeFor(req);
+  let allComponents = await components.list(filterOpts);
+  if (scope) {
+    // scope.org can be null for an empty scope (role=user without org): the
+    // component set comes from the scoped PAGE IDS, not the org id.
+    const pcF = inFilter('page_id', scope.pageIds);
+    const onPage = await queryAll('SELECT DISTINCT component_id FROM page_components WHERE ' + pcF.sql, pcF.params);
+    const allow = new Set(onPage.map(r => r.component_id));
+    allComponents = allComponents.filter(c => allow.has(c.id));
+  }
   for (const c of allComponents) {
     c.activeIncidents = await components.getActiveIncidents(c.id);
     const activeInc = await components.getActiveIncidentForComponent(c.id);
@@ -525,8 +594,16 @@ router.delete('/components/:id', requireAdmin, async (req, res) => {
 
 // ===== INCIDENTS CRUD =====
 router.get('/incidents', async (req, res) => {
-  const allIncidents = await incidents.list();
-  const allPages = await pages.list();
+  const scope = await orgScopeFor(req);
+  let allIncidents = await incidents.list();
+  const allPagesAll = await pages.list();
+  const allPages = scope
+    ? (scope.org ? allPagesAll.filter(pg => pg.organization_id === scope.org.id) : [])
+    : allPagesAll;
+  if (scope) {
+    const allow = new Set(allPages.map(pg => pg.id));
+    allIncidents = allIncidents.filter(i => allow.has(i.page_id));
+  }
   res.render('admin/incidents', {
     title: 'Incidents',
     user: req.user,
@@ -802,9 +879,17 @@ router.get('/docs', async (req, res) => {
 
 // ===== MAINTENANCE WINDOWS =====
 router.get('/maintenance', async (req, res) => {
-  const allMaintenance = await maintenance.list();
-  const allPages = await pages.list();
+  const scope = await orgScopeFor(req);
+  let allMaintenance = await maintenance.list();
+  const allPagesAll = await pages.list();
+  const allPages = scope
+    ? (scope.org ? allPagesAll.filter(pg => pg.organization_id === scope.org.id) : [])
+    : allPagesAll;
   const allComponents = await components.list();
+  if (scope) {
+    const allow = new Set(allPages.map(pg => pg.id));
+    allMaintenance = allMaintenance.filter(w => allow.has(w.page_id));
+  }
   res.render('admin/maintenance', {
     title: 'Maintenance',
     user: req.user,

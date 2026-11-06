@@ -314,12 +314,17 @@ app.get('/status/:slug/components/:id', async (req, res) => {
     const history = await components.getHistory(comp.id, null, 20);
     const activeIncidents = await incidents.list({ component_id: comp.id, visible: 1 });
 
-    const formatStatus = s => ({operational:'Operational',under_maintenance:'Under Maintenance',degraded_performance:'Degraded Performance',partial_outage:'Partial Outage',major_outage:'Major Outage',investigating:'Investigating',identified:'Identified',monitoring:'Monitoring',resolved:'Resolved'}[s] || s);
+    const STATUS_LABELS = {
+      en: { operational:'Operational',under_maintenance:'Under Maintenance',degraded_performance:'Degraded Performance',partial_outage:'Partial Outage',major_outage:'Major Outage',investigating:'Investigating',identified:'Identified',monitoring:'Monitoring',resolved:'Resolved' },
+      es: { operational:'Operativo',under_maintenance:'En mantenimiento',degraded_performance:'Rendimiento degradado',partial_outage:'Interrupción parcial',major_outage:'Interrupión grave',investigating:'Investigando',identified:'Identificado',monitoring:'En monitorización',resolved:'Resuelto' },
+    };
+    const LABELS = STATUS_LABELS[page.locale === 'es' ? 'es' : 'en'] || STATUS_LABELS.en;
+    const formatStatus = s => LABELS[s] || s;
     const customization = await settings.getCustomization();
     res.render('component-detail', {
       page, component: comp, bar: bar.days, uptimePct: bar.uptimePct,
       history, incidents: activeIncidents, formatStatus, customization,
-      uptimeDays: UPTIME_DAYS, refreshInterval: 0
+      uptimeDays: UPTIME_DAYS, refreshInterval: 0, locale: page.locale || 'en'
     });
   } catch (e) {
     console.error('Component detail error:', e);
@@ -424,12 +429,18 @@ app.get('/status/:slug', async (req, res) => {
       }
     });
     
-    const formatStatus = s => ({operational:'Operational',under_maintenance:'Under Maintenance',degraded_performance:'Degraded Performance',partial_outage:'Partial Outage',major_outage:'Major Outage',investigating:'Investigating',identified:'Identified',monitoring:'Monitoring',resolved:'Resolved'}[s] || s);
+    // Public i18n (3.0.0): status labels follow page.locale.
+    const STATUS_LABELS = {
+      en: { operational:'Operational',under_maintenance:'Under Maintenance',degraded_performance:'Degraded Performance',partial_outage:'Partial Outage',major_outage:'Major Outage',investigating:'Investigating',identified:'Identified',monitoring:'Monitoring',resolved:'Resolved' },
+      es: { operational:'Operativo',under_maintenance:'En mantenimiento',degraded_performance:'Rendimiento degradado',partial_outage:'Interrupción parcial',major_outage:'Interrupión grave',investigating:'Investigando',identified:'Identificado',monitoring:'En monitorización',resolved:'Resuelto' },
+    };
+    const LABELS = STATUS_LABELS[page.locale === 'es' ? 'es' : 'en'] || STATUS_LABELS.en;
+    const formatStatus = s => LABELS[s] || s;
     const refreshInterval = page.refresh_interval || 0;
     const customization = await settings.getCustomization();
     // 90-day uptime bars (2.6.0) — one aggregated query for the whole page.
     const { bars: uptimeBars } = await getUptimeBars(page.id, UPTIME_DAYS);
-    res.render('status-page', { page, components: resolvedComps, incidents: incs, incidentsByComponent, formatStatus, refreshInterval: refreshInterval ? parseInt(refreshInterval) : 0, groups: allGroups, upcomingMaintenance, customization, uptimeBars, uptimeDays: UPTIME_DAYS });
+    res.render('status-page', { page, components: resolvedComps, incidents: incs, incidentsByComponent, formatStatus, refreshInterval: refreshInterval ? parseInt(refreshInterval) : 0, groups: allGroups, upcomingMaintenance, customization, uptimeBars, uptimeDays: UPTIME_DAYS, locale: page.locale || 'en' });
   } catch(e) {
     console.error('Status page error:', e);
     res.status(500).send('Internal error');

@@ -83,6 +83,26 @@ function uptimeBarHtml(c) {
   return `<a class="up-bar-wrap" href="${detail}" title="View component detail">${cells}<span class="up-pct">${bar.uptimePct}% uptime · ${uptimeDays}d</span></a>`;
 }
 %>
+<%
+// Public i18n (3.0.0): page.locale (en|es). Status LABELS are localized at the
+// route level (formatStatus) — here only the UI chrome strings.
+const isEs = (typeof locale !== 'undefined' && locale === 'es');
+const t = isEs ? {
+  overall: 'Estado general',
+  activeIncidents: (n) => n + (n === 1 ? ' incidencia activa' : ' incidencias activas'),
+  getUpdates: 'Recibe novedades',
+  subscribe: 'Suscribirse',
+  subscribeNote: 'Confirmación por email y avisos de incidencias. Baja cuando quieras.',
+  emailPh: 'tu@empresa.com',
+} : {
+  overall: 'Overall Status',
+  activeIncidents: (n) => n + (n === 1 ? ' Active Incident' : ' Active Incidents'),
+  getUpdates: 'Get status updates',
+  subscribe: 'Subscribe',
+  subscribeNote: 'Email confirmations and incident updates. Unsubscribe anytime.',
+  emailPh: 'you@company.com',
+};
+%>
 <body class="<%= page.custom_layout ? 'custom-layout' : 'template-' + page.template %>">
 
 <%
@@ -203,7 +223,7 @@ function uptimeBarHtml(c) {
 <div class="overall-status status-<%= page.status %>">
 <span class="pulse-dot dot-<%= page.status %>"></span>
 <div>
-<span class="overall-label">Overall Status</span>
+<span class="overall-label"><%= t.overall %></span>
 <span class="overall-value"><%= formatStatus(page.status) %></span>
 </div>
 </div>
@@ -228,7 +248,7 @@ function uptimeBarHtml(c) {
 <div class="incidents-panel impact-<%= worstImpact %>">
 <div class="incidents-panel-header">
 <span class="alert-icon"></span>
-<span class="incidents-count"><%= activeIncs.length %> Active Incident<%= activeIncs.length > 1 ? 's' : '' %></span>
+<span class="incidents-count"><%= activeIncs.length %> <%= t.activeIncidents(activeIncs.length) %></span>
 </div>
 <% activeIncs.forEach(inc => { %>
 <div class="incident-row impact-<%= inc.impact || 'minor' %>">
@@ -274,13 +294,13 @@ function uptimeBarHtml(c) {
 </div>
 <footer>
 <div class="subscribe-box">
-<h3>Get status updates</h3>
+<h3><%= t.getUpdates %></h3>
 <form method="post" action="/subscribe/<%= page.slug %>">
 <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-<input type="email" name="email" required placeholder="you@company.com" aria-label="Email">
-<button type="submit">Subscribe</button>
+<input type="email" name="email" required placeholder="<%= t.emailPh %>" aria-label="Email">
+<button type="submit"><%= t.subscribe %></button>
 </form>
-<p class="subscribe-note">Email confirmations and incident updates. Unsubscribe anytime.</p>
+<p class="subscribe-note"><%= t.subscribeNote %></p>
 </div>
 <p>Powered by StatusFe v<%= version %></p>
 </footer>
@@ -305,7 +325,7 @@ function uptimeBarHtml(c) {
 <div class="overall-status status-<%= page.status %>">
 <span class="pulse-dot dot-<%= page.status %>"></span>
 <div>
-<span class="overall-label">Overall Status</span>
+<span class="overall-label"><%= t.overall %></span>
 <span class="overall-value"><%= formatStatus(page.status) %></span>
 </div>
 </div>
@@ -328,7 +348,7 @@ function uptimeBarHtml(c) {
 <div class="incidents-panel impact-<%= worstImpact %>">
 <div class="incidents-panel-header">
 <span class="alert-icon"></span>
-<span class="incidents-count"><%= activeIncs.length %> Active Incident<%= activeIncs.length > 1 ? 's' : '' %></span>
+<span class="incidents-count"><%= activeIncs.length %> <%= t.activeIncidents(activeIncs.length) %></span>
 </div>
 <% activeIncs.forEach(inc => { %>
 <div class="incident-row impact-<%= inc.impact || 'minor' %>">
@@ -374,13 +394,13 @@ function uptimeBarHtml(c) {
 </div>
 <footer>
 <div class="subscribe-box">
-<h3>Get status updates</h3>
+<h3><%= t.getUpdates %></h3>
 <form method="post" action="/subscribe/<%= page.slug %>">
 <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-<input type="email" name="email" required placeholder="you@company.com" aria-label="Email">
-<button type="submit">Subscribe</button>
+<input type="email" name="email" required placeholder="<%= t.emailPh %>" aria-label="Email">
+<button type="submit"><%= t.subscribe %></button>
 </form>
-<p class="subscribe-note">Email confirmations and incident updates. Unsubscribe anytime.</p>
+<p class="subscribe-note"><%= t.subscribeNote %></p>
 </div>
 <p>Powered by StatusFe v<%= version %></p>
 </footer>
@@ -405,7 +425,7 @@ function uptimeBarHtml(c) {
 <div class="overall-status status-<%= page.status %>">
 <span class="pulse-dot dot-<%= page.status %>"></span>
 <div>
-<span class="overall-label">Overall Status</span>
+<span class="overall-label"><%= t.overall %></span>
 <span class="overall-value"><%= formatStatus(page.status) %></span>
 </div>
 </div>
@@ -428,7 +448,7 @@ function uptimeBarHtml(c) {
 <div class="incidents-panel impact-<%= worstImpact %>">
 <div class="incidents-panel-header">
 <span class="alert-icon"></span>
-<span class="incidents-count"><%= activeIncs.length %> Active Incident<%= activeIncs.length > 1 ? 's' : '' %></span>
+<span class="incidents-count"><%= activeIncs.length %> <%= t.activeIncidents(activeIncs.length) %></span>
 </div>
 <% activeIncs.forEach(inc => { %>
 <div class="incident-row impact-<%= inc.impact || 'minor' %>">
@@ -477,13 +497,13 @@ function uptimeBarHtml(c) {
 </div>
 <footer>
 <div class="subscribe-box">
-<h3>Get status updates</h3>
+<h3><%= t.getUpdates %></h3>
 <form method="post" action="/subscribe/<%= page.slug %>">
 <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-<input type="email" name="email" required placeholder="you@company.com" aria-label="Email">
-<button type="submit">Subscribe</button>
+<input type="email" name="email" required placeholder="<%= t.emailPh %>" aria-label="Email">
+<button type="submit"><%= t.subscribe %></button>
 </form>
-<p class="subscribe-note">Email confirmations and incident updates. Unsubscribe anytime.</p>
+<p class="subscribe-note"><%= t.subscribeNote %></p>
 </div>
 <p>Powered by StatusFe v<%= version %></p>
 </footer>

@@ -20,6 +20,7 @@ const pgPath = require.resolve('pg');
 require.cache[pgPath] = { id: pgPath, filename: pgPath, loaded: true, exports: { Pool: class { constructor() { this._pool = new memPg.Pool(); } async connect() { return this._pool.connect(); } on() {} } } };
 
 process.env.PORT = '3996';
+process.env.CSRF_DEBUG = '';
 const app = require(path.join(__dirname, '..', 'src', 'app.js'));
 const { queryOne, queryAll, run } = require(path.join(__dirname, '..', 'src', 'db', 'database'));
 const models = require(path.join(__dirname, '..', 'src', 'db', 'models'));

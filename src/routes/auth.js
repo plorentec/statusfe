@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
-const { queryOne, run } = require('../db/database');
+const { queryOne, queryAll, run } = require('../db/database');
 const { createSession, destroySession, getSession } = require('../middleware/session');
 const { passwordResets, auditLog } = require('../db/models');
 const { verify } = require('../utils/totp');
@@ -41,6 +41,24 @@ router.post('/login', async (req, res) => {
 
   await auditLog.create({ user_id: user.id, action: 'login', details: 'Login successful', ip: req.ip, user_agent: req.get('User-Agent') || '' });
   const signedValue = await createSession(user);
+  // Multi-tenancy fase 2 (3.0.0): users with organization memberships get an
+  // org scope in their session (their FIRST org by name; global admins are
+  // never scoped). Content mutations are already blocked for role=user.
+  if (user.role !== 'admin') {
+    const orgs = await queryAll(
+      'SELECT o.id FROM organizations o JOIN organization_members m ON m.organization_id = o.id WHERE m.user_id=$1 ORDER BY o.name LIMIT 1',
+      [user.id]
+    );
+    if (orgs.length > 0) {
+      const dotIdx = signedValue.lastIndexOf('.');
+      let sid = null;
+      try { sid = JSON.parse(signedValue.slice(0, dotIdx)).id; } catch (e) { sid = null; }
+      if (sid) {
+        const store = { id: sid, userId: user.id, name: user.name, email: user.email, role: user.role, createdAt: Date.now(), _2fa_verified: false, org_scope: orgs[0].id };
+        await run('UPDATE sessions SET data=$1 WHERE id=$2', [JSON.stringify(store), sid]).catch(() => {});
+      }
+    }
+  }
   // secure:'auto' equivalent for the raw Set-Cookie: only over HTTPS (honors
   // X-Forwarded-Proto because the app sets 'trust proxy').
   const securePart = req.secure ? '; Secure' : '';

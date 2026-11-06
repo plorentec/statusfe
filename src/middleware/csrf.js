@@ -12,7 +12,6 @@ function csrfProtection(req, res, next) {
   // Check for CSRF token in header or body only (not query params to prevent leakage).
   // req.body can be undefined when no body parser matched (e.g. text/plain) — a
   // missing token must yield a clean 403, never a TypeError/500.
-  if (process.env.CSRF_DEBUG) console.error('[csrf][dbg]', req.method, req.path, 'ct=' + req.headers['content-type'], 'bodyKeys=' + (req.body ? Object.keys(req.body).join(',') : 'NO-BODY'), 'header=' + (req.headers['x-csrf-token'] ? 'yes' : 'no'));
   const token = req.headers['x-csrf-token'] || (req.body && req.body._csrf);
 
   if (!token) {
