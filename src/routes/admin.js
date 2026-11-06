@@ -5,7 +5,7 @@ const bcrypt = require('bcryptjs');
 const { queryOne, queryAll, run } = require('../db/database');
 const fs = require('fs');
 const path = require('path');
-const { pages, components, componentGroups, apiKeys, incidents, maintenance, notifications, settings, auditLog, subscribers: subscribersModel } = require('../db/models');
+const { pages, components, componentGroups, apiKeys, incidents, maintenance, notifications, settings, auditLog, subscribers: subscribersModel, organizations: organizationsModel } = require('../db/models');
 const pkg = require('../../package.json');
 const { requireAuth, requireAdmin, destroyUserSessions } = require('../middleware/session');
 const { layout } = require('../middleware/layout');
@@ -118,6 +118,7 @@ router.get('/pages/new', async (req, res) => {
     pageMode: 'create',
     page: {},
     components: allComponents,
+    orgs: await organizationsModel.list(),
     assignedComponentIds: assignedIds,
     groups: await componentGroups.listPageScoped(),
     selectedGroupIds: []
@@ -136,7 +137,7 @@ router.post('/pages', requireAdmin, async (req, res) => {
     return res.redirect('/admin/pages/new?msg=error&type=error');
   }
   const ri = Math.max(15, parseInt(refresh_interval) || 15);
-  const page = await pages.create({ name, slug, description, status, template, is_public: req.body.is_public ? 1 : 0, refresh_interval: ri, custom_layout: req.body.custom_layout ? 1 : 0, custom_layout_css, custom_layout_html, custom_css, custom_html, external_id });
+  const page = await pages.create({ name, slug, description, status, template, is_public: req.body.is_public ? 1 : 0, refresh_interval: ri, custom_layout: req.body.custom_layout ? 1 : 0, custom_layout_css, custom_layout_html, custom_css, custom_html, external_id, organization_id: req.body.organization_id || null });
   const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
   for (const a of admins) {
     await notifications.create({
@@ -190,6 +191,7 @@ router.get('/pages/:id/edit', async (req, res) => {
     pageMode: 'edit',
     page,
     components: allComponents,
+    orgs: await organizationsModel.list(),
     assignedComponentIds: assignedIds,
     groups: await componentGroups.listPageScoped(),
     // BUGFIX: was componentGroups.getPageIds(page.id) — that queries WHERE
@@ -216,7 +218,7 @@ router.put('/pages/:id', requireAdmin, async (req, res) => {
     return res.redirect('/admin/pages/' + req.params.id + '/edit?msg=error&type=error');
   }
   const ri = Math.max(15, parseInt(refresh_interval) || 15);
-  await pages.update(req.params.id, { name, slug, description, status, template, is_public: req.body.is_public ? 1 : 0, refresh_interval: ri, custom_layout: req.body.custom_layout ? 1 : 0, custom_layout_css, custom_layout_html, custom_css, custom_html, external_id });
+  await pages.update(req.params.id, { name, slug, description, status, template, is_public: req.body.is_public ? 1 : 0, refresh_interval: ri, custom_layout: req.body.custom_layout ? 1 : 0, custom_layout_css, custom_layout_html, custom_css, custom_html, external_id, organization_id: req.body.organization_id || null });
   const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);
   for (const a of admins) {
     await notifications.create({
@@ -1148,6 +1150,59 @@ router.post('/2fa/setup', async (req, res) => {
     await auditLog.create({ user_id: req.user.id, action: '2fa_disabled', details: '2FA disabled', ip: req.ip, user_agent: req.get('User-Agent') || '' });
   }
   res.redirect('/admin/2fa/setup');
+});
+
+// ===== ORGANIZATIONS (2.9.0) =====
+router.get('/organizations', async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.redirect('/admin?msg=admin&type=error');
+  }
+  const orgs = await organizationsModel.list();
+  const memberCounts = {};
+  const members = {};
+  for (const o of orgs) {
+    members[o.id] = await organizationsModel.listMembers(o.id);
+    memberCounts[o.id] = members[o.id].length;
+  }
+  const users = await queryAll('SELECT id, email, name FROM users ORDER BY name');
+  res.render('admin/organizations', {
+    title: 'Organizations',
+    user: req.user,
+    message: res.locals.message,
+    messageType: res.locals.messageType,
+    orgs, members, memberCounts, users,
+    csrfToken: res.locals.csrfToken
+  });
+});
+
+router.post('/organizations', async (req, res) => {
+  if (req.user.role !== 'admin') return res.redirect('/admin?msg=admin&type=error');
+  try {
+    const memberIds = Array.isArray(req.body.member_ids) ? req.body.member_ids : (req.body.member_ids ? [req.body.member_ids] : []);
+    await organizationsModel.create({ name: req.body.name, slug: req.body.slug, memberIds });
+    res.redirect('/admin/organizations?msg=success&type=success');
+  } catch (e) {
+    const msg = ['invalid_slug', 'slug_exists', 'name_required'].includes(e.code) ? e.code : 'error';
+    res.redirect('/admin/organizations?msg=' + msg + '&type=error');
+  }
+});
+
+router.post('/organizations/:id', async (req, res) => {
+  if (req.user.role !== 'admin') return res.redirect('/admin?msg=admin&type=error');
+  try {
+    await organizationsModel.update(req.params.id, { name: req.body.name, slug: req.body.slug });
+    const memberIds = Array.isArray(req.body.member_ids) ? req.body.member_ids : (req.body.member_ids ? [req.body.member_ids] : []);
+    await organizationsModel.setMembers(req.params.id, memberIds);
+    res.redirect('/admin/organizations?msg=success&type=success');
+  } catch (e) {
+    const msg = ['invalid_slug', 'slug_exists', 'name_required'].includes(e.code) ? e.code : 'error';
+    res.redirect('/admin/organizations?msg=' + msg + '&type=error');
+  }
+});
+
+router.post('/organizations/:id/delete', requireAdmin, async (req, res) => {
+  await organizationsModel.delete(req.params.id);
+  res.redirect('/admin/organizations?msg=deleted&type=success');
 });
 
 // ===== SUBSCRIBERS (2.8.0) =====

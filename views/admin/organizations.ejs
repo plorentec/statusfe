@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title><%= title %> - StatusFe Admin</title>
+<link rel="stylesheet" href="/css/admin.css">
+<script>document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('dark');});</script>
+</head>
+<body>
+<div class="admin-layout">
+<%- include('../partials/_sidebar'); %>
+<main class="admin-main">
+<div class="admin-header"><h1><%= title %></h1>
+<% if (message) { %><div class="flash flash-<%= messageType %>"><%= message %></div><% } %>
+</div>
+<div class="card">
+<h3>Create organization</h3>
+<form method="post" action="/admin/organizations">
+<input type="hidden" name="_csrf" value="<%= csrfToken %>">
+<div class="form-row">
+<div class="form-group"><label>Name</label><input type="text" name="name" required placeholder="Acme Corp"></div>
+<div class="form-group"><label>Slug</label><input type="text" name="slug" required pattern="[a-z0-9-]{1,64}" placeholder="acme"></div>
+</div>
+<div class="form-group">
+<label>Members (users)</label>
+<div class="component-checkboxes">
+<% users.forEach(u => { %>
+<label class="component-checkbox"><input type="checkbox" name="member_ids" value="<%= u.id %>"> <%= u.name %> &lt;<%= u.email %>&gt;</label>
+<% }) %>
+</div>
+</div>
+<button type="submit" class="btn btn-primary">Create</button>
+</form>
+</div>
+<div class="card">
+<h3>Organizations (<%= orgs.length %>)</h3>
+<table>
+<thead><tr><th>Name</th><th>Slug</th><th>Members</th><th>Edit members</th><th></th></tr></thead>
+<tbody>
+<% if (orgs.length === 0) { %><tr><td colspan="5">No organizations yet.</td></tr><% } %>
+<% orgs.forEach(o => { %>
+<tr>
+<td><strong><%= o.name %></strong></td>
+<td><code><%= o.slug %></code></td>
+<td><%= memberCounts[o.id] || 0 %></td>
+<td>
+<form method="post" action="/admin/organizations/<%= o.id %>" style="display:flex;gap:6px;align-items:center;">
+<input type="hidden" name="_csrf" value="<%= csrfToken %>">
+<select name="member_ids" multiple size="3" style="min-width:180px;">
+<% users.forEach(u => { %>
+<option value="<%= u.id %>" <%= members[o.id].some(m => m.id === u.id) ? 'selected' : '' %>><%= u.name %></option>
+<% }) %>
+</select>
+<button type="submit" class="btn btn-sm">Save members</button>
+</form>
+</td>
+<td>
+<form method="post" action="/admin/organizations/<%= o.id %>/delete" onsubmit="return confirm('Delete organization? Pages will remain without an org.')">
+<input type="hidden" name="_csrf" value="<%= csrfToken %>">
+<button type="submit" class="btn btn-sm">Delete</button>
+</form>
+</td>
+</tr>
+<% }) %>
+</tbody>
+</table>
+</div>
+</main>
+</div>
+</body>
+</html>

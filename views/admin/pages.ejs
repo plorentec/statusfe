@@ -93,6 +93,15 @@
 <small class="text-muted">Used to link this status page with external monitoring systems.</small>
 </div>
 <div class="form-group">
+<label for="organization_id">Organization (optional)</label>
+<select id="organization_id" name="organization_id">
+<option value="">— None —</option>
+<% (typeof orgs !== 'undefined' ? orgs : []).forEach(o => { %>
+<option value="<%= o.id %>" <%= page.organization_id === o.id ? 'selected' : '' %>><%= o.name %> (<%= o.slug %>)</option>
+<% }) %>
+</select>
+</div>
+<div class="form-group">
 <label for="logo_url">Page logo URL (optional)</label>
 <input type="url" id="logo_url" name="logo_url" value="<%= page.logo_url || '' %>" placeholder="https://.../logo.png">
 <small class="text-muted">Shown instead of the global Customize logo on this page's status page.</small>
