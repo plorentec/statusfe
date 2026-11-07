@@ -9,6 +9,24 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [3.1.0] — 2026-11-05
+
+### Added
+- **Límites por organización (cuotas)**: `organizations.limits` JSON
+  (`maxPages`/`maxApiKeys`/`maxComponents`/`maxSubscribers`; default
+  10/10/50/100 al crear; NULL = ilimitado). Al superarlo: **402** con el
+  nombre del límite en la API y una página amable en el subscribe público.
+  Los pendientes sin confirmar también consumen la cuota de suscriptores.
+- **Dominios custom** (`pages.custom_domain` UNIQUE + `domain_verified`):
+  - `/status/:slug` y `/embed/:slug` resuelven la página por **Host header**
+    cuando el slug no matchea (el tenant apunta su dominio al proxy; el TLS
+    lo maneja el reverse proxy, la app no toca certificados);
+  - **Verificación por TXT DNS**: el panel muestra el registro
+    (`statusfe-verify=<token>`) y `POST /admin/pages/:id/verify-domain`
+    comprueba `dns.resolveTxt` y marca verificado; cambiar el dominio lo
+    des-verifica;
+  - validación de formato + dominios duplicados → 400 (`domain_taken`).
+
 ## [3.0.0] — 2026-11-05
 
 ### Added

@@ -238,17 +238,25 @@ module.exports.pages = {
   async getById(id) { return await queryOne('SELECT * FROM pages WHERE id=$1', [id]); },
   async getBySlug(slug) { return await queryOne('SELECT * FROM pages WHERE slug=$1', [slug]); },
   async getByExternalId(ex_id) { if (!ex_id) return null; return await queryOne('SELECT * FROM pages WHERE external_id=$1', [ex_id]); },
+  async getByCustomDomain(domain) { if (!domain) return null; return await queryOne('SELECT * FROM pages WHERE custom_domain=$1 AND domain_verified=1', [String(domain).toLowerCase()]); },
 
-  async create({ name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public, template, refresh_interval, custom_layout, custom_layout_css, custom_layout_html, external_id, organization_id, locale }) {
+  async create({ name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public, template, refresh_interval, custom_layout, custom_layout_css, custom_layout_html, external_id, organization_id, locale, custom_domain }) {
     const id = uuidv4();
     let orgId = String(organization_id || '').trim() || null;
     if (orgId) {
       const org = await queryOne('SELECT id FROM organizations WHERE id=$1', [orgId]);
       if (!org) { const err = new Error('Organization not found'); err.code = 'org_missing'; throw err; }
     }
+    // Custom domain (3.1.0): lowercase host, sin scheme/path; UNIQUE.
+    let domain = String(custom_domain || '').trim().toLowerCase() || null;
+    if (domain) {
+      if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain)) { const err = new Error('Invalid custom domain'); err.code = 'invalid_domain'; throw err; }
+      const existing = await queryOne('SELECT id FROM pages WHERE custom_domain=$1', [domain]);
+      if (existing) { const err = new Error('Custom domain already in use'); err.code = 'domain_taken'; throw err; }
+    }
     await run(
-      'INSERT INTO pages (id,name,slug,description,status,template,timezone,logo_url,organization_id,locale,custom_css,custom_html,is_public,refresh_interval,custom_layout,custom_layout_css,custom_layout_html,external_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)',
-      [id, name, slug, description||'', status||'operational', template||'default', timezone||'UTC', logo_url||null, orgId, (['en','es'].includes(locale) ? locale : 'en'), sanitizeCss(custom_css)||null, sanitizeHtml(custom_html)||null, toBool01(is_public), refresh_interval ? Math.max(15, parseInt(refresh_interval)) : 15, toBool01(custom_layout), sanitizeCss(custom_layout_css)||null, sanitizeHtml(custom_layout_html)||null, external_id||null]
+      'INSERT INTO pages (id,name,slug,description,status,template,timezone,logo_url,organization_id,locale,custom_css,custom_html,is_public,refresh_interval,custom_layout,custom_layout_css,custom_layout_html,external_id,custom_domain,domain_verified) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,0)',
+      [id, name, slug, description||'', status||'operational', template||'default', timezone||'UTC', logo_url||null, orgId, (['en','es'].includes(locale) ? locale : 'en'), sanitizeCss(custom_css)||null, sanitizeHtml(custom_html)||null, toBool01(is_public), refresh_interval ? Math.max(15, parseInt(refresh_interval)) : 15, toBool01(custom_layout), sanitizeCss(custom_layout_css)||null, sanitizeHtml(custom_layout_html)||null, external_id||null, domain]
     );
     return this.getById(id);
   },
@@ -256,7 +264,7 @@ module.exports.pages = {
   async update(id, data) {
     const fields = [];
     const params = [];
-    const allowed = ['name','slug','description','status','template','timezone','logo_url','custom_css','custom_html','is_public','refresh_interval','custom_layout','custom_layout_css','custom_layout_html','external_id','organization_id','locale'];
+    const allowed = ['name','slug','description','status','template','timezone','logo_url','custom_css','custom_html','is_public','refresh_interval','custom_layout','custom_layout_css','custom_layout_html','external_id','organization_id','locale','custom_domain','domain_verified'];
     for (const k of allowed) {
       if (data[k] !== undefined) {
         let val = data[k];
@@ -270,6 +278,17 @@ module.exports.pages = {
           } else val = null;
         }
         if (k === 'locale') val = ['en','es'].includes(val) ? val : 'en';
+        if (k === 'custom_domain') {
+          val = String(val || '').trim().toLowerCase() || null;
+          if (val) {
+            if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(val)) { const err = new Error('Invalid custom domain'); err.code = 'invalid_domain'; throw err; }
+            const taken = await queryOne('SELECT id FROM pages WHERE custom_domain=$1 AND id<>$2', [val, id]);
+            if (taken) { const err = new Error('Custom domain already in use'); err.code = 'domain_taken'; throw err; }
+            // Dominio nuevo => NO verificado (hay que re-verificar).
+            fields.push('domain_verified=$' + (params.length + 1)); params.push(0);
+          }
+        }
+        if (k === 'domain_verified') val = toBool01(val);
         if (k === 'refresh_interval') val = Math.max(15, parseInt(val) || 15);
         if (k === 'is_public') val = toBool01(val);
         if (k === 'custom_layout') val = toBool01(val);
@@ -2157,6 +2176,7 @@ module.exports.subscribers = {
 // after the migration without an explicit org have organization_id NULL.
 module.exports.organizations = {
   SLUG_RE: /^[a-z0-9-]{1,64}$/,
+  DEFAULT_LIMITS: { maxPages: 10, maxApiKeys: 10, maxSubscribers: 100, maxComponents: 50 },
 
   async list() {
     return await queryAll('SELECT * FROM organizations ORDER BY created_at ASC');
@@ -2171,7 +2191,7 @@ module.exports.organizations = {
     if (!this.SLUG_RE.test(cleanSlug)) { const err = new Error('Invalid org slug'); err.code = 'invalid_slug'; throw err; }
     if (await this.getBySlug(cleanSlug)) { const err = new Error('Slug already exists'); err.code = 'slug_exists'; throw err; }
     if (!String(name || '').trim()) { const err = new Error('Name required'); err.code = 'name_required'; throw err; }
-    await run('INSERT INTO organizations (id,name,slug) VALUES ($1,$2,$3)', [id, String(name).trim(), cleanSlug]);
+    await run('INSERT INTO organizations (id,name,slug,limits) VALUES ($1,$2,$3,$4)', [id, String(name).trim(), cleanSlug, JSON.stringify(this.DEFAULT_LIMITS)]);
     for (const uid of (memberIds || [])) {
       await run("INSERT INTO organization_members (organization_id,user_id,role) VALUES ($1,$2,'member') ON CONFLICT DO NOTHING", [id, uid]);
     }
@@ -2223,6 +2243,38 @@ module.exports.organizations = {
       await run("INSERT INTO organization_members (organization_id,user_id,role) VALUES ($1,$2,$3) ON CONFLICT (organization_id,user_id) DO UPDATE SET role=$3", [id, userId, role]);
     }
     return this.listMembers(id);
+  },
+
+  async getLimits(id) {
+    const org = await this.get(id);
+    if (!org || !org.limits) return null;
+    try { return JSON.parse(org.limits); } catch (e) { return null; }
+  },
+
+  async getUsage(id) {
+    const pagesUsed = await queryOne('SELECT COUNT(*) AS c FROM pages WHERE organization_id=$1', [id]);
+    const keysUsed = await queryOne('SELECT COUNT(*) AS c FROM api_keys WHERE organization_id=$1 AND is_active=1', [id]);
+    const compsUsed = await queryOne('SELECT COUNT(*) AS c FROM components WHERE id IN (SELECT component_id FROM page_components WHERE page_id IN (SELECT id FROM pages WHERE organization_id=$1))', [id]);
+    // Pending subscribers also consume the quota (they occupy an email slot
+    // for up to 7 days — otherwise unconfirmed rows would bypass the limit).
+    const subsUsed = await queryOne('SELECT COUNT(*) AS c FROM subscribers WHERE page_id IN (SELECT id FROM pages WHERE organization_id=$1)', [id]);
+    return {
+      maxPages: parseInt(pagesUsed.c), maxApiKeys: parseInt(keysUsed.c),
+      maxComponents: parseInt(compsUsed.c), maxSubscribers: parseInt(subsUsed.c),
+    };
+  },
+
+  // null = permitido; nombre del límite cuando excedido.
+  async checkLimit(orgId, kind) {
+    const limits = await this.getLimits(orgId);
+    if (!limits || limits[kind] === undefined || limits[kind] === null) return null;
+    const usage = await this.getUsage(orgId);
+    return usage[kind] >= limits[kind] ? kind : null;
+  },
+
+  async setLimits(id, limits) {
+    await run('UPDATE organizations SET limits=$1, updated_at=NOW() WHERE id=$2', [JSON.stringify(limits || null), id]);
+    return this.get(id);
   },
 
   async listForUser(userId) {

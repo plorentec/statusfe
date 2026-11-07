@@ -145,6 +145,11 @@ async function session(req, res, next) {
       dep_deleted: 'Dependency deleted.',
       system: 'System statuses cannot be deleted.',
       invalid_retention: 'Retention must be between 30 and 3650 days.',
+      domain_verified: 'Custom domain verified. It now serves your page.',
+      domain_not_verified: 'TXT record not found or invalid — publish the record and try again.',
+      domain_taken: 'That custom domain is already in use by another page.',
+      invalid_domain: 'Invalid custom domain format (e.g. status.mycompany.com).',
+      org_limit: 'Organization limit reached. Upgrade the organization limits.',
       default: flashMsg
     };
     res.locals.message = msgs[flashMsg] || flashMsg;

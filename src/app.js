@@ -344,6 +344,11 @@ app.post('/subscribe/:slug', async (req, res) => {
     if (!page || page.is_public !== 1) return res.status(404).send('Not found');
     const email = String((req.body && req.body.email) || '').trim();
     const { subscribers } = require('./db/models');
+    // Organization limits (3.1.0): maxSubscribers de la org de la página.
+    if (page.organization_id) {
+      const exceeded = await require('./db/models').organizations.checkLimit(page.organization_id, 'maxSubscribers');
+      if (exceeded) return res.status(402).send('Subscription limit reached for this page. Try later.');
+    }
     const outcome = await subscribers.subscribe(email, page.id); // 'new'|'pending'|'confirmed'|'invalid'
     if (outcome === 'new' || outcome === 'pending') {
       const { subscribers: subsModel } = require('./db/models');
@@ -389,7 +394,13 @@ app.get('/unsubscribe/:token', async (req, res) => {
 // Public status page with analytics tracking
 app.get('/status/:slug', async (req, res) => {
   try {
-    const page = await pages.getBySlug(req.params.slug);
+    let page = await pages.getBySlug(req.params.slug);
+    // Custom domains (3.1.0): when the request comes through a page's custom
+    // domain, serve THAT page regardless of the URL slug (the tenant maps the
+    // domain to the app; TLS stays at the reverse proxy).
+    if (!page && req.hostname) {
+      page = await pages.getByCustomDomain(req.hostname.toLowerCase());
+    }
     if (!page) return res.status(404).send('Not found');
     if (page.is_public !== 1) return res.status(404).send('Not found');
     
@@ -450,7 +461,10 @@ app.get('/status/:slug', async (req, res) => {
 // Embed widget with customization
 app.get('/embed/:slug', async (req, res) => {
   try {
-    const page = await pages.getBySlug(req.params.slug);
+    let page = await pages.getBySlug(req.params.slug);
+    if (!page && req.hostname) {
+      page = await pages.getByCustomDomain(req.hostname.toLowerCase());
+    }
     if (!page) return res.status(404).send('Not found');
     if (page.is_public !== 1) return res.status(404).send('Not found');
     const comps = await components.getForPage(page.id);

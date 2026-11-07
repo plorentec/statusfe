@@ -25,6 +25,8 @@ async function createTables() {
       logo_url TEXT,
       organization_id TEXT,
       locale TEXT DEFAULT 'en',
+      custom_domain TEXT,
+      domain_verified INTEGER DEFAULT 0,
       custom_css TEXT,
       custom_html TEXT,
       is_public INTEGER DEFAULT 1,
@@ -364,6 +366,7 @@ async function createTables() {
       id TEXT NOT NULL,
       name TEXT NOT NULL,
       slug TEXT NOT NULL,
+      limits TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (id),
@@ -670,6 +673,10 @@ async function migrate() {
   // Organizations (2.9.0): multi-tenancy fase 1.
   try { await run(`ALTER TABLE pages ADD COLUMN IF NOT EXISTS organization_id TEXT`); } catch(e) { /* exists */ }
   try { await run(`ALTER TABLE pages ADD COLUMN IF NOT EXISTS locale TEXT DEFAULT 'en'`); } catch(e) { /* exists */ }
+  try { await run(`ALTER TABLE pages ADD COLUMN IF NOT EXISTS custom_domain TEXT`); } catch(e) { /* exists */ }
+  try { await run(`ALTER TABLE pages ADD COLUMN IF NOT EXISTS domain_verified INTEGER DEFAULT 0`); } catch(e) { /* exists */ }
+  try { await run(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS limits TEXT`); } catch(e) { /* exists */ }
+  try { await run('CREATE UNIQUE INDEX IF NOT EXISTS idx_pages_custom_domain ON pages(custom_domain) WHERE custom_domain IS NOT NULL'); } catch(e) { /* exists */ }
   try { await run(`ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS organization_id TEXT`); } catch(e) { /* exists */ }
   // Backfill ONCE: create the "Default" organization and assign every existing
   // page to it, so org scoping is coherent from the first boot after upgrade.

@@ -169,9 +169,20 @@ router.post('/pages', requirePerm('write'), async (req, res) => {
   // Same slug rule as the admin UI (missing here previously — an API key could
   // save slugs with spaces/uppercase that broke /status/:slug URLs).
   if (!/^[a-z0-9-]+$/.test(slug)) return res.status(400).json({ error: 'slug must match ^[a-z0-9-]+$' });
+  // Organization limits (3.1.0): 402 with the limit name when exceeded.
+  if (effectiveOrg) {
+    const exceeded = await organizations.checkLimit(effectiveOrg, 'maxPages');
+    if (exceeded) return res.status(402).json({ error: 'Organization limit reached: ' + exceeded });
+  }
   const existing = await pages.getBySlug(slug);
   if (existing) return res.status(409).json({ error: 'Slug exists' });
-  const page = await pages.create({ name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public, external_id, organization_id: effectiveOrg });
+  let page;
+  try {
+    page = await pages.create({ name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public, external_id, organization_id: effectiveOrg, custom_domain: req.body.custom_domain });
+  } catch (e) {
+    if (['invalid_domain', 'domain_taken', 'org_missing'].includes(e.code)) return res.status(400).json({ error: e.message });
+    throw e;
+  }
   res.status(201).json({ page });
 });
 router.put('/pages/:id', requirePerm('write'), async (req, res) => {
@@ -229,6 +240,13 @@ router.post('/components', requirePerm('write'), async (req, res) => {
     return res.status(403).json({ error: 'Admin permission required for cmd sensors (they execute commands on this server)' });
   }
   const group = await components.resolveGroup(req.body);
+  // Organization limits (3.1.0): when the component lands in an org context
+  // (key org), enforce maxComponents.
+  const orgForLimit = req.user.organization_id || null;
+  if (orgForLimit) {
+    const exceeded = await organizations.checkLimit(orgForLimit, 'maxComponents');
+    if (exceeded) return res.status(402).json({ error: 'Organization limit reached: ' + exceeded });
+  }
   let c;
   try {
     c = await components.create({
@@ -522,6 +540,10 @@ router.post('/api-keys', requirePerm('admin'), async (req, res) => {
   const effectivePageId = req.user.page_id || page_id || null;
   // Org keys mint keys bound to the SAME organization (no cross-org escalation).
   const effectiveOrgId = req.user.organization_id || organization_id || null;
+  if (effectiveOrgId) {
+    const exceeded = await organizations.checkLimit(effectiveOrgId, 'maxApiKeys');
+    if (exceeded) return res.status(402).json({ error: 'Organization limit reached: ' + exceeded });
+  }
   const key = await apiKeys.create({ name, permissions, page_id: effectivePageId, rate_limit, expires_at, organization_id: effectiveOrgId });
   res.status(201).json({ api_key: key });
 });

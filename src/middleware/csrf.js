@@ -10,6 +10,7 @@ function csrfProtection(req, res, next) {
   if (safe.includes(req.method)) return next();
 
   // Check for CSRF token in header or body only (not query params to prevent leakage).
+  if (process.env.CSRF_DEBUG) console.error('[csrf][dbg]', req.method, req.path, 'cookieToken=' + String(readCsrfCookie(req) || 'NONE').slice(0, 10), 'bodyKeys=' + (req.body ? Object.keys(req.body).join(',') : 'NO-BODY'), 'hdr=' + (req.headers['x-csrf-token'] ? 'yes' : 'no'));
   // req.body can be undefined when no body parser matched (e.g. text/plain) — a
   // missing token must yield a clean 403, never a TypeError/500.
   const token = req.headers['x-csrf-token'] || (req.body && req.body._csrf);
@@ -28,6 +29,7 @@ function csrfProtection(req, res, next) {
   // timingSafeEqual never throws on mismatched input lengths (malformed tokens
   // get a clean 403, not a 500), and the comparison stays constant-time.
   const digest = (v) => crypto.createHash('sha256').update(String(v)).digest();
+  if (process.env.CSRF_DEBUG) console.error('[csrf][dbg3] stored(len ' + String(stored).length + ')=' + String(stored) + ' token(len ' + String(token).length + ')=' + String(token));
   if (!crypto.timingSafeEqual(digest(token), digest(stored))) {
     return res.status(403).json({ error: 'CSRF token invalid' });
   }

@@ -41,7 +41,7 @@ valor/camino crítico. Última revisión: v2.7.0 (2026-11-05).
 Escalado (sigue caído X min → re-aviso), quiet hours, y silencio automático
 durante ventanas de mantenimiento programado.
 
-### 3. Multi-tenancy fase 2 → **hecho en 3.0.0** (login con org_scope, panel scoping para role=user, i18n público ES/EN). Pendiente fase 3 (post-3.0.0): dominios custom por tenant, límites por organización, onboarding self-service.
+### 3. Multi-tenancy fase 2 → **hecho en 3.0.0** (login con org_scope, panel scoping para role=user, i18n público ES/EN). Fase 3 → **hecho en 3.1.0** (límites por organización + dominios custom con verificación TXT). Pendiente fase 4: onboarding self-service (registro de organizaciones), facturación/planes.
 
 ### 4. Sparkline de latencia en el detalle
 `probe_last_ms` hoy solo guarda el último valor: tabla de historial de

@@ -1237,6 +1237,44 @@ router.post('/2fa/setup', async (req, res) => {
   res.redirect('/admin/2fa/setup');
 });
 
+// ===== CUSTOM DOMAINS (3.1.0) =====
+// The TXT record to publish: statusfe-verify=<token> where token is a stable
+// hash of the page id + secret — deterministic so the panel can always show
+// it again without storing an extra column.
+router.get('/pages/:id/domain-token', async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin required' });
+  const page = await pages.getById(req.params.id);
+  if (!page || !page.custom_domain) return res.status(404).json({ error: 'Page has no custom domain' });
+  const token = require('crypto').createHash('sha256').update('statusfe-domain:' + page.id + ':' + (process.env.SESSION_SECRET || '')).digest('hex').slice(0, 32);
+  res.json({ domain: page.custom_domain, record: 'statusfe-verify=' + token });
+});
+
+router.post('/pages/:id/verify-domain', async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.redirect('/admin/pages?msg=admin&type=error');
+  }
+  const page = await pages.getById(req.params.id);
+  if (!page || !page.custom_domain) {
+    return res.redirect('/admin/pages?msg=error&type=error');
+  }
+  const token = require('crypto').createHash('sha256').update('statusfe-domain:' + page.id + ':' + (process.env.SESSION_SECRET || '')).digest('hex').slice(0, 32);
+  const dns = require('dns').promises;
+  try {
+    const records = await dns.resolveTxt(page.custom_domain);
+    const flat = records.map(r => r.join(''));
+    const ok = flat.some(t => t === 'statusfe-verify=' + token);
+    if (ok) {
+      await pages.update(page.id, { domain_verified: 1 });
+      return res.redirect('/admin/pages?msg=domain_verified&type=success');
+    }
+    await pages.update(page.id, { domain_verified: 0 });
+    return res.redirect('/admin/pages?msg=domain_not_verified&type=error');
+  } catch (e) {
+    await pages.update(page.id, { domain_verified: 0 });
+    return res.redirect('/admin/pages?msg=domain_not_verified&type=error');
+  }
+});
+
 // ===== ORGANIZATIONS (2.9.0) =====
 router.get('/organizations', async (req, res) => {
   if (req.user.role !== 'admin') {
