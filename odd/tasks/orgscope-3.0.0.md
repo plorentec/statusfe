@@ -33,3 +33,7 @@
   marco público-empresas activo).
 - L2: Dominios custom y límites por org se documentan como post-3.0.0
   (requieren DNS/TLS por tenant y diseño de límites; no caben con calidad aquí).
+- L3: E2E en producción verde: fixture (org+miembro+2 páginas, una ES), login
+  con org_scope, /admin/pages scoped (Tenant Page 1 / Otra Page 0), página ES
+  con chrome en español (Estado general/Recibe novedades/Suscribirse),
+  limpieza total. CI verde. Release v3.0.0 publicado.
