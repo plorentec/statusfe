@@ -347,3 +347,7 @@ body.template-dark .up-pct, .dark-item .up-pct { color: #94a3b8; }
 .subscribe-box input[type="email"] { flex: 1; max-width: 300px; padding: 8px 12px; border: 1px solid var(--border, #e2e8f0); border-radius: 8px; }
 .subscribe-box button { padding: 8px 16px; background: var(--sf-primary, #10b981); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; }
 .subscribe-note { font-size: 11px; color: #94a3b8; margin: 6px 0 0; }
+
+/* ===== Latency sparkline (3.2.0) ===== */
+.lat-spark { margin-top: 8px; }
+.lat-title { font-size: 12px; color: #64748b; margin-bottom: 4px; }

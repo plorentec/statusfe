@@ -75,23 +75,33 @@ router.get('/pages/:slug', optionalAuthMw, async (req, res) => {
   res.json({ page, components: comps, incidents: incs, incidentsByComponent });
 });
 
-// Public: list components
+// Public: list components (pagination OPT-IN via ?page&per_page — absent = full list)
 router.get('/components', async (req, res) => {
   if (req.query.external_id) { const c = await components.getByExternalId(req.query.external_id); return res.json({ component: c || null }); }
   const f = {};
   if (req.query.status) f.status = req.query.status;
   if (req.query.group) f.group = req.query.group;
   const list = await components.list(f);
+  const pageNum = parseInt(req.query.page, 10);
+  const perPage = Math.min(100, Math.max(1, parseInt(req.query.per_page, 10) || 20));
+  if (pageNum >= 1) {
+    return res.json({ components: list.slice((pageNum - 1) * perPage, pageNum * perPage), total: list.length, page: pageNum, per_page: perPage, pages: Math.ceil(list.length / perPage) });
+  }
   res.json({ components: list, total: list.length });
 });
 
-// Public: list incidents
+// Public: list incidents (pagination OPT-IN)
 router.get('/incidents', async (req, res) => {
   const f = { visible: 1 };
   if (req.query.page_id) f.page_id = req.query.page_id;
   if (req.query.status) f.status = req.query.status;
   if (req.query.limit) f.limit = parseInt(req.query.limit);
   const list = await incidents.list(f);
+  const pageNum = parseInt(req.query.page, 10);
+  const perPage = Math.min(100, Math.max(1, parseInt(req.query.per_page, 10) || 20));
+  if (pageNum >= 1) {
+    return res.json({ incidents: list.slice((pageNum - 1) * perPage, pageNum * perPage), total: list.length, page: pageNum, per_page: perPage, pages: Math.ceil(list.length / perPage) });
+  }
   res.json({ incidents: list, total: list.length });
 });
 

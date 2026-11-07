@@ -336,6 +336,14 @@ router.get('/components', async (req, res) => {
     const allow = new Set(onPage.map(r => r.component_id));
     allComponents = allComponents.filter(c => allow.has(c.id));
   }
+  // Pagination (3.2.0): opt-in via ?page — ABSENT page = NO slicing (full
+  // list, backwards compatible). The old Math.max(1, ...||0) coerced the
+  // missing page to 1 and paginated everything by surprise.
+  const pageNum = parseInt(req.query.page, 10);
+  const perPage = Math.min(100, Math.max(5, parseInt(req.query.per_page, 10) || 20));
+  const totalComps = allComponents.length;
+  const totalPages = Math.max(1, Math.ceil(totalComps / perPage));
+  if (pageNum >= 1) allComponents = allComponents.slice((pageNum - 1) * perPage, pageNum * perPage);
   for (const c of allComponents) {
     c.activeIncidents = await components.getActiveIncidents(c.id);
     const activeInc = await components.getActiveIncidentForComponent(c.id);
@@ -355,7 +363,8 @@ router.get('/components', async (req, res) => {
     groups: await componentGroups.list(),
     csrfToken: res.locals.csrfToken,
     searchQuery: filterOpts.search || '',
-    sortBy: filterOpts.sort || 'position_ASC'
+    sortBy: filterOpts.sort || 'position_ASC',
+    pagination: pageNum >= 1 ? { page: pageNum, perPage, total: totalComps, pages: totalPages } : null
   });
 });
 

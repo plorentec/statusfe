@@ -346,6 +346,8 @@ async function probeComponent(comp) {
   // 2.7.0).
   const checkedAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
   await run('UPDATE components SET probe_last_checked_at=$1, probe_last_ok=$2, probe_last_ms=$3, probe_consecutive=$4, updated_at=NOW() WHERE id=$5', [checkedAt, ok ? 1 : 0, durationMs, consec, comp.id]);
+  // Latency history (3.2.0): one row per probe (purged after 14 days by cron).
+  await run('INSERT INTO probe_latency (id, component_id, checked_at, ms) VALUES ($1,$2,$3,$4)', [require('uuid').v4(), comp.id, checkedAt, durationMs]).catch(() => {});
 
   const target = ok ? 'operational' : status;
   if (consec >= need && comp.status !== target) {

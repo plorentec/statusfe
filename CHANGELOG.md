@@ -9,6 +9,24 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [3.2.0] — 2026-11-07
+
+### Added
+- **Historial de latencia + sparkline**: `probe_latency` guarda una fila por
+  sonda (purga a 14 días en el cron); la página de detalle de cada componente
+  muestra una sparkline SVG de 24 h (sin librerías) con el máximo.
+- **Paginación opt-in** en `/admin/components` (controles ‹ › con
+  `?page&per_page`, default = lista completa para no romper enlaces ni
+  integraciones) y en `GET /api/v1/components|incidents` (misma semántica,
+  respuesta con `page/per_page/pages`).
+
+### Fixed
+- **Uptime bars: timezone crossing en los seeds del arnés** — los stamps en
+  hora local (CET) cruzaban medianoche UTC y caían "mañana", vaciando el día
+  de hoy (los checks de carry-in/carry-forward fallaban); el arnés ancla
+  ahora en UTC. La lógica del producto no cambió (la regresión era del
+  arnés).
+
 ## [3.1.0] — 2026-11-05
 
 ### Added

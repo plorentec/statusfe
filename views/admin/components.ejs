@@ -103,6 +103,13 @@
 <% } %>
 </tbody>
 </table>
+<% if (typeof pagination !== 'undefined' && pagination && pagination.pages > 1) { %>
+<div class="pg-controls">
+<% if (pagination.page > 1) { %><a class="btn btn-sm" href="?page=<%= pagination.page - 1 %>">&lsaquo; Prev</a><% } %>
+<span>Page <%= pagination.page %> / <%= pagination.pages %> (<%= pagination.total %> components)</span>
+<% if (pagination.page < pagination.pages) { %><a class="btn btn-sm" href="?page=<%= pagination.page + 1 %>">Next &rsaquo;</a><% } %>
+</div>
+<% } %>
 </div>
 <% } %>
 

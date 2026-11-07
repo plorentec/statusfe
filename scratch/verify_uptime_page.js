@@ -63,7 +63,9 @@ async function waitForBoot() {
   //  compA TODAY: operational->major_outage at 09:00, major_outage->operational
   //  at 10:00 => TODAY counts as DOWN (worst-of-day), even though it recovered.
   //  compB 5 days ago: operational->major_outage (still down).
-  const ts = (daysAgo, hh, mm) => { const d = new Date(); d.setDate(d.getDate() - daysAgo); d.setHours(hh, mm, 0, 0); return d.toISOString().slice(0, 19).replace('T', ' '); };
+  // UTC-anchored stamps (setUTCHours): the bar window is UTC — local-hour
+  // stamps crossed midnight and landed "tomorrow" (9-nov CET = 8-nov UTC late).
+  const ts = (daysAgo, hh, mm) => { const d = new Date(); d.setUTCDate(d.getUTCDate() - daysAgo); d.setUTCHours(hh, mm, 0, 0); return d.toISOString().slice(0, 19).replace('T', ' '); };
   const seed = [
     [compA.id, 'operational', 'major_outage', ts(0, 9, 0)],
     [compA.id, 'major_outage', 'operational', ts(0, 10, 0)],

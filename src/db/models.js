@@ -2285,6 +2285,15 @@ module.exports.organizations = {
   }
 };
 
+// Latency history (3.2.0): last N hours of probe latency for the sparkline.
+module.exports.components.getLatencyHistory = async function(componentId, hours = 24) {
+  const cutoff = new Date(Date.now() - hours * 3600000).toISOString().slice(0, 19).replace('T', ' ');
+  return await queryAll(
+    'SELECT checked_at, ms FROM probe_latency WHERE component_id=$1 AND checked_at >= $2 ORDER BY checked_at ASC',
+    [componentId, cutoff]
+  );
+};
+
 // Composite-component helpers exposed for harnesses (severity map, worst-of
 // aggregation, ancestor recompute). Routes never call these directly — they
 // go through components.* / cascadeStatusChange.

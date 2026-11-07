@@ -43,15 +43,13 @@ durante ventanas de mantenimiento programado.
 
 ### 3. Multi-tenancy fase 2 → **hecho en 3.0.0** (login con org_scope, panel scoping para role=user, i18n público ES/EN). Fase 3 → **hecho en 3.1.0** (límites por organización + dominios custom con verificación TXT). Pendiente fase 4: onboarding self-service (registro de organizaciones), facturación/planes.
 
-### 4. Sparkline de latencia en el detalle
-`probe_last_ms` hoy solo guarda el último valor: tabla de historial de
-latencia (purgada a 7-14 días) + gráfico en la página de detalle.
+### 4. ~~Sparkline de latencia~~ → **hecho en 3.2.0** (probe_latency 14d + SVG 24h en el detalle).
 
 ### 5. Rendimiento
 - `/admin/components`: 2 queries por componente (getActiveIncidents x2) → batched.
 - Cascada de dependencias transitiva: query por nodo → `WITH RECURSIVE`.
 - Analytics admin: N+1 por página × componente.
-- Paginación en listas admin + audit.
+- ~~Paginación en listas admin~~ → **hecho en 3.2.0** (opt-in ?page&per_page en admin/components y API). Audit CSV sigue completo.
 
 ### 6. Notificaciones multi-canal nativas
 Telegram (la casa ya usa bots), Discord, Slack — además del email y webhooks.

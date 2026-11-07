@@ -346,6 +346,8 @@ async function createTables() {
     try { await run(`CREATE INDEX IF NOT EXISTS ${idx}`); } catch(e) { /* exists */ }
   }
   for (const idx of [
+    'idx_probe_latency_component ON probe_latency(component_id, checked_at)',
+    'idx_probe_latency_checked ON probe_latency(checked_at)',
     'idx_pages_organization ON pages(organization_id)',
     'idx_api_keys_organization ON api_keys(organization_id)',
     'idx_org_members_user ON organization_members(user_id)',
@@ -359,6 +361,16 @@ async function createTables() {
   ]) {
     try { await run(`CREATE INDEX IF NOT EXISTS ${idx}`); } catch(e) { /* exists */ }
   }
+
+  // Latency history (3.2.0): one row per executed probe (purged at 14 days).
+  await run(`
+    CREATE TABLE IF NOT EXISTS probe_latency (
+      id TEXT PRIMARY KEY,
+      component_id TEXT NOT NULL,
+      checked_at TIMESTAMP NOT NULL,
+      ms INTEGER
+    )
+  `);
 
   // Organizations (2.9.0): multi-tenancy fase 1.
   await run(`

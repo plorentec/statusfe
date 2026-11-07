@@ -1108,3 +1108,6 @@ body.dark select option {
    cell — no extra column, so colspan/sort/JS stay untouched. */
 .child-cell { padding-left: 28px; }
 .child-parent-tag { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+
+/* ===== Pagination controls (3.2.0) ===== */
+.pg-controls { display: flex; gap: 12px; align-items: center; justify-content: flex-end; margin-top: 10px; font-size: 13px; color: var(--text-muted); }

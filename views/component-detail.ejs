@@ -50,6 +50,25 @@
 </div>
 <% if (Number(component.probe_enabled) === 1) { %>
 <div class="detail-ms">Last check: <%= component.probe_last_checked_at ? new Date(component.probe_last_checked_at).toISOString().replace('T',' ').slice(0,19) + ' UTC' : '—' %> · <%= Number(component.probe_last_ok) === 1 ? 'OK' : 'FAILED' %> · <%= component.probe_last_ms != null ? component.probe_last_ms + ' ms' : '—' %></div>
+<% const lat = (typeof latencyHistory !== 'undefined' ? latencyHistory : []).filter(x => x.ms != null); %>
+<% if (lat.length >= 2) { %>
+<%
+  // Sparkline SVG (3.2.0): latency over the last 24h. Plain inline SVG, no libs.
+  const W = 720, Hh = 60, P = 4;
+  const maxMs = Math.max(...lat.map(x => Number(x.ms)), 1);
+  const pts = lat.map((x, i) => {
+    const px = P + (i / (lat.length - 1)) * (W - 2 * P);
+    const py = Hh - P - (Number(x.ms) / maxMs) * (Hh - 2 * P);
+    return px.toFixed(1) + ',' + py.toFixed(1);
+  });
+%>
+<div class="lat-spark">
+<div class="lat-title">Latency (24h) — max <%= maxMs %> ms</div>
+<svg width="<%= W %>" height="<%= Hh %>" viewBox="0 0 <%= W %> <%= Hh %>" style="max-width:100%;background:rgba(100,116,139,.08);border-radius:6px;">
+<polyline points="<%= pts.join(' ') %>" fill="none" stroke="#10b981" stroke-width="2"/>
+</svg>
+</div>
+<% } %>
 <% } %>
 </div>
 

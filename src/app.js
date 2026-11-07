@@ -69,6 +69,10 @@ setInterval(async () => {
     // GDPR purge: unconfirmed subscriptions die after 7 days.
     const purged = await subscribers.purgeUnconfirmed(7);
     if (purged > 0) console.log(`Subscribers purge: removed ${purged} unconfirmed`);
+    // Latency history purge (3.2.0): 14 days.
+    const latCutoff = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 19).replace('T', ' ');
+    const latPurged = await require('./db/database').run('DELETE FROM probe_latency WHERE checked_at < $1', [latCutoff]);
+    if (latPurged.changes > 0) console.log(`Latency purge: removed ${latPurged.changes} rows`);
   } catch(e) { /* ignore */ }
 
   try {
@@ -313,6 +317,7 @@ app.get('/status/:slug/components/:id', async (req, res) => {
     const bar = bars[comp.id] || { days: [], uptimePct: '100.00' };
     const history = await components.getHistory(comp.id, null, 20);
     const activeIncidents = await incidents.list({ component_id: comp.id, visible: 1 });
+    const latencyHistory = await components.getLatencyHistory(comp.id, 24).catch(() => []);
 
     const STATUS_LABELS = {
       en: { operational:'Operational',under_maintenance:'Under Maintenance',degraded_performance:'Degraded Performance',partial_outage:'Partial Outage',major_outage:'Major Outage',investigating:'Investigating',identified:'Identified',monitoring:'Monitoring',resolved:'Resolved' },
@@ -324,7 +329,7 @@ app.get('/status/:slug/components/:id', async (req, res) => {
     res.render('component-detail', {
       page, component: comp, bar: bar.days, uptimePct: bar.uptimePct,
       history, incidents: activeIncidents, formatStatus, customization,
-      uptimeDays: UPTIME_DAYS, refreshInterval: 0, locale: page.locale || 'en'
+      uptimeDays: UPTIME_DAYS, refreshInterval: 0, locale: page.locale || 'en', latencyHistory
     });
   } catch (e) {
     console.error('Component detail error:', e);
