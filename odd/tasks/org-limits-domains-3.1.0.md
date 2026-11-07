@@ -28,3 +28,11 @@
 ## Tasks
 
 - T1 Tracking. T2 Límites. T3 Dominios. T4 Harnesses. T5 Suite+release+deploy.
+- L3: E2E límites en producción (con plaintext capturado del create — el
+  SELECT key de la BD es NULL por diseño): 2 páginas 201 → 3ª 402
+  {"error":"Organization limit reached: maxPages"}. Limpieza OK.
+- L4: E2E dominios en producción con DNS real (status.canovastv.es): página +
+  token TXT determinista + Host resolution bloqueada sin verificar (404) +
+  verify sin TXT → redirect domain_not_verified + domain_verified=0. El
+  camino positivo (TXT publicado) está cubierto por el arnés con resolveTxt
+  mockeado. CI verde. Release v3.1.0 publicado.
