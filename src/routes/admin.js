@@ -344,9 +344,14 @@ router.get('/components', async (req, res) => {
   const totalComps = allComponents.length;
   const totalPages = Math.max(1, Math.ceil(totalComps / perPage));
   if (pageNum >= 1) allComponents = allComponents.slice((pageNum - 1) * perPage, pageNum * perPage);
+  // 3.5.0: ONE batched incidents query for the whole list instead of two per
+  // component (N+1). Row fields stay identical: activeIncidents, and the
+  // latest incident overriding status/incidentName/incidentImpact.
+  const incidentsByComponent = await components.getActiveIncidentsForMany(allComponents.map(c => c.id));
   for (const c of allComponents) {
-    c.activeIncidents = await components.getActiveIncidents(c.id);
-    const activeInc = await components.getActiveIncidentForComponent(c.id);
+    const entry = incidentsByComponent.get(c.id) || { active: [], latest: null };
+    c.activeIncidents = entry.active || [];
+    const activeInc = entry.latest;
     if (activeInc) {
       c.status = activeInc.status;
       c.incidentName = activeInc.name;
@@ -1114,14 +1119,23 @@ router.get('/audit', async (req, res) => {
   if (req.user.role !== 'admin') {
     return res.redirect('/admin?msg=admin&type=error');
   }
-  const logs = await auditLog.list(100);
+  let logs = await auditLog.list(100);
+  // Pagination (3.5.0): opt-in via ?page — ABSENT page = NO slicing (full
+  // list, backwards compatible), same contract as /admin/components. The CSV
+  // download is never paginated.
+  const pageNum = parseInt(req.query.page, 10);
+  const perPage = Math.min(100, Math.max(5, parseInt(req.query.per_page, 10) || 20));
+  const totalLogs = logs.length;
+  const totalPages = Math.max(1, Math.ceil(totalLogs / perPage));
+  if (pageNum >= 1) logs = logs.slice((pageNum - 1) * perPage, pageNum * perPage);
   res.send(layout(res, 'audit', {
     title: 'Audit Log',
     user: req.user,
     userId: req.user.id,
     message: res.locals.message,
     messageType: res.locals.messageType,
-    logs
+    logs,
+    pagination: pageNum >= 1 ? { page: pageNum, perPage, total: totalLogs, pages: totalPages } : null
   }));
 });
 

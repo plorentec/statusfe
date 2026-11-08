@@ -44,6 +44,13 @@ Cleanup Old Entries
 <% } %>
 </tbody>
 </table>
+<% if (typeof pagination !== 'undefined' && pagination && pagination.pages > 1) { %>
+<div class="pg-controls">
+<% if (pagination.page > 1) { %><a class="btn btn-sm" href="?page=<%= pagination.page - 1 %>&per_page=<%= pagination.perPage %>">&lsaquo; Prev</a><% } %>
+<span>Page <%= pagination.page %> / <%= pagination.pages %> (<%= pagination.total %> entries)</span>
+<% if (pagination.page < pagination.pages) { %><a class="btn btn-sm" href="?page=<%= pagination.page + 1 %>&per_page=<%= pagination.perPage %>">Next &rsaquo;</a><% } %>
+</div>
+<% } %>
 </div>
 </div>
 

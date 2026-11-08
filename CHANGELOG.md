@@ -9,6 +9,34 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [3.5.0] — 2026-11-08
+
+### Performance
+- **`/admin/components` sin N+1**: los incidentes activos se cargan en **una
+  sola consulta** (`components.getActiveIncidentsForMany`) en vez de dos por
+  componente. Medido con contador de consultas: **62 → 1** con 31 componentes.
+  El override de la lista (estado/nombre/impacto del incidente activo) se
+  preserva y está fijado por test.
+- **Cascada de dependencias por niveles**: el recorrido pasa de una consulta
+  por nodo a **una por nivel** del grafo (`IN` por nivel). Medido: hub con 4
+  dependientes **17 → 10** consultas; una cadena pura queda igual (13 → 12, sin
+  regresión); los ciclos siguen terminando y no se duplican escrituras.
+- **`/admin/audit` paginado** (opt-in `?page&per_page`, clamp 5-100) con
+  controles ‹ ›. La descarga CSV sigue completa.
+
+### Verified
+- `scratch/verify_perf.js`: 30 checks con un **contador real de consultas**
+  (envoltura del pool de `pg`), incluido un **diferencial** contra una copia
+  literal del recorrido anterior. Suite completa: **780 checks**.
+
+### Nota honesta (medición > objetivo)
+El objetivo que escribí en la spec («updateStatus ≤20 consultas totales») **no
+es alcanzable**: `updateStatus` tiene un coste fijo de ~18 consultas
+independiente del grafo (7 lecturas de ajustes SMTP, dos recorridos de
+ancestros, historial). Lo que sí se cumple y queda fijado es que **el coste del
+recorrido** baja (hub 17→10). Bajar el total exigiría tocar `updateStatus`/
+`getSMTP` (fuera del alcance de esta tanda).
+
 ## [3.4.0] — 2026-11-08
 
 ### Added

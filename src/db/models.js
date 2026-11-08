@@ -190,29 +190,70 @@ async function cascadeStatusChange(upstreamComponentId, newStatus) {
   // dependents. The component_dependencies table already allows many
   // components to depend on one shared hub. A visited set guards against
   // accidental cycles (which the route-level check also prevents).
-  const queue = [upstreamComponentId];
+  //
+  // 3.5.0: traversal is LEVEL by LEVEL — ONE dependents query per level with
+  // an IN list (plus ONE components query for that level's cascading
+  // dependents) instead of one dependents query per node and one component
+  // SELECT per cascading edge. A level with K cascading dependents now costs 2
+  // queries instead of K+1, and a hub stops paying a SELECT por cada arista.
+  // Same visited dedupe, same writes, same resulting statuses.
   const visited = new Set();
-  while (queue.length > 0) {
-    const currentId = queue.shift();
-    if (visited.has(currentId)) continue;
-    visited.add(currentId);
+  let frontier = [upstreamComponentId];
+  while (frontier.length > 0) {
+    const level = frontier.filter(id => !visited.has(id));
+    frontier = [];
+    if (level.length === 0) break;
+    for (const id of level) visited.add(id);
 
-    const dependents = await queryAll('SELECT * FROM component_dependencies WHERE depends_on=$1', [currentId]);
-    if (dependents.length > 0) console.log('Cascading status', newStatus, 'from', currentId, 'to', dependents.map(d => d.component_id).join(', '));
+    const dependents = await queryAll(
+      `SELECT * FROM component_dependencies WHERE depends_on IN (${level.map((_, i) => '$' + (i + 1)).join(',')})`,
+      level
+    );
+    // Group by upstream, preserving the frontier order so log lines and update
+    // order match the old per-node walk.
+    const byParent = new Map();
+    for (const id of level) byParent.set(id, []);
     for (const dep of dependents) {
-      if (dep.cascade_status == 1) {
-        const depComp = await queryOne('SELECT * FROM components WHERE id=$1', [dep.component_id]);
-        if (depComp && depComp.status !== newStatus) {
-          console.log('  Cascade:', depComp.name, depComp.status, '->', newStatus);
-          await run('UPDATE components SET status=$1, updated_at=NOW() WHERE id=$2', [newStatus, dep.component_id]);
-          const dhId = uuidv4();
-          try {
-            await run('INSERT INTO status_history (id,component_id,page_id,old_status,new_status,created_at) VALUES ($1,$2,$3,$4,$5,NOW())', [dhId, dep.component_id, null, depComp.status, newStatus]);
-          } catch(e) {
-            if (!e.message.includes('FOREIGN KEY')) throw e;
-          }
+      const bucket = byParent.get(dep.depends_on);
+      if (bucket) bucket.push(dep);
+    }
+
+    const cascading = [];
+    for (const id of level) {
+      const deps = byParent.get(id) || [];
+      if (deps.length > 0) console.log('Cascading status', newStatus, 'from', id, 'to', deps.map(d => d.component_id).join(', '));
+      for (const dep of deps) if (dep.cascade_status == 1) cascading.push(dep);
+    }
+    if (cascading.length === 0) continue;
+
+    // ONE components query for every dependent of this level that cascades.
+    const depIds = [...new Set(cascading.map(d => d.component_id))];
+    const rows = await queryAll(
+      `SELECT * FROM components WHERE id IN (${depIds.map((_, i) => '$' + (i + 1)).join(',')})`,
+      depIds
+    );
+    const compById = new Map(rows.map(r => [r.id, r]));
+
+    const queued = new Set();
+    for (const dep of cascading) {
+      const depComp = compById.get(dep.component_id) || null;
+      if (depComp && depComp.status !== newStatus) {
+        console.log('  Cascade:', depComp.name, depComp.status, '->', newStatus);
+        await run('UPDATE components SET status=$1, updated_at=NOW() WHERE id=$2', [newStatus, dep.component_id]);
+        const dhId = uuidv4();
+        try {
+          await run('INSERT INTO status_history (id,component_id,page_id,old_status,new_status,created_at) VALUES ($1,$2,$3,$4,$5,NOW())', [dhId, dep.component_id, null, depComp.status, newStatus]);
+        } catch(e) {
+          if (!e.message.includes('FOREIGN KEY')) throw e;
         }
-        queue.push(dep.component_id);
+        // Keep the in-memory row fresh: the same dependent can appear twice in
+        // a level (diamond graph) and must only be written (and journalled)
+        // once, exactly like the old per-node walk did with its re-SELECT.
+        depComp.status = newStatus;
+      }
+      if (!visited.has(dep.component_id) && !queued.has(dep.component_id)) {
+        queued.add(dep.component_id);
+        frontier.push(dep.component_id);
       }
     }
   }
@@ -1007,6 +1048,31 @@ module.exports.components = {
       'SELECT * FROM incidents WHERE component_id=$1 AND status != \'resolved\' ORDER BY starts_at DESC LIMIT 1',
       [componentId]
     );
+  },
+
+  // 3.5.0: active incidents for MANY components in ONE query. The admin
+  // components list used to run getActiveIncidents()+getActiveIncidentForComponent()
+  // per row — 2 queries per component (N+1). Returns
+  // Map<componentId, { active: [rows...], latest: row|null }>; `active` keeps
+  // the same starts_at DESC order and `latest` is the first row (the incident
+  // the list used as the visible status override). An IN placeholder list is
+  // used on purpose: pg-mem does not support `= ANY($1::text[])`.
+  async getActiveIncidentsForMany(componentIds) {
+    const map = new Map();
+    const ids = [...new Set((componentIds || []).filter(Boolean))];
+    for (const id of ids) map.set(id, { active: [], latest: null });
+    if (ids.length === 0) return map;
+    const rows = await queryAll(
+      `SELECT * FROM incidents WHERE component_id IN (${ids.map((_, i) => '$' + (i + 1)).join(',')}) AND status != 'resolved' ORDER BY starts_at DESC`,
+      ids
+    );
+    for (const row of rows) {
+      const entry = map.get(row.component_id);
+      if (!entry) continue;
+      entry.active.push(row);
+      if (!entry.latest) entry.latest = row;
+    }
+    return map;
   }
 };
 
