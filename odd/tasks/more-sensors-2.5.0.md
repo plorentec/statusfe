@@ -40,3 +40,39 @@ Segunda tanda de sensores sobre el motor de probes (2.3.0/2.4.0).
   heartbeat → staleness la marcó major_outage ✓; heartbeat curl → operational ✓
   (el re-descenso por staleness con tick de 20 s queda cubierto por el arnés
   con tick de 1 s). Limpieza OK. CI verde.
+
+## Revisión nativa: BLOQUEADA (comprobado 5/5) — deuda documentada
+
+**Fecha**: 2026-11-08. **Lineage**: `review-0c81a8cfea62b766` (state=reviewing,
+abierto, NO resetado ni abandonado — reanudable con `gentle_review status`).
+
+**Síntoma exacto**: 5 intentos de `capture-group` para las 3 lentes
+(risk/resilience/reliability). Todos: `reviewer-empty-output`,
+`stopReason: length`, 32.768–51.043 tokens de reasoning y **0 caracteres de
+texto** (textChars: 0). Modelos: `nan/glm5.3-flash` y `nan/deepseek-v4-flash`.
+
+**Interpretación**: determinista para este candidato, no estocástico. El slice
+A (2.2.7+2.3.0) se revisó y APROBÓ con el mismo transporte (3 lentes + refuter
++ 2 correcciones + validador), así que el transporte funciona: lo que rompe el
+reviewer es el contenido de este slice (sensores con `probe_command` +
+`child_process.exec`, que disparan razonamiento sin salida).
+
+**Decisión (usuario, opción A)**: aceptar el arnés como verificación del slice
+B y documentar la deuda para cuando el proveedor/modelos lo permitan.
+
+**Verificación que SÍ respalda este slice**:
+- `scratch/verify_probe_types.js` — 32 checks (cert ok/warn/dead, json
+  eq/gt/exists/mismatch/parse, cmd ok/fail/regex/timeout, tcp, dns, ping,
+  guards por tipo y por estado efectivo, RCE guard de keys write/admin).
+- `scratch/verify_probe_more.js` — 15 checks (tcp abierto/cerrado, dns
+  ok/mismatch/NXDOMAIN, ping, keyword HTTP, push heartbeat/recuperación/
+  staleness).
+- Suite completa: 708 checks en 25 arneses.
+- E2E en producción (2026-11-05): cert contra el Apache real, cmd con regex,
+  json contra el health propio, tcp/ping/push — todos `operational` con
+  `last_ok=1`, limpieza OK. Y el guard del slice A verificado en prod
+  (`probe_invalid`).
+
+**Riesgo residual aceptado**: la revisión nativa de lentes no cubrió este
+slice; se compensa con 47 checks dedicados + E2E. Si se reanuda el lineage y
+aparecen hallazgos, se tratan como correcciones normales sobre `main`.
