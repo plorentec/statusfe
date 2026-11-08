@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title><%= title %> - StatusFe</title>
+<link rel="stylesheet" href="/css/status.css">
+</head>
+<body>
+<div class="auth-card" style="max-width:480px;margin:60px auto;padding:28px;border-radius:12px;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.08);font-family:sans-serif;">
+<h2 style="margin:0 0 6px;">Create your account</h2>
+<p style="color:#64748b;font-size:14px;margin:0 0 18px;">You get your own organization, a public status page and the default plan limits. You can invite your team later.</p>
+<% if (typeof error !== 'undefined' && error) { %><div style="background:#fee2e2;color:#991b1b;padding:10px 12px;border-radius:8px;margin-bottom:14px;font-size:14px;"><%= error %></div><% } %>
+<form method="post" action="/register">
+<div style="margin-bottom:12px;"><label>Name</label><br><input type="text" name="name" required style="width:100%;padding:9px 11px;border:1px solid #e2e8f0;border-radius:8px;"></div>
+<div style="margin-bottom:12px;"><label>Work email</label><br><input type="email" name="email" required style="width:100%;padding:9px 11px;border:1px solid #e2e8f0;border-radius:8px;"></div>
+<div style="margin-bottom:16px;"><label>Password (min 8)</label><br><input type="password" name="password" required minlength="8" style="width:100%;padding:9px 11px;border:1px solid #e2e8f0;border-radius:8px;"></div>
+<button type="submit" style="width:100%;padding:11px;background:#10b981;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;">Create account</button>
+</form>
+<p style="text-align:center;font-size:13px;margin-top:16px;"><a href="/login">Already have an account?</a></p>
+</div>
+<%- include('partials/_csrf'); %>
+<script>
+(function(){var t=document.getElementById('csrfToken');if(t){var f=document.querySelectorAll('form[method="post"]');for(var i=0;i<f.length;i++){if(!f[i].querySelector('input[name="_csrf"]')){var inp=document.createElement('input');inp.type='hidden';inp.name='_csrf';inp.value=t.value;f[i].appendChild(inp);}}}})();
+</script>
+</body>
+</html>

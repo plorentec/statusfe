@@ -219,7 +219,7 @@ async function createTables() {
     CREATE TABLE IF NOT EXISTS password_resets (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
-      token TEXT NOT NULL UNIQUE,
+      token TEXT NOT NULL,
       expires_at TIMESTAMP NOT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -395,6 +395,25 @@ async function createTables() {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `);
+
+  // Self-service onboarding (3.3.0): organization invitations.
+  await run(`
+    CREATE TABLE IF NOT EXISTS org_invites (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      email TEXT,
+      token TEXT NOT NULL,
+      expires_at TIMESTAMP NOT NULL,
+      accepted_at TIMESTAMP,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
+    )
+  `);
+  try { await run('CREATE UNIQUE INDEX IF NOT EXISTS idx_org_invites_token ON org_invites(token)'); } catch(e) { /* exists */ }
+  try { await run('CREATE INDEX IF NOT EXISTS idx_org_invites_org ON org_invites(organization_id)'); } catch(e) { /* exists */ }
+  try { await run('ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified INTEGER DEFAULT 0'); } catch(e) { /* exists */ }
+  try { await run('ALTER TABLE users ADD COLUMN IF NOT EXISTS verify_token TEXT'); } catch(e) { /* exists */ }
+
 
 
   await run(`
@@ -583,6 +602,8 @@ if (!exists) {
     // and cleanOldData() have a consistent baseline; existing installs keep
     // whatever value they set via the admin UI.
     await run("INSERT INTO settings (key,value) VALUES ('analytics_retention_days','365') ON CONFLICT (key) DO NOTHING");
+    // Self-service onboarding (3.3.0): OFF by default — the operator enables it.
+    await run("INSERT INTO settings (key,value) VALUES ('self_registration','off') ON CONFLICT (key) DO NOTHING");
   }
 
 // Run migrations + seed

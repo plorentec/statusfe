@@ -9,6 +9,29 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [3.3.0] — 2026-11-08
+
+### Added
+- **Onboarding self-service**: con `self_registration=on` (interruptor en
+  /admin/organizations, **off por defecto**), cualquiera puede crear su cuenta
+  desde `/register`: en una sola operación se crean el usuario (role=user), su
+  organización (owner, con los límites por defecto de 3.1.0) y una página de
+  estado inicial pública.
+- **Doble opt-in de email**: la cuenta nace con `email_verified=0` y un enlace
+  `/verify/:token`; sin SMTP configurado el alta **no se bloquea** (se avisa en
+  el panel).
+- **Invitaciones**: desde /admin/organizations se invita por email (token de 7
+  días, listado y revocación). `/invite/:token` añade la membresía; si el
+  invitado no tiene cuenta, la crea con contraseña (el token prueba el email).
+- El link "Create an account" vuelve al login **solo** cuando el registro
+  público está activo.
+
+### Verified
+- `scratch/verify_selfservice.js`: 27 checks (switch off/on, alta atómica
+  user+org+owner+page, verificación de email de un solo uso, duplicados,
+  password débil, invitación nueva/existente/expirada, link condicional).
+  Suite completa: 735 checks.
+
 ## [3.2.1] — 2026-11-08
 
 ### Fixed

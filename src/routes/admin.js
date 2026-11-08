@@ -1297,12 +1297,15 @@ router.get('/organizations', async (req, res) => {
     memberCounts[o.id] = members[o.id].length;
   }
   const users = await queryAll('SELECT id, email, name FROM users ORDER BY name');
+  const invites = {};
+  for (const o of orgs) invites[o.id] = await require('../db/models').organizationInvites.listForOrg(o.id);
+  const selfRegistration = await require('../db/models').selfService.isEnabled();
   res.render('admin/organizations', {
     title: 'Organizations',
     user: req.user,
     message: res.locals.message,
     messageType: res.locals.messageType,
-    orgs, members, memberCounts, users,
+    orgs, members, memberCounts, users, invites, selfRegistration,
     csrfToken: res.locals.csrfToken
   });
 });
@@ -1330,6 +1333,37 @@ router.post('/organizations/:id', async (req, res) => {
     const msg = ['invalid_slug', 'slug_exists', 'name_required'].includes(e.code) ? e.code : 'error';
     res.redirect('/admin/organizations?msg=' + msg + '&type=error');
   }
+});
+
+// ===== SELF-SERVICE (3.3.0) =====
+// Toggle the public signup switch (admins only).
+router.post('/organizations/self-registration', requireAdmin, async (req, res) => {
+  await require('../db/models').selfService.setEnabled(req.body.enabled === 'on' || req.body.enabled === '1' || req.body.enabled === 'true');
+  res.redirect('/admin/organizations?msg=success&type=success');
+});
+
+// Invite an email to an organization (token 7 days + best-effort email).
+router.post('/organizations/:id/invite', requireAdmin, async (req, res) => {
+  const org = await organizationsModel.get(req.params.id);
+  if (!org) return res.redirect('/admin/organizations?msg=error&type=error');
+  const email = String((req.body || {}).email || '').trim().toLowerCase();
+  if (!email) return res.redirect('/admin/organizations?msg=error&type=error');
+  const invite = await require('../db/models').organizationInvites.create({ organizationId: org.id, email });
+  try {
+    const base = (req.secure ? 'https' : 'http') + '://' + req.get('Host');
+    const emailUtils = require('../utils/email');
+    const smtp = await settings.getSMTP();
+    if (smtp && smtp.from) {
+      await emailUtils.sendEmail(email, '[StatusFe] You are invited to ' + org.name,
+        `<p>Join <strong>${org.name}</strong> on StatusFe:</p><p><a href="${base}/invite/${invite.token}">Accept invitation</a></p><p style="font-size:12px;color:#64748b;">Expires in 7 days.</p>`);
+    }
+  } catch (e) { /* email best-effort */ }
+  res.redirect('/admin/organizations?msg=success&type=success');
+});
+
+router.post('/organizations/invites/:inviteId/revoke', requireAdmin, async (req, res) => {
+  await require('../db/models').organizationInvites.revoke(req.params.inviteId);
+  res.redirect('/admin/organizations?msg=deleted&type=success');
 });
 
 router.post('/organizations/:id/delete', requireAdmin, async (req, res) => {

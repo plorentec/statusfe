@@ -34,6 +34,18 @@
 </form>
 </div>
 <div class="card">
+<h3>Self-service registration</h3>
+<p style="font-size:13px;color:var(--text-muted);">When enabled, anyone can create their own account, organization and status page from <code>/register</code>. Off by default.</p>
+<form method="post" action="/admin/organizations/self-registration">
+<input type="hidden" name="_csrf" value="<%= csrfToken %>">
+<label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+<input type="checkbox" name="enabled" value="on" <%= (typeof selfRegistration !== 'undefined' && selfRegistration) ? 'checked' : '' %>>
+Public registration enabled
+</label>
+<button type="submit" class="btn btn-sm" style="margin-top:8px;">Save</button>
+</form>
+</div>
+<div class="card">
 <h3>Organizations (<%= orgs.length %>)</h3>
 <table>
 <thead><tr><th>Name</th><th>Slug</th><th>Members</th><th>Edit members</th><th></th></tr></thead>
@@ -56,6 +68,17 @@
 </form>
 </td>
 <td>
+<form method="post" action="/admin/organizations/<%= o.id %>/invite" style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">
+<input type="hidden" name="_csrf" value="<%= csrfToken %>">
+<input type="email" name="email" placeholder="teammate@company.com" required style="min-width:170px;padding:4px 8px;">
+<button type="submit" class="btn btn-sm">Invite</button>
+</form>
+<% ((typeof invites !== 'undefined' && invites[o.id]) || []).forEach(inv => { %>
+<div style="font-size:12px;color:var(--text-muted);">
+<%= inv.email || '(no email)' %> ·
+<% if (inv.accepted_at) { %>accepted<% } else { %>pending · <form method="post" action="/admin/organizations/invites/<%= inv.id %>/revoke" style="display:inline;"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button type="submit" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px;">revoke</button></form><% } %>
+</div>
+<% }); %>
 <form method="post" action="/admin/organizations/<%= o.id %>/delete" onsubmit="return confirm('Delete organization? Pages will remain without an org.')">
 <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 <button type="submit" class="btn btn-sm">Delete</button>

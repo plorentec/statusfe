@@ -153,6 +153,9 @@ app.use('/auth/2fa', safeLimiter(authLimiter));
 app.use('/auth/set-password', safeLimiter(authLimiter));
 // Public subscribe endpoint: anti-abuse (10/15min per IP, same as auth).
 app.use('/subscribe', safeLimiter(authLimiter));
+// Public self-service endpoints share the strict auth limiter (3.3.0).
+app.use('/register', safeLimiter(authLimiter));
+app.use('/invite', safeLimiter(authLimiter));
 app.use('/api/v1', safeLimiter(apiLimiter));
 
 const adminLimiter = rateLimit({
@@ -238,13 +241,14 @@ app.use((req, res, next) => {
 
 // Auth routes
 app.use('/auth', authRoutes);
-app.get('/login', (req, res) => {
+app.get('/login', async (req, res) => {
   if (req.user) return res.redirect('/admin');
-  res.render('login', { title: 'Login', user: req.user });
+  let selfRegistration = false;
+  try { selfRegistration = await require('./db/models').selfService.isEnabled(); } catch (e) { /* keep false */ }
+  res.render('login', { title: 'Login', user: req.user, selfRegistration });
 });
-// Registration is closed (users are created from the admin panel). The old
-// page rendered a form with no POST handler behind it — redirect instead.
-app.get('/register', (req, res) => res.redirect('/login?msg=registered'));
+// Registration (3.3.0): /register is served by the self-service route below,
+// gated by the self_registration setting (off by default).
 
 // Admin routes (protected)
 app.use('/admin', adminRoutes);
@@ -339,6 +343,85 @@ app.get('/status/:slug/components/:id', async (req, res) => {
 
 // TEMP DEBUG (2.8.0): body-parsing A/B for the subscribe form.
 app.post('/subscribe-test', (req, res) => res.json({ keys: Object.keys(req.body || {}) }));
+// ===== Self-service onboarding (3.3.0) =====
+// Public signup is gated by the self_registration setting (off by default).
+// The POST is CSRF-protected (global middleware) and rate-limited (authLimiter
+// is mounted on /auth/* and /subscribe; /register is handled here with its own
+// limiter below).
+app.get('/register', async (req, res) => {
+  try {
+    const { selfService } = require('./db/models');
+    if (!(await selfService.isEnabled())) return res.redirect('/login?msg=registered');
+    res.render('register', { title: 'Create account', error: null, message: null });
+  } catch (e) {
+    console.error('register page error:', e.message);
+    res.status(500).send('Internal error');
+  }
+});
+
+app.post('/register', async (req, res) => {
+  try {
+    const { selfService } = require('./db/models');
+    const { email, password, name } = req.body || {};
+    const out = await selfService.signup({ email, password, name });
+    // Best-effort verification email (no SMTP configured must NOT block signup).
+    const proto = req.secure || req.get('X-Forwarded-Proto') === 'https' ? 'https' : 'http';
+    const base = proto + '://' + req.get('Host');
+    try {
+      const emailUtils = require('./utils/email');
+      const settings = require('./db/models').settings;
+      const smtp = await settings.getSMTP();
+      if (smtp && smtp.from) {
+        await emailUtils.sendEmail(out.user.email, '[StatusFe] Verify your email',
+          `<p>Welcome! Confirm your account:</p><p><a href="${base}/verify/${out.verifyToken}">Verify my email</a></p>`);
+      }
+    } catch (e) { /* email is best-effort */ }
+    res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Account created</title><link rel="stylesheet" href="/css/status.css"></head><body style="font-family:sans-serif;background:#f5f5f5;padding:40px;"><div style="max-width:560px;margin:0 auto;background:#fff;padding:28px;border-radius:10px;"><h2>&#10003; Account created</h2><p>Your organization <strong>${out.organization.name}</strong> and status page are ready.</p><p><a href="${base}/status/${out.page.slug}">View your status page</a></p><p style="font-size:13px;color:#64748b;">Check your inbox for a verification link. You can log in now: <a href="/login">sign in</a>.</p></div></body></html>`);
+  } catch (e) {
+    let msg = 'Signup failed. Please try again.';
+    if (e.code === 'email_taken') msg = 'That email is already registered.';
+    if (e.code === 'weak_password') msg = 'Password must be at least 8 characters.';
+    if (e.code === 'invalid_email') msg = 'Please enter a valid email address.';
+    if (e.code === 'disabled') msg = 'Self-service registration is disabled on this instance.';
+    try { res.render('register', { title: 'Create account', error: msg, message: null }); }
+    catch (e2) { res.status(400).send(msg); }
+  }
+});
+
+app.get('/verify/:token', async (req, res) => {
+  try {
+    const { selfService } = require('./db/models');
+    const row = await selfService.verifyEmail(req.params.token);
+    if (!row) return res.status(404).send('Invalid or expired verification link.');
+    res.send('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Verified</title><link rel="stylesheet" href="/css/status.css"></head><body style="font-family:sans-serif;background:#f5f5f5;padding:40px;"><div style="max-width:520px;margin:0 auto;background:#fff;padding:28px;border-radius:10px;"><h2>&#10003; Email verified</h2><p><a href="/login">Sign in</a></p></div></body></html>');
+  } catch (e) { res.status(500).send('Internal error'); }
+});
+
+// Invitation acceptance (3.3.0): existing users just get the membership;
+// new users set a password (the token proves the email).
+app.get('/invite/:token', async (req, res) => {
+  try {
+    const { organizationInvites } = require('./db/models');
+    const inv = await organizationInvites.getByToken(req.params.token);
+    if (!inv) return res.status(404).send('Invalid or expired invitation.');
+    res.render('invite', { title: 'Join organization', token: req.params.token, email: inv.email, error: null });
+  } catch (e) { res.status(500).send('Internal error'); }
+});
+
+app.post('/invite/:token', async (req, res) => {
+  try {
+    const { selfService } = require('./db/models');
+    const out = await selfService.acceptInvite({ token: req.params.token, password: (req.body || {}).password, name: (req.body || {}).name });
+    res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Joined</title><link rel="stylesheet" href="/css/status.css"></head><body style="font-family:sans-serif;background:#f5f5f5;padding:40px;"><div style="max-width:520px;margin:0 auto;background:#fff;padding:28px;border-radius:10px;"><h2>&#10003; You joined the organization</h2><p><a href="/login">Sign in</a> to see your pages.</p></div></body></html>`);
+  } catch (e) {
+    let msg = 'Could not accept the invitation.';
+    if (e.code === 'invite_invalid') msg = 'Invalid or expired invitation.';
+    if (e.code === 'weak_password') msg = 'Password must be at least 8 characters.';
+    try { res.render('invite', { title: 'Join organization', token: req.params.token, email: null, error: msg }); }
+    catch (e2) { res.status(400).send(msg); }
+  }
+});
+
 // ===== Subscriptions (2.8.0) — GDPR double opt-in =====
 // POST /subscribe/:slug: creates a PENDING subscription and emails the
 // confirmation link. The response is ALWAYS generic (no enumeration): we never

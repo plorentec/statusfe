@@ -2331,6 +2331,133 @@ module.exports.components.getLatencyHistory = async function(componentId, hours 
   );
 };
 
+// ===== SELF-SERVICE ONBOARDING (3.3.0) =====
+// Public signup creates, in ONE operation: the user (role=user), its own
+// organization (owner), and a starter page inside it. Gated by the
+// self_registration setting (off by default).
+module.exports.organizationInvites = {
+  async create({ organizationId, email, days = 7 }) {
+    const id = uuidv4();
+    const token = uuidv4() + '-' + uuidv4();
+    const expiresAt = new Date(Date.now() + days * 86400000).toISOString().slice(0, 19).replace('T', ' ');
+    await run('INSERT INTO org_invites (id, organization_id, email, token, expires_at) VALUES ($1,$2,$3,$4,$5)',
+      [id, organizationId, email ? String(email).trim().toLowerCase() : null, token, expiresAt]);
+    return { id, token, expiresAt };
+  },
+
+  async getByToken(token) {
+    const cutoff = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    return await queryOne(
+      'SELECT * FROM org_invites WHERE token=$1 AND accepted_at IS NULL AND expires_at > $2',
+      [token, cutoff]
+    );
+  },
+
+  async listForOrg(organizationId) {
+    return await queryAll(
+      'SELECT id, email, expires_at, accepted_at, created_at FROM org_invites WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 100',
+      [organizationId]
+    );
+  },
+
+  async accept(token) {
+    await run('UPDATE org_invites SET accepted_at=NOW() WHERE token=$1', [token]);
+    return true;
+  },
+
+  async revoke(id) { await run('DELETE FROM org_invites WHERE id=$1', [id]); return true; }
+};
+
+module.exports.selfService = {
+  // Is public signup enabled? (settings.self_registration === 'on')
+  async isEnabled() {
+    const v = await module.exports.settings.get('self_registration');
+    return v === 'on';
+  },
+
+  async setEnabled(on) {
+    await module.exports.settings.set('self_registration', on ? 'on' : 'off');
+    return true;
+  },
+
+  // Atomic signup: user + organization (owner) + starter page.
+  // Returns { user, organization, page, verifyToken } or throws with .code:
+  //   'disabled' | 'email_taken' | 'invalid_email' | 'weak_password'
+  async signup({ email, password, name }) {
+    if (!(await this.isEnabled())) { const e = new Error('Self-service registration is disabled'); e.code = 'disabled'; throw e; }
+    const mail = String(email || '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(mail)) { const e = new Error('Invalid email'); e.code = 'invalid_email'; throw e; }
+    if (!password || String(password).length < 8) { const e = new Error('Password must be at least 8 characters'); e.code = 'weak_password'; throw e; }
+    const existing = await queryOne('SELECT id FROM users WHERE email=$1', [mail]);
+    if (existing) { const e = new Error('Email already registered'); e.code = 'email_taken'; throw e; }
+
+    const bcrypt = require('bcryptjs');
+    const userId = uuidv4();
+    const displayName = String(name || '').trim() || mail.split('@')[0];
+    await run(
+      'INSERT INTO users (id,email,password_hash,name,role,totp_enabled,totp_secret,email_verified) VALUES ($1,$2,$3,$4,$5,0,NULL,0)',
+      [userId, mail, bcrypt.hashSync(String(password), 10), displayName, 'user']
+    );
+
+    // Own organization, seeded with the default limits (3.1.0).
+    const orgSlug = (displayName.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '') || 'org') + '-' + Math.random().toString(36).slice(2, 7);
+    const org = await module.exports.organizations.create({ name: displayName, slug: orgSlug.slice(0, 60) });
+    await module.exports.organizations.setMembers(org.id, [{ userId, role: 'owner' }]);
+
+    // Starter page inside the organization.
+    const pageSlug = (displayName.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '') || 'status').slice(0, 40) + '-status';
+    let page = null;
+    try {
+      page = await module.exports.pages.create({ name: displayName + ' Status', slug: pageSlug, is_public: true, organization_id: org.id });
+    } catch (e) {
+      // Slug collision: suffix and retry once (never fail the whole signup).
+      page = await module.exports.pages.create({ name: displayName + ' Status', slug: pageSlug + '-' + Math.random().toString(36).slice(2, 6), is_public: true, organization_id: org.id });
+    }
+
+    const verifyToken = uuidv4() + '-' + uuidv4();
+    await run('UPDATE users SET verify_token=$1 WHERE id=$2', [verifyToken, userId]);
+
+    return { user: { id: userId, email: mail, name: displayName }, organization: org, page, verifyToken };
+  },
+
+  // Email double opt-in: verifies and burns the token.
+  async verifyEmail(token) {
+    const row = await queryOne('SELECT id FROM users WHERE verify_token=$1', [token]);
+    if (!row) return null;
+    await run('UPDATE users SET email_verified=1, verify_token=NULL WHERE id=$1', [row.id]);
+    return row;
+  },
+
+  // Accept an invitation: adds the membership (and creates the account when the
+  // invitee has none — the token then also proves the email).
+  async acceptInvite({ token, password, name }) {
+    const invite = await module.exports.organizationInvites.getByToken(token);
+    if (!invite) { const e = new Error('Invalid or expired invitation'); e.code = 'invite_invalid'; throw e; }
+    if (!invite.email) { const e = new Error('This invitation has no email address'); e.code = 'invite_no_email'; throw e; }
+
+    let user = await queryOne('SELECT id, email FROM users WHERE email=$1', [invite.email]);
+    let created = false;
+    if (!user) {
+      if (!password || String(password).length < 8) { const e = new Error('Password must be at least 8 characters'); e.code = 'weak_password'; throw e; }
+      const bcrypt = require('bcryptjs');
+      const id = uuidv4();
+      const displayName = String(name || '').trim() || invite.email.split('@')[0];
+      await run(
+        'INSERT INTO users (id,email,password_hash,name,role,totp_enabled,totp_secret,email_verified) VALUES ($1,$2,$3,$4,$5,0,NULL,1)',
+        [id, invite.email, bcrypt.hashSync(String(password), 10), displayName, 'user']
+      );
+      user = { id, email: invite.email };
+      created = true;
+    }
+    await module.exports.organizations.setMembers(
+      invite.organization_id,
+      [...(await module.exports.organizations.listMembers(invite.organization_id)).map(m => ({ userId: m.id, role: m.role })), { userId: user.id, role: 'member' }]
+    );
+    await module.exports.organizationInvites.accept(token);
+    return { user, organizationId: invite.organization_id, created };
+  }
+};
+
 // Composite-component helpers exposed for harnesses (severity map, worst-of
 // aggregation, ancestor recompute). Routes never call these directly — they
 // go through components.* / cascadeStatusChange.
