@@ -30,3 +30,12 @@
 - L1 (verbatim): "Sigue" — fase 4 del marco público-empresas.
 - L2: Paginación opt-in por query param (sin page= → listas completas) para no
   romper los 23 arneses existentes ni integraciones.
+- L3: E2E en producción verde: probe real escribe probe_latency (2 filas, 6 ms),
+  sparkline "Latency (24h)" en el detalle, paginación API con meta correcta
+  (page=1&per_page=2 -> 2 items / 4 pages) y sin page -> lista completa sin meta.
+- L4: RDD review del candidato completo (59 ficheros, todo el día) BLOQUEADO
+  por el presupuesto nativo de contexto de lentes (lens_context_budget_exceeded,
+  mutation_outcome=not_started — no se creó autoridad ni hay nada que reparar).
+  Guía nativa: revisar en candidatos encadenados más pequeños. PENDIENTE: tanda
+  de reviews por slices (seguridad 2.2.6/2.4.0, auth 2.7.0/2.9.0, público 3.x)
+  en sesiones con contexto fresco; NO reintentar el candidato completo.
