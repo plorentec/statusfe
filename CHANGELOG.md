@@ -9,6 +9,28 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [3.4.0] — 2026-11-08
+
+### Added
+- **Planes y cuotas gestionables**: presets `free` (3/3/20/50), `pro`
+  (10/10/50/100 — el default histórico), `business` (50/50/500/1000) y
+  `unlimited` (sin cuotas). `organizations.setPlan()` aplica el preset y
+  `getPlan()` lo deduce comparando los límites (`custom` si no coincide con
+  ninguno). Plan desconocido → `invalid_plan`.
+- **Panel /admin/organizations**: por organización, selector de plan (aplica
+  al guardar), **uso vs límite** en vivo (páginas, keys, componentes,
+  suscriptores) con aviso rojo al pasar del 80 %, y editor de límites
+  personalizados (vacío = ilimitado).
+- **API**: `GET /api/v1/organizations/:id` devuelve `plan` y `usage`;
+  `PUT /api/v1/organizations/:id` acepta `plan` o `limits` (permiso admin,
+  400 en plan inválido).
+
+### Verified
+- `scratch/verify_plans.js`: 18 checks (presets aplican sus cuotas, override
+  manual gana y da `custom`, `unlimited` deja limits NULL, plan inválido
+  rechazado, uso correcto y **402 al llegar al límite del plan**, GET con
+  plan+usage, PUT con plan y con limits). Suite completa: 753 checks.
+
 ## [3.3.0] — 2026-11-08
 
 ### Added

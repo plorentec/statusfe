@@ -48,14 +48,51 @@ Public registration enabled
 <div class="card">
 <h3>Organizations (<%= orgs.length %>)</h3>
 <table>
-<thead><tr><th>Name</th><th>Slug</th><th>Members</th><th>Edit members</th><th></th></tr></thead>
+<thead><tr><th>Name</th><th>Slug</th><th>Members</th><th>Plan &amp; usage</th><th>Edit members</th><th></th></tr></thead>
 <tbody>
-<% if (orgs.length === 0) { %><tr><td colspan="5">No organizations yet.</td></tr><% } %>
+<% if (orgs.length === 0) { %><tr><td colspan="6">No organizations yet.</td></tr><% } %>
 <% orgs.forEach(o => { %>
 <tr>
 <td><strong><%= o.name %></strong></td>
 <td><code><%= o.slug %></code></td>
 <td><%= memberCounts[o.id] || 0 %></td>
+<td>
+<div style="font-size:12px;margin-bottom:6px;">
+<strong><%= planByOrg[o.id] || 'custom' %></strong>
+<form method="post" action="/admin/organizations/<%= o.id %>/plan" style="display:inline;">
+<input type="hidden" name="_csrf" value="<%= csrfToken %>">
+<select name="plan" onchange="this.form.submit()" style="font-size:12px;padding:2px 6px;">
+<% planKeys.forEach(k => { %><option value="<%= k %>" <%= (planByOrg[o.id] === k) ? 'selected' : '' %>><%= k %></option><% }); %>
+<option value="custom" disabled <%= planByOrg[o.id] === 'custom' ? 'selected' : '' %>>custom</option>
+</select>
+</form>
+</div>
+<%
+  const u = usageByOrg[o.id] || {};
+  const l = limitsByOrg[o.id] || {};
+  const rows = [['pages','maxPages'],['keys','maxApiKeys'],['comp','maxComponents'],['subs','maxSubscribers']];
+%>
+<% rows.forEach(([label, key]) => {
+  const used = u[key] || 0; const cap = l[key];
+  const pct = cap ? Math.min(100, Math.round((used / cap) * 100)) : 0;
+  const warn = cap && used >= cap * 0.8;
+%>
+<div style="font-size:11px;color:<%= warn ? '#ef4444' : 'var(--text-muted)' %>;">
+<%= label %>: <%= used %>/<%= cap ? cap : '∞' %>
+</div>
+<% }); %>
+<details style="font-size:11px;margin-top:4px;">
+<summary style="cursor:pointer;">edit limits</summary>
+<form method="post" action="/admin/organizations/<%= o.id %>/limits" style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:4px;">
+<input type="hidden" name="_csrf" value="<%= csrfToken %>">
+<input type="number" name="maxPages" min="1" placeholder="pages" value="<%= l.maxPages || '' %>" style="width:100%;font-size:11px;padding:2px 4px;">
+<input type="number" name="maxApiKeys" min="1" placeholder="keys" value="<%= l.maxApiKeys || '' %>" style="width:100%;font-size:11px;padding:2px 4px;">
+<input type="number" name="maxComponents" min="1" placeholder="comp" value="<%= l.maxComponents || '' %>" style="width:100%;font-size:11px;padding:2px 4px;">
+<input type="number" name="maxSubscribers" min="1" placeholder="subs" value="<%= l.maxSubscribers || '' %>" style="width:100%;font-size:11px;padding:2px 4px;">
+<button type="submit" class="btn btn-sm" style="grid-column:span 2;">Save limits (empty = unlimited)</button>
+</form>
+</details>
+</td>
 <td>
 <form method="post" action="/admin/organizations/<%= o.id %>" style="display:flex;gap:6px;align-items:center;">
 <input type="hidden" name="_csrf" value="<%= csrfToken %>">

@@ -41,7 +41,7 @@ valor/camino crítico. Última revisión: v2.7.0 (2026-11-05).
 Escalado (sigue caído X min → re-aviso), quiet hours, y silencio automático
 durante ventanas de mantenimiento programado.
 
-### 3. Multi-tenancy fase 2 → **hecho en 3.0.0** (login con org_scope, panel scoping para role=user, i18n público ES/EN). Fase 3 → **hecho en 3.1.0** (límites por organización + dominios custom con verificación TXT). Fase 4 → **hecho en 3.3.0** (onboarding self-service con organizaciones propias e invitaciones). Pendiente fase 5: facturación/planes y límites auto-gestionables por el cliente.
+### 3. Multi-tenancy fase 2 → **hecho en 3.0.0** (login con org_scope, panel scoping para role=user, i18n público ES/EN). Fase 3 → **hecho en 3.1.0** (límites por organización + dominios custom con verificación TXT). Fase 4 → **hecho en 3.3.0** (onboarding self-service con organizaciones propias e invitaciones). Fase 5 → **hecho en 3.4.0** (planes preset, edición de cuotas y uso vs límite en el panel; API con plan/limits/usage). Pendiente: cobro real (pasarela de pago + datos fiscales) y que el propio cliente elija plan desde su panel.
 
 ### 4. ~~Sparkline de latencia~~ → **hecho en 3.2.0** (probe_latency 14d + SVG 24h en el detalle).
 

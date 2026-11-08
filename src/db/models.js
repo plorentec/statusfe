@@ -2214,6 +2214,13 @@ module.exports.subscribers = {
 module.exports.organizations = {
   SLUG_RE: /^[a-z0-9-]{1,64}$/,
   DEFAULT_LIMITS: { maxPages: 10, maxApiKeys: 10, maxSubscribers: 100, maxComponents: 50 },
+  // Plan presets (3.4.0). `unlimited` (null) disables every quota.
+  PLANS: {
+    free:      { maxPages: 3,  maxApiKeys: 3,  maxComponents: 20,  maxSubscribers: 50 },
+    pro:       { maxPages: 10, maxApiKeys: 10, maxComponents: 50,  maxSubscribers: 100 },
+    business:  { maxPages: 50, maxApiKeys: 50, maxComponents: 500, maxSubscribers: 1000 },
+    unlimited: null,
+  },
 
   async list() {
     return await queryAll('SELECT * FROM organizations ORDER BY created_at ASC');
@@ -2312,6 +2319,31 @@ module.exports.organizations = {
   async setLimits(id, limits) {
     await run('UPDATE organizations SET limits=$1, updated_at=NOW() WHERE id=$2', [JSON.stringify(limits || null), id]);
     return this.get(id);
+  },
+
+  // Apply a plan preset (3.4.0). Unknown plan -> err.code='invalid_plan'.
+  async setPlan(id, planKey) {
+    const key = String(planKey || '').trim().toLowerCase();
+    if (!Object.prototype.hasOwnProperty.call(this.PLANS, key)) {
+      const err = new Error('Unknown plan: ' + planKey);
+      err.code = 'invalid_plan';
+      throw err;
+    }
+    await this.setLimits(id, this.PLANS[key]);
+    return this.get(id);
+  },
+
+  // Deduce the plan whose limits match the stored ones ('custom' otherwise,
+  // 'unlimited' when limits is NULL).
+  async getPlan(id) {
+    const limits = await this.getLimits(id);
+    if (!limits) return 'unlimited';
+    const keys = ['maxPages', 'maxApiKeys', 'maxComponents', 'maxSubscribers'];
+    for (const [name, preset] of Object.entries(this.PLANS)) {
+      if (!preset) continue;
+      if (keys.every(k => Number(limits[k]) === Number(preset[k]))) return name;
+    }
+    return 'custom';
   },
 
   async listForUser(userId) {

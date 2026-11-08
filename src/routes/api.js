@@ -612,7 +612,10 @@ router.get('/organizations/:id', async (req, res) => {
   const org = await organizations.get(req.params.id);
   if (!org) return res.status(404).json({ error: 'Not found' });
   const members = await organizations.listMembers(org.id);
-  res.json({ organization: org, members });
+  // Plan and current usage (3.4.0).
+  const plan = await organizations.getPlan(org.id);
+  const usage = await organizations.getUsage(org.id);
+  res.json({ organization: org, members, plan, usage });
 });
 router.post('/organizations', requirePerm('admin'), async (req, res) => {
   try {
@@ -627,8 +630,13 @@ router.post('/organizations', requirePerm('admin'), async (req, res) => {
 router.put('/organizations/:id', requirePerm('admin'), async (req, res) => {
   try {
     const org = await organizations.update(req.params.id, { name: req.body.name, slug: req.body.slug });
-    res.json({ organization: org });
+    // Quotas (3.4.0): a `plan` preset or explicit `limits` (null/empty = unlimited).
+    if (req.body.plan !== undefined) await organizations.setPlan(org.id, req.body.plan);
+    else if (req.body.limits !== undefined) await organizations.setLimits(org.id, req.body.limits);
+    const fresh = await organizations.get(org.id);
+    res.json({ organization: fresh, plan: await organizations.getPlan(org.id), usage: await organizations.getUsage(org.id) });
   } catch (e) {
+    if (e.code === 'invalid_plan') return res.status(400).json({ error: e.message });
     if (['invalid_slug', 'slug_exists', 'name_required'].includes(e.code)) return res.status(400).json({ error: e.message });
     res.status(500).json({ error: 'Internal error' });
   }

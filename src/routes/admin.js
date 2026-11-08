@@ -1298,7 +1298,15 @@ router.get('/organizations', async (req, res) => {
   }
   const users = await queryAll('SELECT id, email, name FROM users ORDER BY name');
   const invites = {};
-  for (const o of orgs) invites[o.id] = await require('../db/models').organizationInvites.listForOrg(o.id);
+  const planByOrg = {};
+  const usageByOrg = {};
+  const limitsByOrg = {};
+  for (const o of orgs) {
+    invites[o.id] = await require('../db/models').organizationInvites.listForOrg(o.id);
+    planByOrg[o.id] = await organizationsModel.getPlan(o.id);
+    usageByOrg[o.id] = await organizationsModel.getUsage(o.id);
+    limitsByOrg[o.id] = (await organizationsModel.getLimits(o.id)) || {};
+  }
   const selfRegistration = await require('../db/models').selfService.isEnabled();
   res.render('admin/organizations', {
     title: 'Organizations',
@@ -1306,6 +1314,8 @@ router.get('/organizations', async (req, res) => {
     message: res.locals.message,
     messageType: res.locals.messageType,
     orgs, members, memberCounts, users, invites, selfRegistration,
+    planByOrg, usageByOrg, limitsByOrg,
+    planKeys: Object.keys(organizationsModel.PLANS),
     csrfToken: res.locals.csrfToken
   });
 });
@@ -1333,6 +1343,35 @@ router.post('/organizations/:id', async (req, res) => {
     const msg = ['invalid_slug', 'slug_exists', 'name_required'].includes(e.code) ? e.code : 'error';
     res.redirect('/admin/organizations?msg=' + msg + '&type=error');
   }
+});
+
+// Apply a plan preset (3.4.0).
+router.post('/organizations/:id/plan', requireAdmin, async (req, res) => {
+  try {
+    await organizationsModel.setPlan(req.params.id, (req.body || {}).plan);
+    res.redirect('/admin/organizations?msg=success&type=success');
+  } catch (e) {
+    const msg = e.code === 'invalid_plan' ? 'invalid_plan' : 'error';
+    res.redirect('/admin/organizations?msg=' + msg + '&type=error');
+  }
+});
+
+// Custom limits (empty = unlimited for that kind).
+router.post('/organizations/:id/limits', requireAdmin, async (req, res) => {
+  const org = await organizationsModel.get(req.params.id);
+  if (!org) return res.redirect('/admin/organizations?msg=error&type=error');
+  const b = req.body || {};
+  const num = (v) => {
+    const n = parseInt(v, 10);
+    return (!v || isNaN(n) || n <= 0) ? null : n;
+  };
+  const limits = {
+    maxPages: num(b.maxPages), maxApiKeys: num(b.maxApiKeys),
+    maxComponents: num(b.maxComponents), maxSubscribers: num(b.maxSubscribers),
+  };
+  const allNull = Object.values(limits).every(v => v === null);
+  await organizationsModel.setLimits(org.id, allNull ? null : limits);
+  res.redirect('/admin/organizations?msg=success&type=success');
 });
 
 // ===== SELF-SERVICE (3.3.0) =====
