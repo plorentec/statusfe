@@ -9,6 +9,13 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [3.2.1] — 2026-11-08
+
+### Fixed
+- (versión del port) Las correcciones del review nativo del slice A (loud
+  probe rejection + parse validation + partial updates) portadas a main con
+  +8 checks. Verificado el guard en producción.
+
 ## [3.2.0] — 2026-11-07 (revisión nativa del slice A aplicada)
 
 ### Fixed
