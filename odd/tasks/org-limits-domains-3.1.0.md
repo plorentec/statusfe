@@ -36,3 +36,13 @@
   verify sin TXT → redirect domain_not_verified + domain_verified=0. El
   camino positivo (TXT publicado) está cubierto por el arnés con resolveTxt
   mockeado. CI verde. Release v3.1.0 publicado.
+- L5: REVIEW NATIVO del slice A (2.2.7+2.3.0) COMPLETADO: 3 lentes + refuter +
+  2 correcciones (loud rejection R3/R4; parse validation + partial updates
+  R4-001 gen2) + validador → APPROVED → acknowledge (autoridad quemada).
+  Hallazgos advisory no-bloqueantes anotados: KDF del SMTP sin PBKDF,
+  shims de CI sin pin, prober sin rate-limit global, duplicación
+  normalizeProbeUrl/validProbeUrl (converger en una sola), rate-limit bucket
+  sin limpieza programada.
+- L6: Las correcciones PORTADAS a main (el review se hizo sobre el slice;
+  main tenía el mismo patrón): +8 checks en verify_probe_types (32). Suite
+  708/0.

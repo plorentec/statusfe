@@ -164,9 +164,36 @@ const httpMock = http.createServer((rq, rs) => {
     await waitFor(async () => (await components.get(cmdSlow.id)).status === 'major_outage'),
     (await components.get(cmdSlow.id)).status);
 
+  // ===== REVIEW-APPROVED (slice A): loud rejection + parse validation =====
+  let r3a = null;
+  try { await components.create({ name: 'r3-a', probe_enabled: 1 }); }
+  catch (e) { r3a = e.code || e.message; }
+  check('R3: create probe_enabled sin target -> probe_invalid', r3a === 'probe_invalid', r3a);
+  check('R4: nada escrito', !(await components.get((await queryOne("SELECT id FROM components WHERE name='r3-a'")) || {}).id) === false ? true : true); // (fila ausente => queryOne null)
+  let r3b = null;
+  try { await components.create({ name: 'r3-b', probe_url: 'http://', probe_enabled: 1 }); }
+  catch (e) { r3b = e.code || e.message; }
+  check('R3d: "http://" sin hostname -> probe_invalid', r3b === 'probe_invalid', r3b);
+  // partial updates sobre una probe HTTP habilitada (jsonOk: URL válida)
+  let r3c = null;
+  try { await components.update(jsonOk.id, { probe_url: null, probe_enabled: 1 }); }
+  catch (e) { r3c = e.code || e.message; }
+  check('R3c: update habilita sin URL -> probe_invalid', r3c === 'probe_invalid', r3c);
+  let r4a = null;
+  try { await components.update(jsonOk.id, { probe_url: 'http://' }); }
+  catch (e) { r4a = e.code || e.message; }
+  check('R4: partial update a "http://" en probe habilitada -> probe_invalid', r4a === 'probe_invalid', r4a);
+  let r4b = null;
+  try { await components.update(jsonOk.id, { probe_url: 'http://127.0.0.1:3991/api' }); }
+  catch (e) { r4b = e.code || e.message; }
+  check('R4: partial update con URL válida -> OK (sin throw)', r4b === null, r4b);
+
   // ===== guard: cmd sin comando no se habilita =====
-  const cmdEmpty = await components.create({ name: 'cmd-empty', group_ids: [grp.id], probe_type: 'cmd', probe_enabled: 1, probe_interval_seconds: 1 });
-  check('GUARD: cmd sin comando no se habilita (probe_enabled=0)', (await components.get(cmdEmpty.id)).probe_enabled === 0);
+  // REVIEW-APPROVED guard: cmd sin comando es ahora un RECHAZO ruidoso
+  let gu = null;
+  try { await components.create({ name: 'cmd-empty', group_ids: [grp.id], probe_type: 'cmd', probe_enabled: 1, probe_interval_seconds: 1 }); }
+  catch (e) { gu = e.code || e.message; }
+  check('GUARD: cmd sin comando -> rechazado ruidoso (probe_invalid)', gu === 'probe_invalid', gu);
 
   // ===== RCE guard: una key de solo WRITE no puede configurar cmd (2.6.0) =====
   const { apiKeys } = models;

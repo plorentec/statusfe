@@ -309,6 +309,18 @@ module.exports.pages = {
 };
 
 // ===== COMPONENTS =====
+// REVIEW-APPROVED (slice A, R3/R4): validate probe URLs by PARSING, not by
+// prefix — 'http://' alone must be rejected so the worker never sees a target
+// it has to fail (false public outages from bad configuration).
+function validProbeUrl(v) {
+  const raw = String(v || '').trim();
+  if (!/^https?:\/\//i.test(raw)) return false;
+  try {
+    const u = new URL(raw);
+    return (u.protocol === 'http:' || u.protocol === 'https:') && !!u.hostname;
+  } catch (e) { return false; }
+}
+
 module.exports.components = {
   async list(filters = {}) {
     let q = 'SELECT * FROM components WHERE 1=1';
@@ -586,7 +598,7 @@ module.exports.components = {
     const PROBE_TYPES = ['http', 'cert', 'json', 'cmd', 'tcp', 'dns', 'ping', 'push'];
     const pType = PROBE_TYPES.includes(probe_type) ? probe_type : 'http';
     const pUrl = String(probe_url || '').trim();
-    const hasUrl = /^https?:\/\//i.test(pUrl);
+    const hasUrl = validProbeUrl(pUrl);
     const certHost = pType === 'cert' && /^[\w.-]+(:\d+)?$/.test(pUrl);
     const tcpHost = pType === 'tcp' && /^[\w.-]+:\d+$/.test(pUrl);
     const bareHost = (pType === 'dns' || pType === 'ping') && /^[\w.-]+$/.test(pUrl);
@@ -595,6 +607,15 @@ module.exports.components = {
       || ((pType === 'http' || pType === 'json') && hasUrl)
       || certHost || tcpHost || bareHost
       || pType === 'push';
+    // REVIEW FIX (R3): an explicitly enabled probe without a valid target for
+    // its type is a REQUEST error, not a silent no-op (silent probe_enabled=0
+    // left the operator believing monitoring was on).
+    const enabledWanted = toBool01(probe_enabled);
+    if (enabledWanted && !hasProbe) {
+      const err = new Error('probe_enabled requires a valid target for the probe type (http/json: URL with hostname, cert: URL or host:port, tcp: host:port, dns/ping: hostname, cmd: command)');
+      err.code = 'probe_invalid';
+      throw err;
+    }
     // Push sensor: token minted here (or kept if resubmitted). The token IS the
     // secret of the public /push/<token> endpoint.
     const pushToken = pType === 'push' ? (String(probe_push_token || '').trim() || uuidv4()) : null;
@@ -605,7 +626,7 @@ module.exports.components = {
        Math.max(1, parseInt(probe_interval_seconds, 10) || 60),
        Math.min(599, Math.max(100, parseInt(probe_expected_status, 10) || 200)),
        Math.min(30000, Math.max(100, parseInt(probe_timeout_ms, 10) || 5000)),
-       hasProbe ? toBool01(probe_enabled) : 0,
+       enabledWanted,
        pType,
        Math.max(0, parseInt(probe_warn_days, 10) || 14),
        (pType === 'json') ? (String(probe_json_path || '').trim() || null) : null,
@@ -702,7 +723,11 @@ module.exports.components = {
     }
     // A probe can only be enabled with a valid target for its type (otherwise
     // the worker would just record failures for a misconfigured row).
-    if (fields.some(f => f.startsWith('probe_enabled'))) {
+    if (fields.some(f => f.startsWith('probe_enabled') || f.startsWith('probe_url'))) {
+      // REVIEW FIX (R4-001 gen2): validate the EFFECTIVE probe state whenever
+      // this write touches probe_url or probe_enabled — a partial update that
+      // only changes the URL of an enabled probe used to skip validation and
+      // feed the worker a target it must fail (false public outages).
       const t = data.probe_type !== undefined ? data.probe_type : oldComp.probe_type;
       const urlRow = data.probe_url !== undefined ? data.probe_url : oldComp.probe_url;
       const cmdRow = data.probe_command !== undefined ? data.probe_command : oldComp.probe_command;
@@ -711,11 +736,23 @@ module.exports.components = {
         ? !!String(cmdRow || '').trim()
         : t === 'push' || (t === 'tcp' && /^[\w.-]+:\d+$/.test(urlStr))
           || ((t === 'dns' || t === 'ping') && /^[\w.-]+$/.test(urlStr))
-          || /^https?:\/\//i.test(urlStr)
+          || validProbeUrl(urlStr)
           || (t === 'cert' && /^[\w.-]+(:\d+)?$/.test(urlStr));
+      const enabledIdx = fields.findIndex(f => f.startsWith('probe_enabled'));
+      const effectiveEnabled = enabledIdx >= 0 ? params[enabledIdx] === 1 : oldComp.probe_enabled === 1;
       if (!okTarget) {
-        const idx = fields.findIndex(f => f.startsWith('probe_enabled'));
-        if (idx >= 0) { fields.splice(idx, 1); params.splice(idx, 1); }
+        if (effectiveEnabled || enabledIdx < 0) {
+          // REVIEW FIX (R3): loud rejection when enabling or re-targeting an
+          // enabled probe with an invalid target. A DISABLE-only write with an
+          // already-invalid stored URL still succeeds (turning it off is the fix).
+          const err = new Error('probe_enabled requires a valid target for the probe type (http/json: URL with hostname, cert: URL or host:port, tcp: host:port, dns/ping: hostname, cmd: command)');
+          err.code = 'probe_invalid';
+          throw err;
+        }
+        // probe_enabled=0 on a component whose stored URL is invalid: allow
+        // (disabling IS the repair); drop the URL write so nothing else changes.
+        const idxUrl = fields.findIndex(f => f.startsWith('probe_url'));
+        if (idxUrl >= 0) { fields.splice(idxUrl, 1); params.splice(idxUrl, 1); }
       } else if (t === 'push') {
         // Mint the push token if this push sensor doesn't have one yet.
         const hasTokenField = fields.some(f => f.startsWith('probe_push_token'));

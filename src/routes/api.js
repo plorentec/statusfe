@@ -281,7 +281,7 @@ router.post('/components', requirePerm('write'), async (req, res) => {
     });
   } catch (e) {
     // Cycle guard / missing parent (model validation) — nothing was written.
-    if (e.code === 'invalid_parent' || e.code === 'parent_missing') return res.status(400).json({ error: e.message });
+    if (['invalid_parent', 'parent_missing', 'probe_invalid'].includes(e.code)) return res.status(400).json({ error: e.message });
     console.error('POST /api/v1/components error:', e);
     return res.status(500).json({ error: 'Internal error' });
   }
@@ -316,7 +316,7 @@ router.put('/components/:id', requirePerm('write'), async (req, res) => {
     c = await components.update(req.params.id, body);
   } catch (e) {
     // Cycle guard / missing parent (model validation) — nothing was written.
-    if (e.code === 'invalid_parent' || e.code === 'parent_missing') return res.status(400).json({ error: e.message });
+    if (['invalid_parent', 'parent_missing', 'probe_invalid'].includes(e.code)) return res.status(400).json({ error: e.message });
     console.error('PUT /api/v1/components error:', e);
     return res.status(500).json({ error: 'Internal error' });
   }

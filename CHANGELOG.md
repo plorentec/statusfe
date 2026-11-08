@@ -9,6 +9,22 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [3.2.0] — 2026-11-07 (revisión nativa del slice A aplicada)
+
+### Fixed
+- **Hallazgos CRITICAL del review nativo (slice A) portados a main**:
+  - Las probes habilitadas sin target válido ya NO se descartan en silencio
+    (`probe_enabled=0` + 200): ahora se RECHAZAN (`probe_invalid` → 400 API /
+    flash del panel). Deshabilitar una probe con URL ya-rota sigue permitido
+    (apagar es el arreglo).
+  - La validación de URLs de probe es por PARSEO (hostname requerido): `http://`
+    a secas ya no pasa.
+  - Los updates PARCIALES que cambian la URL de una probe habilitada TAMBIÉN
+    se validan (antes saltaban el guard y alimentaban al worker un target que
+    debía fallar → falso major_outage público).
+- +8 checks en verify_probe_types.js (32 total): el guard del review, el caso
+  del fix y el caso control, todos portados del slice A aprobado.
+
 ## [3.2.0] — 2026-11-07
 
 ### Added

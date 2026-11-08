@@ -132,6 +132,7 @@ async function session(req, res, next) {
       bulk_delete_error: 'Nothing deleted — no valid components were selected.',
       bulk_deleted: 'Selected components deleted.',
       invalid_parent: 'Invalid parent: a component cannot be its own parent or one of its own descendants.',
+      probe_invalid: 'The probe cannot be enabled: its target is missing or invalid for the selected probe type.',
       parent_missing: 'The selected parent component does not exist.',
       // Codes added in 2.2.6: every ?msg= emitted by a redirect now has readable text
       invalid_reset: 'Invalid or expired reset link.',
