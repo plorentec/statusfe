@@ -1119,15 +1119,21 @@ router.get('/audit', async (req, res) => {
   if (req.user.role !== 'admin') {
     return res.redirect('/admin?msg=admin&type=error');
   }
-  let logs = await auditLog.list(100);
   // Pagination (3.5.0): opt-in via ?page — ABSENT page = NO slicing (full
   // list, backwards compatible), same contract as /admin/components. The CSV
   // download is never paginated.
+  //
+  // The window must cover the WHOLE log while paginating: sliced to the old
+  // 100-row cap, pages past the first 100 entries were unreachable and the
+  // displayed page count lied. The CSV export already reads the same 10000
+  // cap, so this is the same order of magnitude.
   const pageNum = parseInt(req.query.page, 10);
+  const paginating = pageNum >= 1;
+  let logs = await auditLog.list(paginating ? 10000 : 100);
   const perPage = Math.min(100, Math.max(5, parseInt(req.query.per_page, 10) || 20));
   const totalLogs = logs.length;
   const totalPages = Math.max(1, Math.ceil(totalLogs / perPage));
-  if (pageNum >= 1) logs = logs.slice((pageNum - 1) * perPage, pageNum * perPage);
+  if (paginating) logs = logs.slice((pageNum - 1) * perPage, pageNum * perPage);
   res.send(layout(res, 'audit', {
     title: 'Audit Log',
     user: req.user,
@@ -1135,7 +1141,7 @@ router.get('/audit', async (req, res) => {
     message: res.locals.message,
     messageType: res.locals.messageType,
     logs,
-    pagination: pageNum >= 1 ? { page: pageNum, perPage, total: totalLogs, pages: totalPages } : null
+    pagination: paginating ? { page: pageNum, perPage, total: totalLogs, pages: totalPages } : null
   }));
 });
 

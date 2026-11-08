@@ -335,6 +335,25 @@ async function settle() { for (let i = 0; i < 6; i++) await new Promise(r => set
   check('C8: /admin/audit/download sigue devolviendo el CSV completo', csv.status === 200 && csvLines[0].startsWith('Date,User,Action') && csvLines.length > 21, csvLines.length + ' líneas');
   check('C9: el CSV incluye las 20 entradas nuevas', countOcc(csv.body, 'perf_entry') === 20, countOcc(csv.body, 'perf_entry'));
 
+  // C10/C11 — regresión del hallazgo R4-AUDIT-PAGINATION: la vista paginaba una
+  // ventana ya recortada a 100 filas, así que las páginas más allá de la 100 no
+  // eran alcanzables y el total mentía. Con 140 entradas, la página 7 (filas
+  // 121-140) tiene que existir y traer 20 filas.
+  for (let i = 1; i <= 120; i++) {
+    await auditLog.create({ user_id: null, action: 'perf_extra', target: 'x' + i, details: 'perf-extra-' + i, ip: '127.0.0.1' });
+  }
+  const p7 = await req('GET', '/admin/audit?page=7&per_page=20', { headers: SH });
+  check('C10: ?page=7 con 140 entradas es alcanzable y trae 20 filas',
+    p7.status === 200 && p7.body.includes('Page 7') && auditRows(p7.body) === 20,
+    p7.status + ' / ' + auditRows(p7.body) + ' filas');
+  // El total real incluye entradas de las secciones anteriores del arnés (login,
+  // otras acciones), así que se valida la COHERENCIA que el hallazgo ponía en duda:
+  // total real visible y pages = ceil(total/perPage).
+  const pagText = (p7.body.match(/Page (\d+) \/ (\d+) \((\d+) entries\)/) || []).slice(1).map(Number);
+  check('C11: total y páginas reflejan el log completo (no la ventana de 100)',
+    pagText.length === 3 && pagText[2] > 100 && pagText[1] === Math.ceil(pagText[2] / 20),
+    'page/pages/total=' + pagText.join('/'));
+
   console.log(failures === 0 ? '\nPERF PASSED' : `\nFAILURES: ${failures}`);
   process.exit(failures === 0 ? 0 : 1);
 })().catch(e => { console.error('HARNESS ERROR:', e); process.exit(1); });
