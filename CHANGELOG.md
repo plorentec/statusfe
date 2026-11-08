@@ -9,6 +9,26 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [3.5.1] — 2026-11-08
+
+### Fixed
+- **`/admin/audit` paginaba una ventana ya recortada**: se pedían 100 filas y se
+  cortaban en páginas, así que las entradas más allá de la 100 eran
+  inalcanzables y el total mentía. Ahora la ventana cubre el log completo
+  (10000, el mismo tope del CSV) mientras se pagina; la vista sin `?page`
+  conserva su ventana histórica de 100. Hallazgo del review nativo
+  (`R4-AUDIT-PAGINATION`, CRITICAL).
+- **Versiones de dependencias corrompidas en `package-lock.json`**: el salto de
+  versión reescribía con una regex global la versión de dos paquetes
+  (`is-fullwidth-code-point` y `p-limit`). Venía ya de 3.4.0 (los `resolved` sí
+  eran correctos, así que las instalaciones no se vieron afectadas). Ahora cada
+  entrada se deriva de su propio `resolved`. Hallazgo del review nativo
+  (`R3-lockfile-version-drift`, WARNING).
+
+### Verified
+- Review nativo del slice de rendimiento: **APPROVED** tras una corrección
+  acotada (31 líneas), con refuter y validador dirigido. Suite: **782 checks**.
+
 ## [3.5.0] — 2026-11-08
 
 ### Performance
