@@ -9,6 +9,27 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [3.7.1] — 2026-11-08
+
+### Fixed
+- **Escritura en la columna equivocada** (`components.update()`). Cuando se caía
+  un campo de la lista del `UPDATE` (rama de sonda deshabilitada con destino
+  inválido), los `$N` no se renumeraban: **cada valor se guardaba en la columna
+  anterior**. Con vecinos del mismo tipo (dos TEXT) eso corrompía datos en
+  silencio; en este caso el UUID aterrizó en la columna `INTEGER` `position` y la
+  escritura falló.
+- **Diagnóstico del formulario de componentes**: «no existe» y «faltan campos»
+  compartían el mismo `msg=error`, así que el fallo era indiscernible desde el
+  redirect. Ahora son `notfound` y `missing_fields`, con su texto en el mapa de
+  mensajes, y una excepción real del modelo se registra en vez de tragarse.
+
+### Verified
+- El bug apareció persiguiendo el «flake» de `verify_e2e` («editar sin grupo =>
+  NULL»). No era el test: era la aplicación. Fijado en `scratch/verify_plan.js`
+  con ciclo **RED** (la escritura lanza y nada cambia) → **GREEN**, y 8
+  ejecuciones consecutivas de `verify_e2e` sin un solo fallo.
+- Suite: **843 checks**, todas en verde. Ya no hay aserciones intermitentes.
+
 ## [3.7.0] — 2026-11-08
 
 ### Added
@@ -40,11 +61,6 @@ All notable changes to StatusFe.
   dos desviaciones, ambas intencionadas.
 - Suite: **839 checks** en 30 arneses.
 - Review nativo (tier **high**, lente de riesgo): **APPROVED**.
-
-### Known issue
-- `scratch/verify_e2e.js` tiene una aserción intermitente preexistente
-  («editar sin grupo => NULL»): falla ~1 de cada 3 ejecuciones también sobre el
-  código anterior a este release. Pendiente de investigar en su propio slice.
 
 ## [3.6.0] — 2026-11-08
 

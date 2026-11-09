@@ -137,6 +137,10 @@ async function session(req, res, next) {
       invalid_parent: 'Invalid parent: a component cannot be its own parent or one of its own descendants.',
       probe_invalid: 'The probe cannot be enabled: its target is missing or invalid for the selected probe type.',
       parent_missing: 'The selected parent component does not exist.',
+      // 3.7.1: the component route used to emit msg=error for both of these,
+      // which made a real failure indistinguishable from a validation error.
+      notfound: 'That component does not exist any more.',
+      missing_fields: 'The component needs at least a name.',
       // Codes added in 2.2.6: every ?msg= emitted by a redirect now has readable text
       invalid_reset: 'Invalid or expired reset link.',
       password_set: 'Password updated. Log in with your new password.',
