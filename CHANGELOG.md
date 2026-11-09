@@ -9,6 +9,34 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [3.6.0] — 2026-11-08
+
+### Security
+- **Se acabó el `admin123`.** Una instalación nueva ya no siembra una contraseña
+  conocida: usa `ADMIN_PASSWORD` (≥ 8 caracteres) si existe o genera una
+  **aleatoria de 16** (sin caracteres confundibles) que se imprime una vez y se
+  guarda en un fichero **`0600`**, igual que ya se hacía con la API key por
+  defecto.
+- **Cambio de contraseña obligatorio al primer login** (`users.must_change_password`):
+  la sesión queda confinada a `/auth/change-password` hasta que el operador elige
+  su contraseña. `/auth/*`, `/status/*`, `/embed/*`, `/api/*`, `/push/*`, los
+  enlaces de verificación/baja y los estáticos siguen funcionando.
+- **Nada cambia para instalaciones existentes**: la columna nace en `0` y el seed
+  solo actúa si no hay admin.
+
+### Fixed
+- **`AGENTS.md` mentía**: decía que la API key por defecto era inservible en una
+  base nueva. Es falso: `init.js` guarda el plaintext en un fichero `0600` y lo
+  imprime. Documentación corregida.
+
+### Verified
+- `scratch/verify_first_run.js` (nuevo): **20 comprobaciones** — `admin123` no
+  autentica, la contraseña generada sí y su fichero es `0600`, `/admin` bloqueado,
+  cambio de contraseña correcto, y `ADMIN_PASSWORD` evita el cambio forzado
+  (probado con un proceso hijo real).
+- Suite: **802 checks** en 29 arneses.
+- Review nativo (tier **high**, lentes riesgo + resiliencia): **APPROVED**.
+
 ## [3.5.1] — 2026-11-08
 
 ### Fixed
