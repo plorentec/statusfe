@@ -34,6 +34,14 @@ All notable changes to StatusFe.
 - Se corrigió una aserción que pasaba **siempre**: `S2: migrate() es idempotente`
   recibía una promesa sin resolver como condición y era un PASS falso.
 - Suite: **854 checks** en 30 arneses.
+- **Review nativo parcial, y se dice tal cual**: la lente **risk** (¿puede la caché
+  servir credenciales rancias?) se capturó y admitió. La lente **reliability**
+  **no pudo producirse**: tres intentos, tres fallos del proveedor (Cloudflare
+  502 en el origen; después `reviewer-empty-output` con 32k tokens de
+  razonamiento y cero texto, y por último 0 tokens de salida). Sin esa lente el
+  lineage queda abierto y la review **no se considera completa**: la cobertura de
+  esa lente es la que aportan las aserciones P0–P5 de `verify_perf.js`, no un
+  revisor independiente.
 
 ## [3.8.0] — 2026-11-08
 
