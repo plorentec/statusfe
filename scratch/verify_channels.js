@@ -359,6 +359,26 @@ const WEBHOOK_SECRET = 'whsec-harness-123';
   check('C6: an unresolvable destination is never contacted', !calls.some(c => c.url.includes('unresolvable.example.test')));
   check('C6: the public channels were still delivered (fail closed, not fail everything)',
     !!callFor('api.telegram.org') && callFor('example.com/statusfe-hook') !== undefined);
+  // C6b — REVIEW FIX R4-002: a public destination that answers 3xx must NOT be
+  // followed. The guard validates the URL it resolved; following a redirect would
+  // reach 169.254.169.254 or an internal host with no validation at all.
+  fetchPlan = (url) => ({ status: 302, headers: { location: 'http://169.254.169.254/latest/meta-data/' }, ok: false, body: '' });
+  const redir = await notificationChannels.create({ type: 'webhook', name: 'Redir', config: { url: 'http://public.example.test/hook' }, events: [] });
+  resetCalls();
+  await notify.dispatch('component_status', { title: 'redir', message: 'guard', url: null });
+  // Otros canales de secciones anteriores siguen activos y reciben su copia:
+  // lo que importa es que el destino validado se llame UNA vez y que la IP de
+  // metadata (169.254.169.254) no se toque nunca.
+  const redirCalls = calls.filter(c => c.url.includes('public.example.test'));
+  check('C6b: a 3xx is refused, not followed (the redirect target is never contacted)',
+    redirCalls.length === 1 && !calls.some(c => c.url.includes('169.254.169.254')),
+    redirCalls.length + ' llamada(s) al destino validado, metadata=' + (calls.some(c => c.url.includes('169.254.169.254')) ? 'CONTACTADA' : 'no'));
+  check('C6b: the redirect refusal is logged',
+    notifyLogs.some(l => l.includes('Redir failed') && l.includes('redirect refused')),
+    notifyLogs.filter(l => l.includes('Redir')).slice(-1)[0] || 'no log');
+  fetchPlan = null;
+  await notificationChannels.remove(redir.id);
+
   check('C6: each rejected destination is logged',
     ['Internal', 'Lan', 'Nxdomain'].every(n => notifyLogs.some(l => l.startsWith('[NOTIFY] webhook ' + n + ' failed: ') && l.includes('destination rejected'))));
   await notificationChannels.remove(internal.id);
@@ -472,6 +492,26 @@ const WEBHOOK_SECRET = 'whsec-harness-123';
   check('C8: the created channel is stored with its token encrypted',
     !!uiRow && String(uiRow.config).includes('enc:v1:') && !String(uiRow.config).includes('555:ui-token'),
     uiRow && String(uiRow.config).slice(0, 40));
+
+  // C8b — REVIEW FIX R4-001: an unchecked Enabled box must create a DISABLED
+  // channel. The route used to hardcode enabled: 1, so an admin who switched it
+  // off still got a live channel notifying straight away.
+  const offPost = await req('POST', '/admin/channels', {
+    headers: { Cookie: cookieHeader(), 'x-csrf-token': csrf },
+    body: { type: 'slack', name: 'UI Disabled', webhook_url: 'https://hooks.example.test/services/X' }
+  });
+  const offRow = await db.queryOne("SELECT * FROM notification_channels WHERE name='UI Disabled'");
+  check('C8b: creating WITHOUT the enabled checkbox stores the channel disabled',
+    offPost.status === 302 && !!offRow && Number(offRow.enabled) === 0,
+    offPost.status + ' / enabled=' + (offRow && offRow.enabled));
+  const onPost = await req('POST', '/admin/channels', {
+    headers: { Cookie: cookieHeader(), 'x-csrf-token': csrf },
+    body: { type: 'slack', name: 'UI Enabled', webhook_url: 'https://hooks.example.test/services/Y', enabled: '1' }
+  });
+  const onRow = await db.queryOne("SELECT * FROM notification_channels WHERE name='UI Enabled'");
+  check('C8b: creating WITH the checkbox checked stores the channel enabled',
+    onPost.status === 302 && !!onRow && Number(onRow.enabled) === 1,
+    onPost.status + ' / enabled=' + (onRow && onRow.enabled));
 
   const editPage = await req('GET', '/admin/channels/' + uiRow.id + '/edit', { headers: { Cookie: cookieHeader() } });
   absorb(editPage);

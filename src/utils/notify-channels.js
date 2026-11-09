@@ -143,8 +143,16 @@ async function deliver(channel, event, payload) {
       method: 'POST',
       headers: request.headers,
       body: JSON.stringify(request.body),
+      // REVIEW FIX (R4-002): NEVER follow redirects. The SSRF guard only
+      // validates the URL we resolved, so a public destination answering 302 to
+      // 169.254.169.254 (cloud metadata) or an internal host would otherwise be
+      // fetched without any validation. A 3xx is a failure, not a hop.
+      redirect: 'manual',
       signal: AbortSignal.timeout(DELIVERY_TIMEOUT_MS)
     });
+    if (res && res.status >= 300 && res.status < 400) {
+      throw new Error('HTTP ' + res.status + ' redirect refused (SSRF guard does not follow redirects)');
+    }
     if (res && res.ok === false) throw new Error('HTTP ' + res.status);
     return { ok: true };
   } catch (e) {

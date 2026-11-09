@@ -537,7 +537,10 @@ router.post('/channels', requireAdmin, async (req, res) => {
       name: body.name,
       config: buildChannelConfig(body.type, body),
       events: body.events === undefined ? [] : body.events,
-      enabled: 1
+      // REVIEW FIX (R4-001): honour the form. A checkbox that is unchecked sends
+      // nothing, and hardcoding 1 here created a LIVE channel that started
+      // notifying immediately even though the admin had switched it off.
+      enabled: (body.enabled === undefined || body.enabled === null || body.enabled === '' || body.enabled === '0' || body.enabled === 'false' || body.enabled === false) ? 0 : 1
     });
   } catch (e) {
     return res.redirect('/admin/channels?msg=channel_invalid&type=error');
