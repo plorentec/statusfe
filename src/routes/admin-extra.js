@@ -3,7 +3,8 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const { requireAuth, requireAdmin } = require('../middleware/session');
-const { notifications, analytics, dependencies, settings, pages, components, componentStatuses, incidentStatuses, statusMappings } = require('../db/models');
+const { notifications, analytics, dependencies, settings, pages, components, componentStatuses, incidentStatuses, statusMappings, notificationChannels } = require('../db/models');
+const notifyChannels = require('../utils/notify-channels');
 const { queryOne, queryAll, run } = require('../db/database');
 
 router.use(requireAuth);
@@ -466,6 +467,130 @@ router.post('/config/mappings', requireAdmin, async (req, res) => {
 router.delete('/config/mappings/:incidentStatus/:componentStatus', requireAdmin, async (req, res) => {
   await statusMappings.delete(req.params.incidentStatus, req.params.componentStatus);
   res.redirect('/admin/config/mappings?msg=deleted&type=success');
+});
+
+// ===== NOTIFICATION CHANNELS (4.0.0) =====
+// Global per-installation fan-out targets. The form fields are type-conditional;
+// buildChannelConfig() maps the flat body onto that type's config object. Blank
+// secret fields mean "keep the stored value" — the model merges them against the
+// row it already has (S10).
+function buildChannelConfig(type, body) {
+  const b = body || {};
+  const val = (k) => (b[k] === undefined || b[k] === null ? '' : String(b[k]));
+  if (type === 'telegram') return { bot_token: val('bot_token'), chat_id: val('chat_id') };
+  if (type === 'slack' || type === 'discord') return { webhook_url: val('webhook_url') };
+  if (type === 'webhook') return { url: val('url'), secret: val('secret') };
+  return {};
+}
+
+// A blank form for GET /channels/new.
+function emptyChannel() {
+  return { id: null, type: 'telegram', name: '', events: [], enabled: 1, config: {}, has_secret: {} };
+}
+
+router.get('/channels', async (req, res) => {
+  const channels = await notificationChannels.list();
+  res.render('admin/channels', {
+    title: 'Notification Channels',
+    user: req.user,
+    channels,
+    channel: null,
+    channelTypes: notificationChannels.TYPES,
+    channelEvents: notificationChannels.EVENTS,
+    testError: req.query.error || null
+  });
+});
+
+router.get('/channels/new', async (req, res) => {
+  const channels = await notificationChannels.list();
+  res.render('admin/channels', {
+    title: 'Notification Channels',
+    user: req.user,
+    channels,
+    channel: emptyChannel(),
+    channelTypes: notificationChannels.TYPES,
+    channelEvents: notificationChannels.EVENTS,
+    testError: null
+  });
+});
+
+router.get('/channels/:id/edit', async (req, res) => {
+  const channel = await notificationChannels.get(req.params.id);
+  if (!channel) return res.redirect('/admin/channels?msg=channel_notfound&type=error');
+  const channels = await notificationChannels.list();
+  res.render('admin/channels', {
+    title: 'Notification Channels',
+    user: req.user,
+    channels,
+    channel,
+    channelTypes: notificationChannels.TYPES,
+    channelEvents: notificationChannels.EVENTS,
+    testError: null
+  });
+});
+
+router.post('/channels', requireAdmin, async (req, res) => {
+  const body = req.body || {};
+  try {
+    await notificationChannels.create({
+      type: body.type,
+      name: body.name,
+      config: buildChannelConfig(body.type, body),
+      events: body.events === undefined ? [] : body.events,
+      enabled: 1
+    });
+  } catch (e) {
+    return res.redirect('/admin/channels?msg=channel_invalid&type=error');
+  }
+  res.redirect('/admin/channels?msg=channel_created&type=success');
+});
+
+// Update: the edit form posts with _method=PUT (app.js honours the override), so
+// both handlers share one implementation.
+async function updateChannel(req, res) {
+  const body = req.body || {};
+  try {
+    const updated = await notificationChannels.update(req.params.id, {
+      type: body.type,
+      name: body.name,
+      config: buildChannelConfig(body.type, body),
+      events: body.events === undefined ? [] : body.events,
+      // A checkbox that is not sent means "disabled".
+      enabled: body.enabled ? 1 : 0
+    });
+    if (!updated) return res.redirect('/admin/channels?msg=channel_notfound&type=error');
+  } catch (e) {
+    return res.redirect('/admin/channels?msg=channel_invalid&type=error');
+  }
+  res.redirect('/admin/channels?msg=channel_updated&type=success');
+}
+router.post('/channels/:id', requireAdmin, updateChannel);
+router.put('/channels/:id', requireAdmin, updateChannel);
+
+async function deleteChannel(req, res) {
+  await notificationChannels.remove(req.params.id);
+  res.redirect('/admin/channels?msg=channel_deleted&type=success');
+}
+router.delete('/channels/:id', requireAdmin, deleteChannel);
+// Plain form fallback (no JS method override needed).
+router.post('/channels/:id/delete', requireAdmin, deleteChannel);
+
+router.post('/channels/:id/toggle', requireAdmin, async (req, res) => {
+  const channel = await notificationChannels.get(req.params.id);
+  if (!channel) return res.redirect('/admin/channels?msg=channel_notfound&type=error');
+  await notificationChannels.setEnabled(channel.id, Number(channel.enabled) === 1 ? 0 : 1);
+  res.redirect('/admin/channels?msg=channel_toggled&type=success');
+});
+
+// Test button: ONE sample message to THIS channel only, so an operator can
+// verify credentials without waiting for an incident. Disabled channels are
+// testable on purpose (you check the credentials first, then enable it).
+router.post('/channels/:id/test', requireAdmin, async (req, res) => {
+  const channel = await notificationChannels.getWithSecrets(req.params.id);
+  if (!channel) return res.redirect('/admin/channels?msg=channel_notfound&type=error');
+  const result = await notifyChannels.sendTest(channel);
+  if (result.ok) return res.redirect('/admin/channels?msg=channel_test_ok&type=success');
+  res.redirect('/admin/channels?msg=channel_test_failed&type=error&error=' + encodeURIComponent(String(result.error || '').slice(0, 200)));
 });
 
 module.exports = router;

@@ -57,6 +57,30 @@ views/partials/_sidebar.ejs ← SECOND sidebar copy, included by the 16 full-doc
 data/audit_logs/        ← Daily rotated CSV exports (created at runtime, `app.js:74`; NOT covered by `.gitignore`, which only ignores `data/*.db*` and `data/session_secret.txt`).
 ```
 
+## Notificaciones multi-canal (4.0.0)
+
+Avisos por **Telegram, Slack, Discord y webhook genérico**, además del email.
+Configuración **global por instalación** en `/admin/channels` (listar, crear,
+editar, activar/desactivar, **probar** un canal sin esperar a un incidente).
+
+- Tabla `notification_channels` (`type`, `name`, `config` JSON, `events`,
+  `enabled`) creada por la migración **`003-notification-channels`** — nunca en el
+  baseline: una instalación existente la recibe al actualizar.
+- **Credenciales cifradas en reposo** con el primitivo de `smtp_pass` (`enc:v1:`
+  AES-256-GCM derivado de `SESSION_SECRET`). El panel **nunca** devuelve el valor:
+  el campo va vacío y «dejar en blanco conserva el actual».
+- **SSRF**: las URLs de destino pasan el mismo `isPrivateIp` que los webhooks,
+  con resolución DNS acotada y **fallo en cerrado**. Sin bandera para permitir
+  IPs privadas en producción; los tests inyectan el cliente HTTP
+  (`__setFetchForTests` / `__setDnsForTests`).
+- **Fan-out independiente** (`allSettled`): un canal caído no silencia los demás.
+  Timeout de 5 s por entrega, `dispatch()` nunca lanza y los fallos se registran
+  como `[NOTIFY] <tipo> <nombre> failed: <motivo>`.
+- Eventos: `component_status`, `incident_created`, `incident_updated`,
+  `incident_resolved`, `maintenance_started`, `maintenance_ended`. Lista
+  `events` vacía o inválida = todos (mismo criterio que los webhooks).
+- Arnés: `scratch/verify_channels.js` (67 comprobaciones, pg-mem + fetch falso).
+
 ## Migrations (3.7.0)
 
 The schema is a numbered list of migrations in `src/db/migrations/`. A table

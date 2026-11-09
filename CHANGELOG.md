@@ -9,6 +9,43 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [4.0.0] — 2026-11-08
+
+### Added
+- **Notificaciones multi-canal**: Telegram, Slack, Discord y webhook genérico,
+  además del email. Configuración **global por instalación** en
+  `/admin/channels`, con un botón **Probar** para validar credenciales sin
+  esperar a un incidente.
+- Seis eventos notificables: cambio de estado de componente, incidente creado /
+  actualizado / resuelto, y mantenimiento iniciado / finalizado. La lista
+  `events` de cada canal filtra; vacía = todos.
+- Tabla `notification_channels` por la **migración `003`** — primer uso real del
+  esquema versionado de 3.7.0: una instalación existente la recibe al actualizar,
+  sin re-ejecutar nada.
+
+### Security
+- El bot token de Telegram y las URLs con token se guardan **cifrados en reposo**
+  con el mismo primitivo que `smtp_pass` (`enc:v1:`, AES-256-GCM). El panel nunca
+  los devuelve: el campo va vacío y dejarlo en blanco conserva el valor guardado.
+- Las URLs de destino pasan la **misma validación SSRF** que los webhooks
+  (`isPrivateIp` + DNS acotado, fallo en cerrado). **No hay** bandera para
+  permitir IPs privadas: sería abrir un SSRF en cualquier instalación.
+
+### Resilience
+- **Fan-out independiente**: un canal caído no impide que los demás reciban el
+  aviso. Timeout de 5 s por entrega; `dispatch()` nunca lanza y el fallo se
+  registra en el log.
+- El envío es fire-and-forget: no retrasa la respuesta ni el cambio de estado.
+
+### Verified
+- `scratch/verify_channels.js` (nuevo): **67 comprobaciones** — migración 003
+  sobre una base ya en 001+002, cifrado en reposo por tipo, los cuatro payloads
+  exactos, HMAC presente/ausente, filtro por evento y por `enabled`, aislamiento
+  del fan-out, tres rechazos SSRF y el panel completo.
+- Suite: **921 checks** en 31 arneses.
+- `verify_migrations.js` actualizado a tres migraciones (las 8 aserciones que
+  fijaban «exactamente 2» eran expectativas obsoletas, no regresiones).
+
 ## [3.9.0] — 2026-11-08
 
 ### Performance

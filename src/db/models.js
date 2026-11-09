@@ -1000,6 +1000,14 @@ module.exports.components = {
     }
     const email = require('../utils/email');
     email.notifyComponentStatusChange(comp.name, oldStatus, newStatus, pageTitle).catch(() => {});
+    // 4.0.0: the same event goes to the global channels (Telegram/Slack/Discord/
+    // webhook). Fire-and-forget and independent of the email path.
+    const notifyChannels = require('../utils/notify-channels');
+    notifyChannels.dispatch('component_status', {
+      title: '[' + pageTitle + '] ' + comp.name + ' is now ' + newStatus,
+      message: comp.name + ' changed from ' + oldStatus + ' to ' + newStatus + '.',
+      url: null
+    }).catch(() => {});
     // Suscriptores confirmados de las páginas donde vive el componente.
     const subPages = await queryAll('SELECT page_id FROM page_components WHERE component_id=$1', [componentId]);
     for (const sp of subPages) {
@@ -1210,6 +1218,13 @@ module.exports.incidents = {
     const email = require('../utils/email');
     const compName = comp ? comp.name : 'Status Page';
     email.notifyIncident(true, name, validStatus, message, page ? page.name : compName).catch(() => {});
+    // 4.0.0: global channels (fire-and-forget, independent of email).
+    const notifyChannels = require('../utils/notify-channels');
+    notifyChannels.dispatch('incident_created', {
+      title: 'New incident: ' + name + ' (' + validStatus + ')',
+      message: (page ? page.name : compName) + ': ' + (message || name),
+      url: null
+    }).catch(() => {});
     // Suscriptores confirmados de la página (visible=1): fire-and-forget.
     if (visibleFlag === 1) {
       notifySubscribersOfPage(page.id, `[StatusFe] New incident on ${page.name}: ${name}`,
@@ -1291,6 +1306,14 @@ module.exports.incidents = {
       const compName = comp ? comp.name : 'Status Page';
       const email = require('../utils/email');
       email.notifyIncident(false, inc.name, inc.status, data.message || '', page ? page.name : compName).catch(() => {});
+      // 4.0.0: global channels. A status of 'resolved' is its own event, so an
+      // operator can route recoveries somewhere quieter than the updates.
+      const notifyChannels = require('../utils/notify-channels');
+      notifyChannels.dispatch(inc.status === 'resolved' ? 'incident_resolved' : 'incident_updated', {
+        title: inc.name + ' is now ' + inc.status,
+        message: (page ? page.name : compName) + ': ' + (data.message || 'Incident updated'),
+        url: null
+      }).catch(() => {});
       if (data.status) {
         notifySubscribersOfPage(inc.page_id, `[StatusFe] ${inc.name} is now ${inc.status}`,
           `<p>Incident <strong>${inc.name}</strong> on ${compName} moved to <strong>${inc.status}</strong>.</p><p>${data.message || ''}</p>`);
@@ -1503,8 +1526,30 @@ module.exports.maintenance = {
 
   async updateStatuses() {
     const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    // Read the windows that are ABOUT to transition before writing, so the
+    // channel notifications can name them. The two UPDATEs below stay exactly
+    // as they were (same predicates, same order) — the SELECTs are additive and
+    // run on a table with a handful of rows.
+    const starting = await queryAll("SELECT * FROM maintenance_windows WHERE status='upcoming' AND starts_at<=$1", [now]);
+    const ending = await queryAll("SELECT * FROM maintenance_windows WHERE status='ongoing' AND ends_at<=$1", [now]);
     await run("UPDATE maintenance_windows SET status='ongoing' WHERE status='upcoming' AND starts_at<=$1", [now]);
     await run("UPDATE maintenance_windows SET status='completed' WHERE status='ongoing' AND ends_at<=$1", [now]);
+    // Fire-and-forget: a channel that is down must not delay or break the sweep.
+    const notifyChannels = require('../utils/notify-channels');
+    for (const w of starting) {
+      notifyChannels.dispatch('maintenance_started', {
+        title: 'Maintenance started: ' + w.title,
+        message: (w.description ? w.description + ' — ' : '') + w.title + ' is now in progress (until ' + w.ends_at + ').',
+        url: null
+      }).catch(() => {});
+    }
+    for (const w of ending) {
+      notifyChannels.dispatch('maintenance_ended', {
+        title: 'Maintenance finished: ' + w.title,
+        message: w.title + ' has been completed.',
+        url: null
+      }).catch(() => {});
+    }
     return true;
   },
 
@@ -1518,6 +1563,197 @@ module.exports.maintenance = {
       ORDER BY m.starts_at ASC`;
     return await queryAll(q, [pageId, now]);
   }
+};
+
+// ===== NOTIFICATION CHANNELS (4.0.0) =====
+// Global per-installation fan-out targets: Telegram, Slack, Discord and a
+// generic webhook. ONE configuration per installation — not per organization
+// and not per page: the operator wires the whole server to their chat.
+//
+// Secrets at rest: `config` is a JSON blob whose secret fields are encrypted
+// with the SAME primitive as smtp_pass (enc:v1:, AES-256-GCM derived from
+// SESSION_SECRET — see encryptSecret/decryptSecret above). That covers the
+// Telegram bot token, the generic webhook secret AND the Slack/Discord/generic
+// URLs, because every one of those URLs embeds its own token.
+//
+// Reads used by the admin UI never decrypt (S10): get()/list() return the config
+// with secret fields REMOVED plus a `has_secret` map, so a template cannot
+// render a stored credential by accident. getWithSecrets() and
+// listEnabledForEvent() are the only doors to the plaintext, and they exist for
+// DELIVERY, not for the panel.
+const CHANNEL_TYPES = ['telegram', 'slack', 'discord', 'webhook'];
+const CHANNEL_EVENTS = ['component_status', 'incident_created', 'incident_updated', 'incident_resolved', 'maintenance_started', 'maintenance_ended'];
+const CHANNEL_SECRET_FIELDS = {
+  telegram: ['bot_token'],
+  slack: ['webhook_url'],
+  discord: ['webhook_url'],
+  webhook: ['url', 'secret'],
+};
+
+function channelSecretFields(type) { return CHANNEL_SECRET_FIELDS[type] || []; }
+
+function parseChannelConfig(raw) {
+  if (!raw) return {};
+  if (typeof raw === 'object' && !Array.isArray(raw)) return { ...raw };
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch (e) { return {}; }
+}
+
+// Events column: JSON array of event names. Empty/invalid means "every event",
+// exactly like the webhooks table (webhooks.shouldDeliver applies the same rule).
+function normalizeChannelEvents(value) {
+  const list = normalizeIds(value); // accepts an array or a comma-joined string
+  return list.filter(e => CHANNEL_EVENTS.includes(e));
+}
+
+// Encrypt the secret fields of a channel config. `previous` (the row as stored)
+// supplies the "leave blank to keep the current value" rule of the SMTP form.
+function encryptChannelConfig(type, incoming, previous) {
+  const cfg = parseChannelConfig(incoming);
+  const prev = parseChannelConfig(previous);
+  const secretFields = channelSecretFields(type);
+  const out = {};
+  for (const k of Object.keys(cfg)) {
+    const raw = cfg[k];
+    const val = raw === undefined || raw === null ? '' : String(raw);
+    if (!secretFields.includes(k)) { out[k] = val; continue; }
+    if (!val) continue; // blank: fall through to the stored value below (if any)
+    // A value that is already encrypted (round-tripping) is preserved as-is.
+    out[k] = isEncryptedSecret(val) ? val : encryptSecret(val);
+  }
+  for (const k of secretFields) {
+    if (out[k]) continue;
+    const stored = prev[k];
+    if (!stored) continue;
+    out[k] = isEncryptedSecret(stored) ? stored : encryptSecret(stored);
+  }
+  return out;
+}
+
+// Delivery-side view: secret fields decrypted. A rotated SESSION_SECRET yields
+// an empty string (decryptSecret returns null) — the delivery then fails closed
+// and logs, instead of sending the ciphertext somewhere.
+function decryptChannelConfig(type, raw) {
+  const cfg = parseChannelConfig(raw);
+  const secretFields = channelSecretFields(type);
+  const out = {};
+  for (const k of Object.keys(cfg)) {
+    out[k] = secretFields.includes(k) && isEncryptedSecret(cfg[k]) ? (decryptSecret(cfg[k]) || '') : cfg[k];
+  }
+  return out;
+}
+
+// Panel-safe view: no secret value ever leaves this function.
+function publicChannel(row) {
+  if (!row) return null;
+  const cfg = parseChannelConfig(row.config);
+  const secretFields = channelSecretFields(row.type);
+  const visible = {};
+  const has_secret = {};
+  for (const k of Object.keys(cfg)) {
+    if (secretFields.includes(k)) { has_secret[k] = !!cfg[k]; continue; }
+    visible[k] = cfg[k];
+  }
+  let events = [];
+  try {
+    const parsed = JSON.parse(row.events || '[]');
+    if (Array.isArray(parsed)) events = parsed;
+  } catch (e) { events = []; }
+  return { ...row, config: visible, has_secret, events };
+}
+
+module.exports.notificationChannels = {
+  TYPES: CHANNEL_TYPES,
+  EVENTS: CHANNEL_EVENTS,
+  SECRET_FIELDS: CHANNEL_SECRET_FIELDS,
+
+  // Panel list: no secrets, events as an array.
+  async list() {
+    const rows = await queryAll('SELECT * FROM notification_channels ORDER BY created_at ASC, name ASC');
+    return rows.map(publicChannel);
+  },
+
+  async get(id) {
+    return publicChannel(await queryOne('SELECT * FROM notification_channels WHERE id=$1', [id]));
+  },
+
+  // Delivery/test only: the plaintext config. Never rendered by a view.
+  async getWithSecrets(id) {
+    const row = await queryOne('SELECT * FROM notification_channels WHERE id=$1', [id]);
+    if (!row) return null;
+    return { ...publicChannel(row), config: decryptChannelConfig(row.type, row.config) };
+  },
+
+  async create(data = {}) {
+    const type = String(data.type || '').trim();
+    if (!CHANNEL_TYPES.includes(type)) throw new Error('invalid_type');
+    const name = String(data.name || '').trim();
+    if (!name) throw new Error('invalid_name');
+    const id = uuidv4();
+    const config = encryptChannelConfig(type, data.config || {}, {});
+    const events = normalizeChannelEvents(data.events);
+    const enabled = toBool01(data.enabled === undefined ? 1 : data.enabled);
+    await run(
+      'INSERT INTO notification_channels (id,type,name,config,events,enabled) VALUES ($1,$2,$3,$4,$5,$6)',
+      [id, type, name, JSON.stringify(config), JSON.stringify(events), enabled]
+    );
+    return this.get(id);
+  },
+
+  async update(id, data = {}) {
+    const row = await queryOne('SELECT * FROM notification_channels WHERE id=$1', [id]);
+    if (!row) return null;
+    const type = data.type !== undefined ? String(data.type).trim() : row.type;
+    if (!CHANNEL_TYPES.includes(type)) throw new Error('invalid_type');
+    const sets = [];
+    const params = [];
+    const push = (col, val) => { params.push(val); sets.push(col + '=$' + params.length); };
+    if (data.name !== undefined) {
+      const name = String(data.name).trim();
+      if (!name) throw new Error('invalid_name');
+      push('name', name);
+    }
+    if (type !== row.type) push('type', type);
+    if (data.config !== undefined || type !== row.type) {
+      // Merge against the stored config so a blank secret keeps its value; a
+      // type change starts from an empty previous config (different fields).
+      const previous = type === row.type ? row.config : {};
+      push('config', JSON.stringify(encryptChannelConfig(type, data.config || {}, previous)));
+    }
+    if (data.events !== undefined) push('events', JSON.stringify(normalizeChannelEvents(data.events)));
+    if (data.enabled !== undefined) push('enabled', toBool01(data.enabled));
+    if (sets.length === 0) return this.get(id);
+    params.push(id);
+    await run('UPDATE notification_channels SET ' + sets.join(',') + ', updated_at=NOW() WHERE id=$' + params.length, ...params);
+    return this.get(id);
+  },
+
+  async remove(id) {
+    await run('DELETE FROM notification_channels WHERE id=$1', [id]);
+    return true;
+  },
+
+  async setEnabled(id, enabled) {
+    await run('UPDATE notification_channels SET enabled=$1, updated_at=NOW() WHERE id=$2', [toBool01(enabled), id]);
+    return this.get(id);
+  },
+
+  // Delivery fan-out source. Enabled rows whose `events` list includes the event
+  // (empty/invalid = every event, same rule as the webhooks table). The events
+  // filter runs in JS on purpose: the list is tiny and an array column would not
+  // be portable to pg-mem.
+  async listEnabledForEvent(event) {
+    const { shouldDeliver } = require('../utils/webhooks');
+    const rows = await queryAll('SELECT * FROM notification_channels WHERE enabled=1 ORDER BY created_at ASC');
+    return rows
+      .filter(row => shouldDeliver(row, event))
+      .map(row => ({ ...row, config: decryptChannelConfig(row.type, row.config) }));
+  },
+
+  // Exposed for the admin form preview/tests; pure functions, no I/O.
+  decryptConfig: decryptChannelConfig
 };
 
 // ===== NOTIFICATIONS =====
