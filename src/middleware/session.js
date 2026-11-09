@@ -49,6 +49,9 @@ async function createSession(user) {
     createdAt: Date.now(),
     _2fa_verified: false
   };
+  // First-run guard: the account was seeded with a generated password and must
+  // set a new one before the panel is usable (see isMustChangeExempt below).
+  if (user.must_change_password) sessionData._must_change = 1;
   const sessionValue = JSON.stringify(sessionData);
   const signedValue = signCookie(sessionValue);
   await run('INSERT INTO sessions (id, data, created_at) VALUES ($1, $2, NOW())', [sessionId, sessionValue]);
@@ -137,6 +140,8 @@ async function session(req, res, next) {
       // Codes added in 2.2.6: every ?msg= emitted by a redirect now has readable text
       invalid_reset: 'Invalid or expired reset link.',
       password_set: 'Password updated. Log in with your new password.',
+      password_changed: 'Password changed successfully.',
+      must_change: 'This administrator account still uses the password generated at first boot. Sign in and set a new password.',
       status_updated: 'Status updated.',
       invalid_status: 'Invalid status.',
       last_admin: 'You cannot delete the last admin account.',
@@ -159,6 +164,8 @@ async function session(req, res, next) {
       res.locals.key_value = req.query.key;
       res.locals.key_perms = req.query.perms || '';
     }
+    // Rendered as a dedicated notice box in views/login.ejs.
+    if (flashMsg === 'must_change') res.locals.mustChangeNotice = true;
   }
 
   let sessionId = null;
@@ -217,7 +224,31 @@ async function session(req, res, next) {
     res.cookie('_flash_key', key, { httpOnly: true, maxAge: 10000, sameSite: 'lax', secure: 'auto' });
   };
 
+  // First-run gate: an authenticated session that still carries _must_change is
+  // confined to the change-password form. Everything that does NOT require the
+  // panel keeps working (login/logout/2FA, public status pages and embeds, the
+  // API, push heartbeats, verification/invite/subscription links, static
+  // assets). Same skip style as require-2fa: an explicit prefix allowlist.
+  if (req.user && req.session && req.session._must_change) {
+    const requestPath = req.path || '/';
+    if (!isMustChangeExempt(requestPath)) {
+      return res.redirect('/auth/change-password');
+    }
+  }
+
   next();
+}
+
+// Paths that stay reachable while an account must change its password.
+const MUST_CHANGE_EXEMPT_PREFIXES = [
+  '/auth/', '/status/', '/embed/', '/api/', '/push/', '/verify/', '/invite/',
+  '/confirm/', '/unsubscribe/', '/css/', '/js/', '/img/', '/assets/'
+];
+const MUST_CHANGE_EXEMPT_PATHS = ['/login', '/register', '/logout', '/favicon.ico'];
+
+function isMustChangeExempt(requestPath) {
+  if (MUST_CHANGE_EXEMPT_PATHS.includes(requestPath)) return true;
+  return MUST_CHANGE_EXEMPT_PREFIXES.some(prefix => requestPath.startsWith(prefix));
 }
 
 function requireAuth(req, res, next) {
@@ -260,4 +291,4 @@ async function initSessionTable() {
   }
 }
 
-module.exports = { session, requireAuth, optionalAuth, requireAdmin, createSession, getSession, destroySession, destroyUserSessions, initSessionTable, verifySignedCookie };
+module.exports = { session, requireAuth, optionalAuth, requireAdmin, createSession, getSession, updateSession, destroySession, destroyUserSessions, initSessionTable, verifySignedCookie, isMustChangeExempt };

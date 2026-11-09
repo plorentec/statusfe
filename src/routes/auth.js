@@ -1,9 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
+const fs = require('fs');
 const { queryOne, queryAll, run } = require('../db/database');
-const { createSession, destroySession, getSession } = require('../middleware/session');
+const { createSession, destroySession, getSession, requireAuth, updateSession } = require('../middleware/session');
+const { csrfMiddleware, csrfProtection, readCsrfCookie } = require('../middleware/csrf');
 const { passwordResets, auditLog } = require('../db/models');
+const { seedAdminPasswordFile } = require('../db/init');
 const { verify } = require('../utils/totp');
 
 // Compared when the email doesn't exist so real and missing users take the
@@ -30,9 +33,13 @@ router.post('/login', async (req, res) => {
   if (user.totp_enabled && user.totp_secret) {
     console.log('[2FA] User', user.email, 'has totp_enabled=', user.totp_enabled, 'has_secret=', !!user.totp_secret);
     const tempId = require('uuid').v4();
+    // Carry the first-run flag through the 2FA step: the real session created
+    // after a valid TOTP code keeps it (see createSession / the store below).
+    const tempData = { userId: user.id, email: user.email, name: user.name, role: user.role };
+    if (user.must_change_password) tempData._must_change = 1;
     await run(
       'INSERT INTO sessions (id, data, created_at) VALUES ($1, $2, NOW())',
-      ['_2fa_' + tempId, JSON.stringify({ userId: user.id, email: user.email, name: user.name, role: user.role })]
+      ['_2fa_' + tempId, JSON.stringify(tempData)]
     );
     res.cookie('_2fa_token', tempId, { httpOnly: true, maxAge: 10 * 60 * 1000, sameSite: 'lax', secure: 'auto' });
     return res.redirect('/auth/2fa');
@@ -55,6 +62,7 @@ router.post('/login', async (req, res) => {
       try { sid = JSON.parse(signedValue.slice(0, dotIdx)).id; } catch (e) { sid = null; }
       if (sid) {
         const store = { id: sid, userId: user.id, name: user.name, email: user.email, role: user.role, createdAt: Date.now(), _2fa_verified: false, org_scope: orgs[0].id };
+        if (user.must_change_password) store._must_change = 1;
         await run('UPDATE sessions SET data=$1 WHERE id=$2', [JSON.stringify(store), sid]).catch(() => {});
       }
     }
@@ -63,6 +71,9 @@ router.post('/login', async (req, res) => {
   // X-Forwarded-Proto because the app sets 'trust proxy').
   const securePart = req.secure ? '; Secure' : '';
   res.setHeader('Set-Cookie', `session_id=${signedValue}; HttpOnly; Max-Age=${24*60*60}; SameSite=Lax; Path=/${securePart}`);
+  // First run: the seeded password is generated (never a known default), so the
+  // panel stays closed until the admin sets their own password.
+  if (user.must_change_password) return res.redirect('/auth/change-password');
   res.redirect('/admin?msg=success');
 });
 
@@ -113,6 +124,7 @@ router.post('/2fa', async (req, res) => {
     try {
       // Keep `id` so updateSession()/req.session.id keep working for this session.
       const store = { id: newSession.id, userId: user.id, name: user.name, email: user.email, role: user.role, createdAt: Date.now(), _2fa_verified: true, _2fa_last_counter: verdict.counter };
+      if (user.must_change_password) store._must_change = 1;
       await run('UPDATE sessions SET data=$1, created_at=NOW() WHERE id=$2', [JSON.stringify(store), newSession.id]);
     } catch(e) {}
   }
@@ -124,6 +136,7 @@ router.post('/2fa', async (req, res) => {
   ]);
   if (!req.session) req.session = {};
   req.session._2fa_verified = true;
+  if (user.must_change_password) return res.redirect('/auth/change-password');
   res.redirect('/admin?msg=success');
 });
 
@@ -149,6 +162,83 @@ router.post('/logout', async (req, res) => {
 router.get('/me', (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
   res.json({ user: req.user });
+});
+
+// ===== FIRST-RUN / PASSWORD CHANGE =====
+// The seeded admin password is generated (or comes from ADMIN_PASSWORD), so the
+// panel stays closed until the operator picks their own. The routes live under
+// /auth (session-gated, not API-key gated); CSRF is enforced explicitly here
+// because app.js exempts /auth/* from the global CSRF middleware.
+function renderChangePassword(req, res, error, status) {
+  return res.status(status || 200).render('auth/change-password', {
+    title: 'Change Password',
+    error: error || null,
+    mustChange: !!(req.session && req.session._must_change),
+    csrfToken: res.locals.csrfToken || readCsrfCookie(req) || '',
+  });
+}
+
+router.get('/change-password', requireAuth, csrfMiddleware, (req, res) => {
+  renderChangePassword(req, res, null);
+});
+
+router.post('/change-password', requireAuth, csrfProtection, async (req, res) => {
+  try {
+    const { current_password, password, confirm_password } = req.body || {};
+    if (!current_password || !password || !confirm_password) {
+      return renderChangePassword(req, res, 'All fields are required.', 400);
+    }
+    const user = await queryOne('SELECT * FROM users WHERE id=$1', [req.user.id]);
+    if (!user) return res.redirect('/login?msg=error&type=error');
+
+    // Always run the bcrypt comparison, even for a bogus/empty input.
+    if (!bcrypt.compareSync(current_password, user.password_hash)) {
+      return renderChangePassword(req, res, 'The current password is incorrect.', 400);
+    }
+    if (String(password).length < 8) {
+      return renderChangePassword(req, res, 'The new password must be at least 8 characters long.', 400);
+    }
+    if (password !== confirm_password) {
+      return renderChangePassword(req, res, 'The new passwords do not match.', 400);
+    }
+    if (password === current_password) {
+      return renderChangePassword(req, res, 'The new password must be different from the current one.', 400);
+    }
+
+    const firstRun = !!(req.session && req.session._must_change);
+    const passwordHash = bcrypt.hashSync(password, 10);
+    await run('UPDATE users SET password_hash=$1, must_change_password=0, updated_at=NOW() WHERE id=$2', [passwordHash, user.id]);
+
+    // Clear the flag in the live session too, otherwise the gate keeps bouncing
+    // this browser back to the form until the session expires.
+    if (req.session && req.session._must_change) {
+      delete req.session._must_change;
+      if (req.session.id) await updateSession(req.session.id, req.session);
+    }
+
+    await auditLog.create({
+      user_id: user.id,
+      action: 'password_changed_first_login',
+      target: user.email,
+      details: firstRun ? 'First-run admin password replaced' : 'Password changed from the change-password form',
+      ip: req.ip,
+      user_agent: req.get('User-Agent') || '',
+    });
+
+    // The generated password is now useless: drop the one-shot file if that is
+    // the flow we came from (best effort — never fail the request over it).
+    if (firstRun) {
+      try {
+        const pwFile = seedAdminPasswordFile();
+        if (fs.existsSync(pwFile)) fs.unlinkSync(pwFile);
+      } catch (e) { /* ignore */ }
+    }
+
+    res.redirect('/admin?msg=password_changed&type=success');
+  } catch (e) {
+    console.error('change-password error:', e.message);
+    renderChangePassword(req, res, 'Could not change the password. Please try again.', 500);
+  }
 });
 
 // GET /auth/set-password/:token

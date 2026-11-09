@@ -18,8 +18,11 @@
 </a>
 <p>Sign in to your account</p>
 </div>
-<% if (message) { %>
+<% if (message && !(typeof mustChangeNotice !== 'undefined' && mustChangeNotice)) { %>
 <div class="flash flash-<%= messageType %>"><%= message %></div>
+<% } %>
+<% if (typeof mustChangeNotice !== 'undefined' && mustChangeNotice) { %>
+<div class="flash flash-success">First run: this administrator account still uses the password generated at installation. Sign in to set a new password.</div>
 <% } %>
 <form action="/auth/login" method="post" class="auth-form">
 <div class="form-group">

@@ -1,15 +1,47 @@
 const { prepare, run, queryOne, queryAll } = require('./database');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+
+const DATA_DIR = path.join(__dirname, '..', '..', 'data');
 
 // One-shot recovery file for the seeded "Default Admin Key" (fresh DB only).
 // seed() writes it; migrate() deletes it on the NEXT boot (never the boot that
 // wrote it — seedKeysFileJustWritten guards that), so the plaintext can sit on
 // disk at most until the next restart.
-const SEED_KEYS_FILE = path.join(__dirname, '..', '..', 'data', 'seed_keys.txt');
+const SEED_KEYS_FILE = path.join(DATA_DIR, 'seed_keys.txt');
 let seedKeysFileJustWritten = false;
+
+// First-run admin password (fresh DB only, see seed()). Same 0600 treatment as
+// the seeded API key, in the same directory. The path is overridable so a
+// harness — or a container operator — never has to write into the real data
+// dir. Read at call time, not at require time.
+function seedAdminPasswordFile() {
+  return process.env.SEED_ADMIN_PASSWORD_FILE || path.join(DATA_DIR, 'seed_admin_password.txt');
+}
+
+// Alphabet for the generated first-run password: alphanumeric WITHOUT the
+// look-alike characters (0/O, 1/l/I) so it survives being copied out of a
+// terminal or a text file without transcription mistakes.
+const SEED_PASSWORD_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+
+// 16 alphanumeric characters from crypto.randomBytes. Bytes above the largest
+// multiple of the alphabet length are rejected, so every character is equally
+// likely (a bare `byte % length` would favour the first characters).
+function generateSeedPassword(length = 16) {
+  const limit = 256 - (256 % SEED_PASSWORD_ALPHABET.length);
+  let out = '';
+  while (out.length < length) {
+    for (const byte of crypto.randomBytes(length * 2)) {
+      if (byte >= limit) continue;
+      out += SEED_PASSWORD_ALPHABET[byte % SEED_PASSWORD_ALPHABET.length];
+      if (out.length === length) break;
+    }
+  }
+  return out;
+}
 
 // Create all tables (idempotent — IF NOT EXISTS)
 async function createTables() {
@@ -165,6 +197,7 @@ async function createTables() {
       totp_enabled INTEGER DEFAULT 0,
       totp_secret TEXT,
       email_notifications INTEGER DEFAULT 1,
+      must_change_password INTEGER DEFAULT 0,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
@@ -491,8 +524,7 @@ async function seed() {
     // Write plaintext key to a 0600 file and print to console. The file survives
     // the boot that created it (migrate() does not delete it until the next boot).
     try {
-      const dataDir = path.join(__dirname, '..', '..', 'data');
-      if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+      if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
       fs.writeFileSync(SEED_KEYS_FILE, apiKey + '\n', { mode: 0o600 });
       fs.chmodSync(SEED_KEYS_FILE, 0o600); // enforce mode in case file already existed
       seedKeysFileJustWritten = true;
@@ -528,16 +560,44 @@ async function seed() {
     console.log('Seeded: admin page, API key, 6 components');
   }
 
-  // Seed admin user
+  // Seed admin user — fresh seed only. An existing admin row is NEVER touched
+  // (no password reset, no must_change_password write).
   const adminUser = await queryOne('SELECT id FROM users WHERE email = $1', ['admin@status.local']);
   if (!adminUser) {
     const adminUserId = uuidv4();
-    const adminPasswordHash = bcrypt.hashSync('admin123', 10);
+    // No hardcoded default password: either ADMIN_PASSWORD from the environment
+    // (>= 8 chars) or a cryptographically random one that MUST be changed on
+    // first login (must_change_password gates the whole admin panel).
+    const envPassword = process.env.ADMIN_PASSWORD;
+    const fromEnv = typeof envPassword === 'string' && envPassword.length >= 8;
+    const adminPassword = fromEnv ? envPassword : generateSeedPassword(16);
+    const adminPasswordHash = bcrypt.hashSync(adminPassword, 10);
     await run(
-      'INSERT INTO users (id, email, password_hash, name, role, totp_enabled, totp_secret) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-      [adminUserId, 'admin@status.local', adminPasswordHash, 'Admin User', 'admin', 0, null]
+      'INSERT INTO users (id, email, password_hash, name, role, totp_enabled, totp_secret, must_change_password) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+      [adminUserId, 'admin@status.local', adminPasswordHash, 'Admin User', 'admin', 0, null, fromEnv ? 0 : 1]
     );
-    console.log('Seeded: default admin user (admin@status.local / admin123)');
+    if (fromEnv) {
+      console.log('Seeded: admin user (admin@status.local) with ADMIN_PASSWORD from the environment');
+    } else {
+      // Printed exactly once (console) and written to a 0600 file, mirroring the
+      // seeded API key above. The file is removed when the admin sets a new
+      // password (POST /auth/change-password) — never on a timer, so a restart
+      // before the operator reads it cannot lock them out.
+      console.log('=== First-run admin password (shown ONCE — save it now) ===');
+      console.log('  email:    admin@status.local');
+      console.log('  password: ' + adminPassword);
+      console.log('You must set a new password on first login.');
+      try {
+        const pwFile = seedAdminPasswordFile();
+        const pwDir = path.dirname(pwFile);
+        if (!fs.existsSync(pwDir)) fs.mkdirSync(pwDir, { recursive: true });
+        fs.writeFileSync(pwFile, adminPassword + '\n', { mode: 0o600 });
+        fs.chmodSync(pwFile, 0o600); // enforce mode in case the file already existed
+        console.log('Also saved to ' + pwFile + ' (0600) — delete it after storing the password.');
+      } catch(e) {
+        console.error('WARNING: could not write the first-run password file:', e.message);
+      }
+    }
   }
 
   // Seed component statuses
@@ -632,6 +692,15 @@ async function migrate() {
   // The seeded "Default Admin Key" is exempted — its plaintext lives in the
   // one-shot file (data/seed_keys.txt), not in the DB.
   await run(`UPDATE api_keys SET key = NULL WHERE key IS NOT NULL AND name <> 'Default Admin Key'`);
+
+  // First-run admin password: force a change when the account was seeded with a
+  // generated password. Installs upgraded from <= 3.5.x get the column with the
+  // DEFAULT 0, so an existing admin is never forced to change anything.
+  try {
+    await run(`ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password INTEGER DEFAULT 0`);
+  } catch(e) {
+    // Column already exists or the wording differs — safe to proceed.
+  }
 
   // One-shot seed key file: keep the file from the boot that wrote it (so the
   // operator can still read it that boot), but delete it on the next boot so
@@ -745,4 +814,4 @@ async function migrate() {
   }
 }
 
-module.exports = { init, migrate, prepare, run, queryOne, queryAll };
+module.exports = { init, migrate, prepare, run, queryOne, queryAll, seedAdminPasswordFile, generateSeedPassword };
