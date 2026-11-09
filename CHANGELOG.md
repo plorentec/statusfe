@@ -9,6 +9,36 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [3.8.0] — 2026-11-08
+
+Objetivo de esta tanda: que **un tercero pueda instalar y actualizar** sin leer
+el código.
+
+### Changed
+- **`docker-compose.yml` sin valores fijos**: puerto, credenciales de base de
+  datos, `SESSION_SECRET`, `ADMIN_PASSWORD` y los interruptores del
+  auto-update salen del entorno (`${VAR:-default}`). Ya **no hace falta un
+  `docker-compose.override.yml`** local para cambiar el puerto.
+- **`SESSION_SECRET` deja de tener un valor por defecto público**: si no se
+  define, la app genera uno y lo persiste en el volumen de datos (ya lo hacía;
+  el compose dejaba de forzarlo).
+
+### Fixed (documentación que mentía)
+- El **README anunciaba `admin123` como contraseña por defecto**. Eliminado:
+  ahora explica el flujo real de primer arranque (`ADMIN_PASSWORD` o contraseña
+  generada con cambio obligatorio).
+- El README decía **v2.2.4**; actualizado a la versión actual.
+- Nueva sección **«Upgrade an existing install»**: `scripts/migrate.js status`,
+  la regla de adopción y el backup/restore verificado.
+
+### Verified
+- `docker compose config` valida y resuelve las variables (`PORT=3080` desde el
+  entorno, sin override).
+- Comprobado en el host real que Compose fusiona `environment` **por clave**
+  entre el compose y un override con lista: una variable nueva del base no se
+  pierde.
+- Suite: **843 checks** en verde.
+
 ## [3.7.1] — 2026-11-08
 
 ### Fixed

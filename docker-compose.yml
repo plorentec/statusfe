@@ -1,5 +1,8 @@
 # Docker Compose for StatusFe
 #
+# Everything configurable lives in the environment (see .env.example): copy it
+# to .env and edit, then `docker compose up -d`. No override file required.
+#
 # Corporate network troubleshooting:
 # If docker build hangs on npm install (DNS resolution timeout),
 # your corporate firewall may block Docker's internal DNS.
@@ -16,14 +19,26 @@ services:
     restart: unless-stopped
     network_mode: host
     environment:
-      - PORT=3000
+      # 3.8.0: every value a self-hoster must change is driven by the
+      # environment, so no local override file is needed. Docker Compose reads
+      # these from the shell or from a .env file next to this one.
+      - PORT=${PORT:-3000}
       - HOST=0.0.0.0
-      - SESSION_SECRET=${SESSION_SECRET:-change-me-to-a-random-string}
-      - DB_HOST=127.0.0.1
-      - DB_PORT=5432
-      - DB_NAME=statusfe
-      - DB_USER=postgres
-      - DB_PASSWORD=statusfe-secret
+      # Leave SESSION_SECRET unset to let the app generate one and persist it in
+      # the data volume; set it only if you need to share/rotate it deliberately.
+      - SESSION_SECRET=${SESSION_SECRET:-}
+      - DB_HOST=${DB_HOST:-127.0.0.1}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-statusfe}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-statusfe-secret}
+      - DB_SSL=${DB_SSL:-}
+      # First-run admin password. Omit it and the app generates one, prints it
+      # once and forces a change on the first login (3.6.0).
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      # Optional: disable the self-update button, override the release feed.
+      - SELF_UPDATE_DISABLED=${SELF_UPDATE_DISABLED:-}
+      - SELF_UPDATE_RELEASES_URL=${SELF_UPDATE_RELEASES_URL:-}
     volumes:
       - statusfe-data:/app/data
     # node:20-slim has neither curl nor wget — healthcheck via node fetch.

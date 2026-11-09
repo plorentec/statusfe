@@ -6,7 +6,7 @@
 ---
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-**v2.2.4** — crash/DoS hardening (malformed cookies, null API resources), admin role checks (privilege escalation fix), 2FA redirect-loop fix, correct uptime/analytics, custom CSS/HTML persisted, SMTP TLS fixed
+**v3.7.1** — versioned database migrations (baseline + adoption, no re-run on existing installs), no hardcoded admin password (generated or `ADMIN_PASSWORD`, forced change on first login), performance (no N+1 on the component list, level-batched dependency cascade, paginated audit log)
 
 ---
 
@@ -41,12 +41,47 @@ docker compose up -d
 
 Access / Accede en: `http://localhost:3000`
 
-### Default Credentials / Credenciales por Defecto
+### First Login / Primer Inicio de Sesión
+
+There are **no default credentials**. On the first boot against an empty database
+the app seeds one admin account:
 
 | Field / Campo | Value |
 |---|---|
 | **Email** | `admin@status.local` |
-| **Password** | `admin123` |
+| **Password** | the one you passed in `ADMIN_PASSWORD`, or a random 16-character password |
+
+- **With `ADMIN_PASSWORD` set** (>= 8 characters): that password is used and you
+  can log in straight away.
+- **Without it**: a random password is generated, printed **once** in the container
+  log (`docker compose logs statusfe`) and written to
+  `data/seed_admin_password.txt` (**0600**) inside the data volume. The first
+  login **forces you to choose a new password** before the admin panel opens, and
+  the generated file is deleted once you do.
+
+Existing installations are unaffected: the flag is seeded as `0` and never
+forces a change.
+
+---
+
+### Upgrade an existing install / Actualizar una instalación existente
+
+Database changes are versioned (`schema_migrations`). Check what is pending before
+upgrading:
+
+```bash
+node scripts/migrate.js status      # aplicadas / pendientes, con fecha y checksum
+node scripts/migrate.js up          # aplica solo lo pendiente
+```
+
+The first boot on a pre-3.7.0 database **adopts** the existing schema: the
+baseline migration is recorded as applied without re-running it, so an upgrade
+never reinterprets tables that already exist. Back up first anyway:
+
+```bash
+/usr/local/bin/statusfe-backup              # dump gzip en /var/backups/statusfe
+/usr/local/bin/statusfe-verify-restore      # comprueba que el dump se restaura
+```
 
 ---
 
