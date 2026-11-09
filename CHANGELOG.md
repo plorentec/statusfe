@@ -9,6 +9,43 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [3.7.0] — 2026-11-08
+
+### Added
+- **Migraciones versionadas.** Se acabó «ejecutar todos los `ALTER` idempotentes
+  en cada arranque»: hay una tabla `schema_migrations` (versión, nombre, fecha y
+  **checksum**) y un runner que aplica solo lo pendiente, en orden.
+- **Regla de adopción**: si la tabla de control acaba de crearse y el esquema
+  antiguo ya existe (hay `users`), `001-baseline` se registra como aplicada
+  **sin ejecutarse**. Una instalación existente conserva su esquema tal cual y
+  solo corre lo genuinamente nuevo — el mismo trabajo que hacía antes.
+- **CLI**: `node scripts/migrate.js status` (aplicadas/pendientes con fecha y
+  aviso si el fichero de una migración cambió después de aplicarse) y
+  `node scripts/migrate.js up`.
+
+### Changed
+- `init()` ahora es: baseline → seed → migraciones restantes → **higiene de
+  arranque**. Las reglas que deben cumplirse en *cada* arranque (borrado del
+  fichero de API key de un solo uso, limpieza del plaintext de `api_keys`,
+  borrado de la contraseña generada ya usada) viven ahí, no en una migración.
+- Un fallo de migración **detiene el arranque** con un mensaje que nombra la
+  versión, en vez de servir un esquema a medias.
+- Editar una migración ya aplicada **avisa** (checksum distinto) pero nunca la
+  re-ejecuta.
+
+### Verified
+- `scratch/verify_migrations.js` (nuevo): **38 comprobaciones**, incluida la
+  adopción sobre un esquema legacy con datos plantados y un proceso hijo real.
+- El SQL movido está **verificado byte a byte** contra el código anterior: solo
+  dos desviaciones, ambas intencionadas.
+- Suite: **839 checks** en 30 arneses.
+- Review nativo (tier **high**, lente de riesgo): **APPROVED**.
+
+### Known issue
+- `scratch/verify_e2e.js` tiene una aserción intermitente preexistente
+  («editar sin grupo => NULL»): falla ~1 de cada 3 ejecuciones también sobre el
+  código anterior a este release. Pendiente de investigar en su propio slice.
+
 ## [3.6.0] — 2026-11-08
 
 ### Security

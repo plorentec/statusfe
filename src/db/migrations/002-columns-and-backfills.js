@@ -16,12 +16,6 @@ async function up() {
     ON CONFLICT DO NOTHING
   `);
 
-  // Security: never keep API key plaintext at rest. Auth relies on key_hash only;
-  // wipe any previously stored readable key (idempotent, safe on every boot).
-  // The seeded "Default Admin Key" is exempted — its plaintext lives in the
-  // one-shot file (data/seed_keys.txt), not in the DB.
-  await run(`UPDATE api_keys SET key = NULL WHERE key IS NOT NULL AND name <> 'Default Admin Key'`);
-
   // First-run admin password: force a change when the account was seeded with a
   // generated password. Installs upgraded from <= 3.5.x get the column with the
   // DEFAULT 0, so an existing admin is never forced to change anything.

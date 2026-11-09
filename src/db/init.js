@@ -242,7 +242,26 @@ async function init() {
   await runMigrations({ upTo: BASELINE_VERSION });
   await seed();
   await runMigrations();
+  await runBootHygiene();
+}
+
+// Rules that must hold on EVERY boot, not once. They used to live at the end of
+// the old migrate(), which ran on each start; a migration cannot carry them any
+// more because "applied means applied". Native review finding R1-once-only-hygiene.
+async function runBootHygiene() {
   removeStaleSeedKeysFile();
+  // Security: never keep API key plaintext at rest. Auth relies on key_hash only;
+  // wipe any previously stored readable key. The seeded "Default Admin Key" is
+  // exempted — its plaintext lives in the one-shot file (data/seed_keys.txt).
+  await run(`UPDATE api_keys SET key = NULL WHERE key IS NOT NULL AND name <> 'Default Admin Key'`);
+  // A generated first-run password is useless once the admin picked their own.
+  try {
+    const row = await queryOne('SELECT must_change_password FROM users WHERE email = $1', ['admin@status.local']);
+    if (row && Number(row.must_change_password) === 0) {
+      const pwFile = seedAdminPasswordFile();
+      if (fs.existsSync(pwFile)) fs.unlinkSync(pwFile);
+    }
+  } catch (e) { /* best effort, never block a boot */ }
 }
 
 // Kept for existing callers (app boot, harnesses): apply everything pending.
