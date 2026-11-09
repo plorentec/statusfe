@@ -74,6 +74,8 @@ mockServer.listen(0, '127.0.0.1', () => {
   process.env.PORT = String(PORT);
   process.env.SELF_UPDATE_RELEASES_URL = 'http://127.0.0.1:' + mockServer.address().port + '/releases/latest';
   const GOOD_URL = process.env.SELF_UPDATE_RELEASES_URL;
+// 3.6.0: the fresh seed no longer hardcodes a password, so the harness supplies one.
+process.env.ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
   require(path.join(__dirname, '..', 'src', 'app.js'));
 
   (async () => {

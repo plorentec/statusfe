@@ -9,6 +9,8 @@ const memPg = mem.adapters.createPg();
 const pgPath = require.resolve('pg');
 require.cache[pgPath] = { id: pgPath, filename: pgPath, loaded: true, exports: { Pool: class { constructor() { this._pool = new memPg.Pool(); } async connect() { return this._pool.connect(); } on() {} } } };
 process.env.PORT = '3974';
+// 3.6.0: the fresh seed no longer hardcodes a password, so the harness supplies one.
+process.env.ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 const app = require(path.join(__dirname, '..', 'src', 'app.js'));
 const { queryAll } = require(path.join(__dirname, '..', 'src', 'db', 'database'));
 const { pages, components, apiKeys, componentGroups } = require(path.join(__dirname, '..', 'src', 'db', 'models'));

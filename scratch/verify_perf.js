@@ -55,6 +55,8 @@ require.cache[pgPath] = {
 // se aleja a una hora (los sondeos no son objeto de este arnés).
 process.env.PROBE_TICK_SECONDS = '3600';
 process.env.PORT = '3976';
+// 3.6.0: the fresh seed no longer hardcodes a password, so the harness supplies one.
+process.env.ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 const app = require(path.join(__dirname, '..', 'src', 'app.js'));
 const { queryAll, queryOne } = require(path.join(__dirname, '..', 'src', 'db', 'database'));
 const { pages, components, incidents, dependencies, auditLog } = require(path.join(__dirname, '..', 'src', 'db', 'models'));
