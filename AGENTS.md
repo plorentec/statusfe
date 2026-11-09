@@ -79,7 +79,14 @@ editar, activar/desactivar, **probar** un canal sin esperar a un incidente).
 - Eventos: `component_status`, `incident_created`, `incident_updated`,
   `incident_resolved`, `maintenance_started`, `maintenance_ended`. Lista
   `events` vacía o inválida = todos (mismo criterio que los webhooks).
-- Arnés: `scratch/verify_channels.js` (67 comprobaciones, pg-mem + fetch falso).
+- Arnés: `scratch/verify_channels.js` (69 comprobaciones, pg-mem + fetch falso).
+- **Redirecciones**: la entrega usa `redirect: 'manual'` y un 3xx es un fallo. El
+  guard SSRF solo valida la URL que resuelve, así que seguir una redirección
+  hacia `169.254.169.254` o la red interna saltaría la protección entera.
+- **Limitación conocida**: queda el DNS rebinding entre la validación y el
+  `fetch` (la validación resuelve, la entrega resuelve otra vez). Los webhooks de
+  2.2.7 sí fijan la IP validada; hacer lo mismo aquí exige un agente HTTP propio
+  y es la mejora pendiente de esta pieza.
 
 ## Migrations (3.7.0)
 

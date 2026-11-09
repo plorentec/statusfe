@@ -488,7 +488,7 @@ function emptyChannel() {
   return { id: null, type: 'telegram', name: '', events: [], enabled: 1, config: {}, has_secret: {} };
 }
 
-router.get('/channels', async (req, res) => {
+router.get('/channels', requireAdmin, async (req, res) => {
   const channels = await notificationChannels.list();
   res.render('admin/channels', {
     title: 'Notification Channels',
@@ -501,7 +501,7 @@ router.get('/channels', async (req, res) => {
   });
 });
 
-router.get('/channels/new', async (req, res) => {
+router.get('/channels/new', requireAdmin, async (req, res) => {
   const channels = await notificationChannels.list();
   res.render('admin/channels', {
     title: 'Notification Channels',
@@ -514,7 +514,7 @@ router.get('/channels/new', async (req, res) => {
   });
 });
 
-router.get('/channels/:id/edit', async (req, res) => {
+router.get('/channels/:id/edit', requireAdmin, async (req, res) => {
   const channel = await notificationChannels.get(req.params.id);
   if (!channel) return res.redirect('/admin/channels?msg=channel_notfound&type=error');
   const channels = await notificationChannels.list();
