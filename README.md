@@ -41,6 +41,22 @@ docker compose up -d
 
 Access / Accede en: `http://localhost:3000`
 
+### Before you expose it / Antes de exponerlo a internet
+
+Set these in `.env` (Docker Compose reads it automatically):
+
+| Variable | Why |
+|---|---|
+| `DB_PASSWORD` | The compose default is only for a local trial. It is the database password. |
+| `ADMIN_PASSWORD` | Optional: if you omit it, the generated password is printed in `docker compose logs statusfe` and a forced change is required. |
+| `PORT` | The port the app listens on (default `3000`). |
+
+`SESSION_SECRET` should stay **unset**: the app generates a 64-byte secret and
+persists it in the data volume. Setting it to a shared value is only for
+deliberately clustering or rotating.
+
+---
+
 ### First Login / Primer Inicio de Sesión
 
 There are **no default credentials**. On the first boot against an empty database

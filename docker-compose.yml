@@ -24,13 +24,16 @@ services:
       # these from the shell or from a .env file next to this one.
       - PORT=${PORT:-3000}
       - HOST=0.0.0.0
-      # Leave SESSION_SECRET unset to let the app generate one and persist it in
-      # the data volume; set it only if you need to share/rotate it deliberately.
+      # Leave SESSION_SECRET unset: the app treats an empty value as "generate
+      # one" (src/app.js checks !secret || the old sentinel) and persists a real
+      # 64-byte secret in the data volume. Set it only to share/rotate on purpose.
       - SESSION_SECRET=${SESSION_SECRET:-}
       - DB_HOST=${DB_HOST:-127.0.0.1}
       - DB_PORT=${DB_PORT:-5432}
       - DB_NAME=${DB_NAME:-statusfe}
       - DB_USER=${DB_USER:-postgres}
+      # The default only exists so a local trial run works without a .env.
+      # ANY real deployment must set DB_PASSWORD: it is the database password.
       - DB_PASSWORD=${DB_PASSWORD:-statusfe-secret}
       - DB_SSL=${DB_SSL:-}
       # First-run admin password. Omit it and the app generates one, prints it
