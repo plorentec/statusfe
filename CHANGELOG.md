@@ -9,6 +9,32 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [3.9.0] — 2026-11-08
+
+### Performance
+- **`getSMTP()` leía la configuración siete veces por envío.** Hacía un
+  `settings.get()` **por clave** (host, port, user, pass, secure, from,
+  from_name). Ahora es **una sola consulta** con `IN ($1..$7)` y el objeto queda
+  cacheado en memoria, invalidado por `setSMTP()`, `settings.set('smtp_*')`,
+  `settings.delete('smtp_*')` y al guardar desde el panel.
+- **Un cambio de estado baja de 18 a 11 consultas fijas.** La configuración
+  SMTP se leía en **cada** envío, y un cambio de estado notifica a los
+  administradores *y* a los suscriptores de cada página del componente: la misma
+  configuración se leía siete veces por destinatario. Medido con el contador de
+  `scratch/verify_perf.js`: `getSMTP` **7 → 1** en frío y **0** en caliente;
+  `updateStatus` **18 → 11** (un proceso recién arrancado paga 12 una vez).
+
+### Verified
+- Nuevas aserciones **P0–P5** en `scratch/verify_perf.js` (40 checks): una
+  consulta en frío, cero en caliente, y que guardar SMTP devuelve **los valores
+  nuevos** — la trampa clásica de cachear sin invalidar. P3c fija el límite: un
+  `set()` que no es `smtp_*` **no** invalida.
+- Comprobado que ningún llamador muta el objeto cacheado (el objeto compartido
+  solo se lee).
+- Se corrigió una aserción que pasaba **siempre**: `S2: migrate() es idempotente`
+  recibía una promesa sin resolver como condición y era un PASS falso.
+- Suite: **854 checks** en 30 arneses.
+
 ## [3.8.0] — 2026-11-08
 
 Objetivo de esta tanda: que **un tercero pueda instalar y actualizar** sin leer

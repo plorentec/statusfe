@@ -68,7 +68,11 @@ async function waitForBoot() {
   check('S2: round-trip mantiene el texto plano al leer', (await settings.getSMTP()).pass === 'SuperSecret-123');
 
   // Legacy plaintext row → passes through on read...
+  // An out-of-band SQL write bypasses the model, so it does NOT drop the
+  // getSMTP() cache (every write made through settings.set/setSMTP does). The
+  // test drops it explicitly to simulate the next process/next cold read.
   await run("UPDATE settings SET value='legacy-in-clear' WHERE key='smtp_pass'");
+  models.__invalidateSMTPCache();
   check('S2: legacy en claro se lee tal cual (no lockout)', (await settings.getSMTP()).pass === 'legacy-in-clear');
   // ...and migrate() re-encrypts it.
   // 3.7.0: migrate() no longer re-runs backfills on every boot, so the harness
@@ -77,15 +81,20 @@ async function waitForBoot() {
   await migrate();
   const migrated = await queryOne("SELECT value FROM settings WHERE key='smtp_pass'");
   check('S2: migrate() cifra el legacy en boot', migrated.value.startsWith('enc:v1:'), migrated.value.slice(0, 20) + '...');
-  check('S2: migrate() es idempotente (no toca lo ya cifrado)', (async () => {
+  // migrate() writes raw SQL too, so the cache (holding the plaintext) is
+  // dropped explicitly before proving the ENCRYPTED row decrypts end-to-end.
+  models.__invalidateSMTPCache();
+  const migrateAgain = await (async () => {
     const before = migrated.value;
     await migrate();
     const after = await queryOne("SELECT value FROM settings WHERE key='smtp_pass'");
     return after.value === before;
-  })());
-  check('S2: el valor cifrado descifra bien tras migrate', (await settings.getSMTP()).pass === 'legacy-in-clear');
+  })();
+  check('S2: migrate() es idempotente (no toca lo ya cifrado)', migrateAgain, String(migrateAgain));
+  check('S2: el valor cifrado descifra bien tras migrate', (await settings.getSMTP()).pass === 'legacy-in-clear', (await settings.getSMTP()).pass);
   // "Leave blank to keep current": saving email settings WITHOUT the password
-  // must not wipe it (BUGFIX 2.3.0 — it used to overwrite with '').
+  // must not wipe it (BUGFIX 2.3.0 — it used to overwrite with ''). El save pasa
+  // por settings.set(), que invalida el cache: la lectura siguiente es fresca.
   await settings.setSMTP({ smtp_host: 'smtp.t.local', smtp_pass: '' });
   check('S2b: setSMTP con password vacía NO borra la guardada', (await settings.getSMTP()).pass === 'legacy-in-clear', (await settings.getSMTP()).pass);
 

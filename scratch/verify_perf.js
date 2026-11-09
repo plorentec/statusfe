@@ -6,6 +6,9 @@
 //   B) cascadeStatusChange() recorre el grafo POR NIVELES: una cadena
 //      A→B→C→D cuesta muchas menos consultas que el walk nodo a nodo.
 //   C) /admin/audit acepta ?page&per_page y la descarga CSV sigue completa.
+//   P) settings.getSMTP() cuesta 1 consulta en frío (antes 7, una por clave) y
+//      0 en caliente, y el cache se invalida en cada escritura smtp_* — lo que
+//      baja el coste FIJO de updateStatus() de 18 a 11 consultas.
 //
 // Bootea la app real contra pg-mem (puerto 3976), igual que verify_pagination.
 //
@@ -59,7 +62,7 @@ process.env.PORT = '3976';
 process.env.ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 const app = require(path.join(__dirname, '..', 'src', 'app.js'));
 const { queryAll, queryOne } = require(path.join(__dirname, '..', 'src', 'db', 'database'));
-const { pages, components, incidents, dependencies, auditLog } = require(path.join(__dirname, '..', 'src', 'db', 'models'));
+const { pages, components, incidents, dependencies, auditLog, settings } = require(path.join(__dirname, '..', 'src', 'db', 'models'));
 
 let failures = 0;
 const check = (name, cond, extra) => {
@@ -146,6 +149,68 @@ async function settle() { for (let i = 0; i < 6; i++) await new Promise(r => set
   console.log('--- app booted (pg-mem, port 3976) ---');
   const SH = await loginAdmin();
 
+  // ===== P) settings.getSMTP(): 1 consulta + cache =====
+  // Costaba 7 consultas (una por clave smtp_*) y CADA envío de correo la
+  // llamaba: un cambio de estado manda correo a cada admin y un broadcast a
+  // cada página con suscriptores, así que el 7 se multiplicaba. Ahora: 1
+  // consulta en frío, 0 en caliente, invalidado en cada escritura smtp_*.
+  const smtpFull = {
+    smtp_host: 'smtp.perf.local', smtp_port: '2525', smtp_user: 'perf',
+    smtp_pass: 'S3cret-P1', smtp_secure: '', smtp_from: 'perf@perf.local', smtp_from_name: 'Perf'
+  };
+  await settings.setSMTP(smtpFull);
+  await settle();
+  check('P0: setSMTP() cifra la password en la BD (no hay texto plano)',
+    (await queryOne("SELECT value FROM settings WHERE key='smtp_pass'")).value.startsWith('enc:v1:'));
+
+  // P1 — frío: una sola consulta (antes: 7, una por clave).
+  counterReset();
+  const coldSMTP = await settings.getSMTP();
+  const coldSMTPQueries = queryCount;
+  console.log('  [SMTP] getSMTP() en frío: ' + coldSMTPQueries + ' consulta(s) (antes 7)');
+  check('P1: getSMTP() en frío -> 1 sola consulta (antes 7)', coldSMTPQueries === 1, coldSMTPQueries + ' query(s)');
+
+  // P2 — caliente: cero consultas, mismo objeto.
+  counterReset();
+  const warmSMTP = await settings.getSMTP();
+  const warmSMTPQueries = queryCount;
+  console.log('  [SMTP] segunda getSMTP() sin escrituras: ' + warmSMTPQueries + ' consulta(s)');
+  check('P2: segunda getSMTP() sin escrituras -> 0 consultas (cache caliente)', warmSMTPQueries === 0, warmSMTPQueries + ' query(s)');
+  check('P2: cache caliente devuelve el mismo objeto, con la password descifrada',
+    warmSMTP === coldSMTP && warmSMTP.pass === 'S3cret-P1', (warmSMTP === coldSMTP) + ' / ' + warmSMTP.pass);
+
+  // P3 — setSMTP() invalida: la lectura siguiente ve los valores NUEVOS.
+  await settings.setSMTP({
+    smtp_host: 'smtp.nuevo.local', smtp_port: '2526', smtp_user: 'perf2',
+    smtp_pass: 'Nueva-Pass-2', smtp_secure: 'true', smtp_from: 'nuevo@perf.local', smtp_from_name: 'Nuevo'
+  });
+  const afterSetSMTP = await settings.getSMTP();
+  check('P3: setSMTP() invalida el cache (valores nuevos + password descifrada)',
+    afterSetSMTP !== coldSMTP && afterSetSMTP.host === 'smtp.nuevo.local' && afterSetSMTP.port === '2526' &&
+    afterSetSMTP.from === 'nuevo@perf.local' && afterSetSMTP.pass === 'Nueva-Pass-2',
+    afterSetSMTP.host + ' / ' + afterSetSMTP.pass);
+
+  // P3b — el set() genérico con clave smtp_* también invalida (es la otra
+  // escritura que puede cambiar esos siete valores).
+  await settings.set('smtp_from', 'generico@perf.local');
+  check('P3b: settings.set(\'smtp_*\') invalida el cache',
+    (await settings.getSMTP()).from === 'generico@perf.local', (await settings.getSMTP()).from);
+
+  // P3c — límite de la regla: una clave que NO es smtp_* no toca el cache.
+  await settings.set('analytics_retention_days', '365');
+  counterReset();
+  await settings.getSMTP();
+  check('P3c: un set() que NO es smtp_* no invalida el cache', queryCount === 0, queryCount + ' query(s)');
+
+  // PRESERVE — forma y semántica intactas: mismas 7 claves y una clave ausente
+  // sigue dando null (lo que devolvía settings.get()); delete() invalida.
+  await settings.delete('smtp_from_name');
+  const afterDelete = await settings.getSMTP();
+  check('P5: forma idéntica (7 claves)',
+    Object.keys(afterDelete).sort().join(',') === 'from,from_name,host,pass,port,secure,user', Object.keys(afterDelete).join(','));
+  check('P5: delete() de una clave smtp_ invalida el cache y la ausente vuelve a null',
+    afterDelete.from_name === null && afterDelete.host === 'smtp.nuevo.local', afterDelete.from_name + ' / ' + afterDelete.host);
+
   // ===== A) Incidentes activos en lote =====
   const page = await pages.create({ name: 'Perf', slug: 'perf', is_public: true });
   const comps = [];
@@ -227,10 +292,21 @@ async function settle() { for (let i = 0; i < 6; i++) await new Promise(r => set
   // los números comparen RECORRIDO DEL GRAFO contra RECORRIDO DEL GRAFO.
   const solo = await components.create({ name: 'solo', status: 'operational' });
   await settle();
+  // Estado normal del proceso: el cache de SMTP ya está caliente (se llena en el
+  // primer envío de correo) — así el coste fijo no incluye la lectura de settings.
+  await settings.getSMTP();
   counterReset();
   await components.updateStatus(solo.id, 'degraded_performance');
   await settle();
   const baseCost = queryCount;
+  const smtpReadsInCost = countedTexts.filter(t => t.includes('FROM settings WHERE key IN')).length;
+  // 18 = 11 + 7 de getSMTP (una por clave) medidas antes de este cambio.
+  const FIXED_COST_BEFORE = 18;
+  console.log('  [FIXED] updateStatus() sin dependientes: antes=' + FIXED_COST_BEFORE + ' ahora=' + baseCost);
+  check('P4: updateStatus() sin dependientes baja de 18 a <= 12 consultas',
+    baseCost < FIXED_COST_BEFORE && baseCost <= 12, 'antes=' + FIXED_COST_BEFORE + ' ahora=' + baseCost);
+  check('P4b: en caliente updateStatus() no lee settings SMTP (0 consultas)',
+    smtpReadsInCost === 0, smtpReadsInCost + ' lectura(s) de settings');
 
   await resetStatuses(chainIds);
   await settle();

@@ -35,6 +35,17 @@ function decryptSecret(stored) {
 function isEncryptedSecret(v) { return typeof v === 'string' && v.startsWith(ENC_PREFIX); }
 
 let customizationCache = null;
+// SMTP settings cache. getSMTP() used to cost SEVEN `settings.get()`
+// queries and every email send called it — a single status change sent one
+// email per admin plus one broadcast per subscriber page, so the 7 (and the
+// decryption) multiplied. Now it is ONE query on a cold cache and ZERO while
+// warm. Invalidated by every write that can change those seven values:
+// settings.set() for any `smtp_*` key and setSMTP() (both go through
+// invalidateSMTPCache()). Cross-process staleness is out of scope: the app is a
+// single process, exactly like the customization cache below.
+let smtpCache = null;
+const SMTP_SETTING_KEYS = ['smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_secure', 'smtp_from', 'smtp_from_name'];
+function invalidateSMTPCache() { smtpCache = null; }
 
 function isUUID(str) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
@@ -1715,23 +1726,41 @@ module.exports.settings = {
     return row ? row.value : null;
   },
   async set(key, value) {
+    // Any smtp_* write invalidates the getSMTP() cache, whichever caller made
+    // it (setSMTP below, the admin email-settings route, a harness). Done BEFORE
+    // the write so a throwing INSERT still leaves the cache cold instead of stale.
+    if (String(key).startsWith('smtp_')) invalidateSMTPCache();
     await run('INSERT INTO settings (key,value) VALUES ($1,$2) ON CONFLICT (key) DO UPDATE SET value=$2', [key, String(value)]);
     return true;
   },
   async getSMTP() {
-    const pass = await this.get('smtp_pass');
-    return {
-      host: await this.get('smtp_host'),
-      port: await this.get('smtp_port'),
-      user: await this.get('smtp_user'),
+    if (smtpCache) return smtpCache;
+    // ONE query for the seven keys (was seven sequential settings.get() calls).
+    // A flat IN ($1..$7) placeholder list: pg-mem does not support
+    // `= ANY($1::text[])`.
+    const placeholders = SMTP_SETTING_KEYS.map((_, i) => '$' + (i + 1)).join(',');
+    const rows = await queryAll(
+      `SELECT key, value FROM settings WHERE key IN (${placeholders})`,
+      SMTP_SETTING_KEYS
+    );
+    const values = Object.create(null);
+    for (const row of rows) values[row.key] = row.value;
+    // A missing row reads as null, exactly what settings.get() returned.
+    const read = (k) => (values[k] === undefined ? null : values[k]);
+    const pass = read('smtp_pass');
+    smtpCache = {
+      host: read('smtp_host'),
+      port: read('smtp_port'),
+      user: read('smtp_user'),
       // Decrypt at rest; legacy plaintext rows pass through (and migrate()
       // re-encrypts them on the next boot). A rotated SESSION_SECRET yields
       // null — the operator re-enters the password.
       pass: pass ? (isEncryptedSecret(pass) ? decryptSecret(pass) : pass) : null,
-      secure: await this.get('smtp_secure'),
-      from: await this.get('smtp_from'),
-      from_name: await this.get('smtp_from_name'),
+      secure: read('smtp_secure'),
+      from: read('smtp_from'),
+      from_name: read('smtp_from_name'),
     };
+    return smtpCache;
   },
   async setSMTP(data) {
     const fields = ['smtp_host','smtp_port','smtp_user','smtp_pass','smtp_secure','smtp_from','smtp_from_name'];
@@ -1748,6 +1777,10 @@ module.exports.settings = {
       }
       await this.set(k, val);
     }
+    // this.set() already drops the cache for every smtp_* key; repeated for the
+    // case where the loop writes nothing at all (e.g. a password-only save with
+    // an empty password, which "keeps current") and for clarity at the seam.
+    invalidateSMTPCache();
     return true;
   },
 
@@ -1796,7 +1829,11 @@ module.exports.settings = {
     customizationCache = null;
     return true;
   },
-  async delete(key) { await run('DELETE FROM settings WHERE key=$1', [key]); return true; }
+  async delete(key) {
+    if (String(key).startsWith('smtp_')) invalidateSMTPCache();
+    await run('DELETE FROM settings WHERE key=$1', [key]);
+    return true;
+  }
 };
 
 // ===== COMPONENT DEPENDENCIES =====
@@ -2653,3 +2690,7 @@ module.exports.UPTIME_DAYS = UPTIME_DAYS;
 module.exports.__encryptSecretForMigration = encryptSecret;
 module.exports.__isEncryptedSecret = isEncryptedSecret;
 module.exports.__decryptSecretForHarness = decryptSecret;
+// The getSMTP() cache is dropped by every model-level write; a harness that
+// changes the settings table with raw SQL (simulating an out-of-band write,
+// e.g. a legacy plaintext row) has to drop it explicitly.
+module.exports.__invalidateSMTPCache = invalidateSMTPCache;
