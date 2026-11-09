@@ -71,7 +71,9 @@ async function waitForBoot() {
   await run("UPDATE settings SET value='legacy-in-clear' WHERE key='smtp_pass'");
   check('S2: legacy en claro se lee tal cual (no lockout)', (await settings.getSMTP()).pass === 'legacy-in-clear');
   // ...and migrate() re-encrypts it.
-  const { migrate } = require(path.join(__dirname, '..', 'src', 'db', 'init.js'));
+  // 3.7.0: migrate() no longer re-runs backfills on every boot, so the harness
+  // calls the 002 payload directly to exercise the legacy re-encryption path.
+  const migrate = require(path.join(__dirname, '..', 'src', 'db', 'migrations', '002-columns-and-backfills.js')).up;
   await migrate();
   const migrated = await queryOne("SELECT value FROM settings WHERE key='smtp_pass'");
   check('S2: migrate() cifra el legacy en boot', migrated.value.startsWith('enc:v1:'), migrated.value.slice(0, 20) + '...');

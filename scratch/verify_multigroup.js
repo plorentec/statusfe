@@ -17,6 +17,10 @@ const pgPath = require.resolve('pg');
 require.cache[pgPath] = { id: pgPath, filename: pgPath, loaded: true, exports: fakePg };
 
 const ROOT = path.join(__dirname, '..');
+
+// 3.7.0: las migraciones se aplican UNA vez. Para volver a ejercitar el payload
+// legacy (backfills idempotentes) el arnés lo llama directamente.
+const reapplyBackfills = () => require(path.join(ROOT, 'src', 'db', 'migrations', '002-columns-and-backfills.js')).up();
 const db = () => require(path.join(ROOT, 'src', 'db', 'database'));
 
 async function main() {
@@ -111,7 +115,7 @@ async function main() {
   // ===== 8. Backfill: componente legacy con group_id obtiene membresía =====
   const legacyId = require('uuid').v4();
   await db().run("INSERT INTO components (id, name, status, group_name, group_id) VALUES ($1,'Legacy','operational','Alpha',$2)", [legacyId, gA.id]);
-  await require(path.join(ROOT, 'src', 'db', 'init')).migrate(); // re-run backfill (idempotente)
+  await reapplyBackfills(); // 3.7.0: migrate() ya no re-ejecuta backfills por arranque
   const legacyMem = await queryAll('SELECT group_id FROM component_group_members WHERE component_id=$1', [legacyId]);
   check('backfill migra components.group_id a membresías', legacyMem.length === 1 && legacyMem[0].group_id === gA.id);
 
@@ -195,17 +199,17 @@ async function main() {
   const gBack = await componentGroups.create({ name: 'BackfillBound' });
   const gBackGlobal = await componentGroups.create({ name: 'BackfillGlobal', is_global: 0 }); // old default (no pages => global)
   await db().run('INSERT INTO group_pages (group_id, page_id) VALUES ($1,$2)', [gBack.id, pOne.id]);
-  // First migrate() runs the legacy backfill.
-  await require(path.join(ROOT, 'src', 'db', 'init')).migrate();
+  // The 002 payload runs the legacy backfill.
+  await reapplyBackfills();
   const backBound = await componentGroups.get(gBack.id);
   const backGlobal = await componentGroups.get(gBackGlobal.id);
   check('migrate: grupo con páginas NO se vuelve global', backBound.is_global === 0 && backBound.is_global !== 1, 'is_global=' + backBound.is_global);
   check('migrate: grupo sin páginas pasa a global (backfill único)', backGlobal.is_global === 1, 'is_global=' + backGlobal.is_global);
 
   // Regression (v2.2.4): a later non-global group with no page bindings must
-  // NOT be re-globalized by a subsequent boot/migrate().
+  // NOT be re-globalized by a subsequent backfill run.
   const gLater = await componentGroups.create({ name: 'LaterNonGlobal' });
-  await require(path.join(ROOT, 'src', 'db', 'init')).migrate();
+  await reapplyBackfills();
   const backLater = await componentGroups.get(gLater.id);
   check('migrate idempotente: grupo no-global sin páginas sigue no-global', backLater.is_global === 0, 'is_global=' + backLater.is_global);
 

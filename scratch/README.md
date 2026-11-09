@@ -23,4 +23,4 @@ código del proyecto respeta para mantener las queries portables:
 - No soporta `= ANY($1::text[])` (falla o se comporta mal) → usar listas `IN ($1,$2,...)` con placeholders.
 - No soporta window functions (`OVER`) ni `integer * interval` (usar `(n::text || ' minutes')::interval`).
 - No soporta subconsultas correlacionadas en la lista SELECT (DISTINCT ON + LEFT JOIN sí funciona).
-- Re-ejecutar `CREATE TABLE IF NOT EXISTS` sobre tablas existentes lanza error → en los harness llamar a `migrate()` (exportada de `src/db/init.js`) en vez de `init()` dos veces.
+- Re-ejecutar `CREATE TABLE IF NOT EXISTS` sobre tablas existentes lanza error → desde 3.7.0 `init()` es seguro dos veces (las migraciones se aplican una sola vez), pero si un arnés necesita volver a ejecutar el payload legacy debe llamar a `src/db/migrations/002-columns-and-backfills.js` `.up()` directamente, no a `migrate()`.
