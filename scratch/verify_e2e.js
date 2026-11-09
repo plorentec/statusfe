@@ -232,7 +232,8 @@ const check = (name, cond, extra) => {
     body: { name: 'RouterTest', description: 'e2e', status: 'operational', group_id: '', group_name: '', position: '1', _method: 'PUT' }
   });
   const comp2 = await queryOne('SELECT * FROM components WHERE id=$1', [comp.id]);
-  check('editar sin grupo => NULL', upd.status === 302 && comp2.group_id === null && comp2.group_name === null);
+  check('editar sin grupo => NULL', upd.status === 302 && comp2.group_id === null && comp2.group_name === null,
+    'status=' + upd.status + ' group_id=' + JSON.stringify(comp2.group_id) + ' group_name=' + JSON.stringify(comp2.group_name) + ' location=' + (upd.headers && upd.headers.location));
 
   // 7. Group page renders with the group listed
   const groupsPage = await req('GET', '/admin/groups', { headers: { Cookie: cookieHeader() } });

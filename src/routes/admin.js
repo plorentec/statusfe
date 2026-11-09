@@ -507,11 +507,14 @@ router.get('/components/:id/edit', async (req, res) => {
 router.put('/components/:id', requireAdmin, async (req, res) => {
   const comp = await components.get(req.params.id);
   if (!comp) {
-    return res.redirect('/admin/components/' + req.params.id + '/edit?msg=error&type=error');
+    // Distinct flash codes on purpose: "not found" and "missing fields" used to
+    // share msg=error, which made a real failure impossible to diagnose from the
+    // redirect alone (a test harness had to guess between them).
+    return res.redirect('/admin/components/' + req.params.id + '/edit?msg=notfound&type=error');
   }
   const { name, description, status, position, external_id } = req.body;
   if (!name) {
-    return res.redirect('/admin/components/' + req.params.id + '/edit?msg=error&type=error');
+    return res.redirect('/admin/components/' + req.params.id + '/edit?msg=missing_fields&type=error');
   }
   const oldData = { name: comp.name, description: comp.description, status: comp.status, group_name: comp.group_name, position: comp.position };
   const group = await components.resolveGroup(req.body);
@@ -539,6 +542,11 @@ router.put('/components/:id', requireAdmin, async (req, res) => {
     });
   } catch (e) {
     // Cycle guard / missing parent raised by the model — nothing was written.
+    // Anything else is a real failure: log it, otherwise the generic redirect
+    // makes it indistinguishable from a validation error.
+    if (e.code !== 'invalid_parent' && e.code !== 'parent_missing') {
+      console.error('Component update failed for ' + req.params.id + ':', e.message);
+    }
     return res.redirect('/admin/components/' + req.params.id + '/edit?msg=' + (e.code === 'invalid_parent' || e.code === 'parent_missing' ? e.code : 'error') + '&type=error');
   }
   const admins = await queryAll("SELECT id FROM users WHERE role='admin'", []);

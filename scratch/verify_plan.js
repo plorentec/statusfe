@@ -249,6 +249,36 @@ async function main() {
   const defaultList = await components.list();
   check('default sigue siendo position,name', JSON.stringify(defaultList.map(r => r.name)) === JSON.stringify([...defaultList].sort((a, b) => a.position - b.position || String(a.name).localeCompare(String(b.name))).map(r => r.name)), defaultList.length + ' filas');
 
+  // ===== 3.7.0: no parameter shift when a field is dropped =====
+  // A disable-only probe write used to splice the probe_url field out of the
+  // UPDATE list without renumbering the $N placeholders, so every later value
+  // was written into the PREVIOUS column (a uuid ended up in the INTEGER
+  // position column and the write threw; with same-typed neighbours it would
+  // have silently corrupted the row). This pins every column of that write.
+  const shiftComp = await components.create({
+    name: 'ShiftProbe', description: 'antes', position: 1,
+    probe_url: null, probe_enabled: 0, probe_type: 'http'
+  });
+  let shiftError = null;
+  try {
+    await components.update(shiftComp.id, {
+      name: 'ShiftProbe2', description: 'despues', status: 'operational', position: 7,
+      external_id: 'ext-shift',
+      group_id: null, group_name: null, group_ids: [],
+      probe_url: null, probe_enabled: 0, probe_type: 'http'
+    });
+  } catch (e) { shiftError = e.message; } // the shift makes the driver reject the write
+  const shifted = await queryOneRaw('SELECT * FROM components WHERE id=$1', [shiftComp.id]);
+  check('la actualización no lanza (desplazamiento de parámetros)',
+    shiftError === null, shiftError || 'sin error');
+  check('caída de un campo no desplaza los demás (name/description/position/external_id)',
+    shifted.name === 'ShiftProbe2' && shifted.description === 'despues'
+    && Number(shifted.position) === 7 && shifted.external_id === 'ext-shift',
+    'name=' + shifted.name + ' desc=' + shifted.description + ' pos=' + shifted.position + ' ext=' + shifted.external_id);
+  check('el campo caído sigue en null y el flag se respeta',
+    shifted.probe_url === null && Number(shifted.probe_enabled) === 0,
+    'url=' + JSON.stringify(shifted.probe_url) + ' enabled=' + shifted.probe_enabled);
+
   console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} TESTS FAILED`);
   process.exit(failures === 0 ? 0 : 1);
 }

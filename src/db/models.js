@@ -793,7 +793,15 @@ module.exports.components = {
         // probe_enabled=0 on a component whose stored URL is invalid: allow
         // (disabling IS the repair); drop the URL write so nothing else changes.
         const idxUrl = fields.findIndex(f => f.startsWith('probe_url'));
-        if (idxUrl >= 0) { fields.splice(idxUrl, 1); params.splice(idxUrl, 1); }
+        if (idxUrl >= 0) {
+          fields.splice(idxUrl, 1); params.splice(idxUrl, 1);
+          // Placeholders were baked as $N when each field was pushed. Removing one
+          // entry shifts every later parameter, so without renumbering the UPDATE
+          // writes each value into the PREVIOUS column (a uuid landed in an
+          // INTEGER column and the update failed; with same-typed neighbours it
+          // would have silently corrupted the row).
+          for (let i = 0; i < fields.length; i++) fields[i] = fields[i].replace(/=\$\d+$/, '=$' + (i + 1));
+        }
       } else if (t === 'push') {
         // Mint the push token if this push sensor doesn't have one yet.
         const hasTokenField = fields.some(f => f.startsWith('probe_push_token'));
