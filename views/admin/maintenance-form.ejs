@@ -1,9 +1,15 @@
+<%# i18n (5.0.0): every user-visible string goes through `t` (res.locals). The
+    fallback keeps standalone rendering working when a harness renders the
+    template without the session middleware. %>
+<% const tr = (typeof t === 'function') ? t : function (k) { return k; }; %>
+<% const loc = (typeof locale === 'string' && locale) ? locale : 'en'; %>
+<% const heading = pageMode === 'create' ? tr('maintenance.newWindow') : tr('maintenance.editTitle'); %>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<%= loc %>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><%= title %> - StatusFe Admin</title>
+<title><%= heading %> - <%= tr('common.adminTitle') %></title>
 <link rel="stylesheet" href="/css/admin.css">
 <script>document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('dark');});</script>
 <style>
@@ -14,79 +20,79 @@
 <div class="admin-layout">
 <%- include('../partials/_sidebar'); %>
 <main class="admin-main">
-<div class="admin-header"><h1><%= title %></h1>
+<div class="admin-header"><h1><%= heading %></h1>
 <% if (message) { %><div class="flash flash-<%= messageType %>"><%= message %></div><% } %>
 </div>
 
 <div class="card">
-<h3><%= pageMode === 'create' ? 'Schedule Maintenance Window' : 'Edit Maintenance Window' %></h3>
+<h3><%= pageMode === 'create' ? tr('maintenance.scheduleTitle') : tr('maintenance.editTitle') %></h3>
 <form action="<%= pageMode === 'create' ? '/admin/maintenance' : '/admin/maintenance/' + window.id %>" method="post">
 <% if (pageMode === 'edit') { %>
 <input type="hidden" name="_method" value="PUT">
 <% } %>
 <div class="form-group">
-<label for="page_id">Page</label>
+<label for="page_id"><%= tr('subs.thPage') %></label>
 <select id="page_id" name="page_id" required>
-<option value="">-- Select page --</option>
+<option value=""><%= tr('maintenance.selectPage') %></option>
 <% pages.forEach(p => { %>
 <option value="<%= p.id %>" <%= window.page_id === p.id ? 'selected' : '' %>><%= p.name %> (<%= p.slug %>)</option>
 <% }) %>
 </select>
 </div>
 <div class="form-group">
-<label for="component_id">Component (optional - leave empty for all)</label>
+<label for="component_id"><%= tr('maintenance.componentOptional') %></label>
 <select id="component_id" name="component_id">
-<option value="">All components</option>
+<option value=""><%= tr('maintenance.allComponentsOption') %></option>
 <% components.forEach(c => { %>
-<option value="<%= c.id %>" <%= window.component_id === c.id ? 'selected' : '' %>><%= c.name %> (<%= c.group_name || 'Other' %>)</option>
+<option value="<%= c.id %>" <%= window.component_id === c.id ? 'selected' : '' %>><%= c.name %> (<%= c.group_name || tr('pages.groupFallback') %>)</option>
 <% }) %>
 </select>
 </div>
 <div class="form-group">
-<label for="title">Title</label>
-<input type="text" id="title" name="title" value="<%= window.title || '' %>" required placeholder="e.g. Database migration">
+<label for="title"><%= tr('notif.thTitle') %></label>
+<input type="text" id="title" name="title" value="<%= window.title || '' %>" required placeholder="<%= tr('maintenance.titlePlaceholder') %>">
 </div>
 <div class="form-group">
-<label for="description">Description</label>
+<label for="description"><%= tr('components.fieldDescription') %></label>
 <textarea id="description" name="description" rows="3"><%= window.description || '' %></textarea>
 </div>
 <div class="form-row">
 <div class="form-group">
-<label for="starts_at">Starts At</label>
+<label for="starts_at"><%= tr('maintenance.startsAt') %></label>
 <input type="datetime-local" id="starts_at" name="starts_at" value="<%= window.starts_at ? new Date(window.starts_at).toISOString().slice(0,16) : '' %>">
 </div>
 <div class="form-group">
-<label for="ends_at">Ends At</label>
+<label for="ends_at"><%= tr('maintenance.endsAt') %></label>
 <input type="datetime-local" id="ends_at" name="ends_at" value="<%= window.ends_at ? new Date(window.ends_at).toISOString().slice(0,16) : '' %>">
 </div>
 </div>
 <div class="form-group">
-<label>Advance Notice (minutes before maintenance)</label>
+<label><%= tr('maintenance.advanceNotice') %></label>
 <input type="hidden" id="advance_notice_minutes" name="advance_notice_minutes" value="<%= window.advance_notice_minutes || 0 %>">
 <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">
-<button type="button" class="btn btn-sm notice-btn<%= (!window.advance_notice_minutes || window.advance_notice_minutes === 0) ? ' active' : '' %>" data-value="0">None</button>
-<button type="button" class="btn btn-sm notice-btn<%= window.advance_notice_minutes === 10 ? ' active' : '' %>" data-value="10">10 min</button>
-<button type="button" class="btn btn-sm notice-btn<%= window.advance_notice_minutes === 30 ? ' active' : '' %>" data-value="30">30 min</button>
-<button type="button" class="btn btn-sm notice-btn<%= window.advance_notice_minutes === 60 ? ' active' : '' %>" data-value="60">1 hour</button>
-<button type="button" class="btn btn-sm notice-btn<%= window.advance_notice_minutes === 120 ? ' active' : '' %>" data-value="120">2 hours</button>
-<button type="button" class="btn btn-sm notice-btn<%= window.advance_notice_minutes === 240 ? ' active' : '' %>" data-value="240">4 hours</button>
-<button type="button" class="btn btn-sm notice-btn<%= window.advance_notice_minutes === 360 ? ' active' : '' %>" data-value="360">6 hours</button>
-<button type="button" class="btn btn-sm notice-btn<%= window.advance_notice_minutes === 480 ? ' active' : '' %>" data-value="480">8 hours</button>
+<button type="button" class="btn btn-sm notice-btn<%= (!window.advance_notice_minutes || window.advance_notice_minutes === 0) ? ' active' : '' %>" data-value="0"><%= tr('maintenance.noticeNone') %></button>
+<button type="button" class="btn btn-sm notice-btn<%= window.advance_notice_minutes === 10 ? ' active' : '' %>" data-value="10"><%= tr('maintenance.noticeMinutes', { n: 10 }) %></button>
+<button type="button" class="btn btn-sm notice-btn<%= window.advance_notice_minutes === 30 ? ' active' : '' %>" data-value="30"><%= tr('maintenance.noticeMinutes', { n: 30 }) %></button>
+<button type="button" class="btn btn-sm notice-btn<%= window.advance_notice_minutes === 60 ? ' active' : '' %>" data-value="60"><%= tr('maintenance.noticeHourOne') %></button>
+<button type="button" class="btn btn-sm notice-btn<%= window.advance_notice_minutes === 120 ? ' active' : '' %>" data-value="120"><%= tr('maintenance.noticeHours', { n: 2 }) %></button>
+<button type="button" class="btn btn-sm notice-btn<%= window.advance_notice_minutes === 240 ? ' active' : '' %>" data-value="240"><%= tr('maintenance.noticeHours', { n: 4 }) %></button>
+<button type="button" class="btn btn-sm notice-btn<%= window.advance_notice_minutes === 360 ? ' active' : '' %>" data-value="360"><%= tr('maintenance.noticeHours', { n: 6 }) %></button>
+<button type="button" class="btn btn-sm notice-btn<%= window.advance_notice_minutes === 480 ? ' active' : '' %>" data-value="480"><%= tr('maintenance.noticeHours', { n: 8 }) %></button>
 </div>
 </div>
 <div class="form-group">
-<label>Notice Pages (where to show the advance notice)</label>
+<label><%= tr('maintenance.noticePages') %></label>
 <% pages.forEach(p => { %>
 <label style="display:block;margin:4px 0;cursor:pointer">
 <input type="checkbox" name="notice_page_ids" value="<%= p.id %>" <%= (window.notice_pages && window.notice_pages.includes(p.id)) || (pageMode === 'create' && p.id === window.page_id) ? 'checked' : '' %>>
 <%= p.name %>
 </label>
 <% }) %>
-<small style="color:#888;margin-top:4px;display:block">Select which pages should show the advance notice. At least one page is required.</small>
+<small style="color:#888;margin-top:4px;display:block"><%= tr('maintenance.noticePagesHelp') %></small>
 </div>
 <div class="form-actions">
-<button type="submit" class="btn btn-primary"><%= pageMode === 'create' ? 'Schedule' : 'Save Changes' %></button>
-<a href="/admin/maintenance" class="btn">Cancel</a>
+<button type="submit" class="btn btn-primary"><%= pageMode === 'create' ? tr('maintenance.schedule') : tr('components.saveButton') %></button>
+<a href="/admin/maintenance" class="btn"><%= tr('common.cancel') %></a>
 </div>
 </form>
 </div>

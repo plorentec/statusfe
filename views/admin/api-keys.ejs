@@ -1,9 +1,16 @@
+<%# i18n (5.0.0): every user-visible string goes through `t` (res.locals). The
+    fallback keeps standalone rendering working when a harness renders the
+    template without the session middleware. %>
+<% const tr = (typeof t === 'function') ? t : function (k) { return k; }; %>
+<% const pt = (typeof pageTitle === 'function') ? pageTitle : function (x) { return x; }; %>
+<% const loc = (typeof locale === 'string' && locale) ? locale : 'en'; %>
+<% const permLabel = function (p) { return p === 'read' ? tr('apiKeys.permRead') : p === 'write' ? tr('apiKeys.permWrite') : p === 'admin' ? tr('apiKeys.permAdmin') : p; }; %>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<%= loc %>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><%= title %> - StatusFe Admin</title>
+<title><%= pt(title) %> - <%= tr('common.adminTitle') %></title>
 <link rel="stylesheet" href="/css/admin.css">
 <style>
 .key-display {
@@ -43,18 +50,18 @@
 <div class="admin-layout">
 <%- include('../partials/_sidebar'); %>
 <main class="admin-main">
-<div class="admin-header"><h1><%= title %></h1>
+<div class="admin-header"><h1><%= pt(title) %></h1>
 <% if (message) { %>
 <div class="flash flash-<%= messageType %>"><%= message %></div>
 <% if (typeof key_value !== 'undefined' && key_value) { %>
 <div class="card" style="margin-top:16px;border-color:#10b981;background:var(--bg)">
-<h3>🔑 New API Key Created</h3>
-<div style="font-size:13px;margin-bottom:8px">Permissions: <%= (key_perms || 'read, write') %></div>
+<h3>🔑 <%= tr('apiKeys.newKeyTitle') %></h3>
+<div style="font-size:13px;margin-bottom:8px"><%= tr('apiKeys.permissions') %>: <%= (key_perms || 'read, write') %></div>
 <div class="key-display">
 <code id="newApiKey"><%= key_value %></code>
-<button class="btn btn-sm" onclick="copyToClipboard(document.getElementById('newApiKey').textContent.trim(), this)">Copy</button>
+<button class="btn btn-sm" onclick="copyToClipboard(document.getElementById('newApiKey').textContent.trim(), this)"><%= tr('apiKeys.copy') %></button>
 </div>
-<p style="margin-top:12px;color:#dc2626;font-weight:600;font-size:13px">⚠ This key will never be shown again. Save it now.</p>
+<p style="margin-top:12px;color:#dc2626;font-weight:600;font-size:13px">⚠ <%= tr('apiKeys.warning') %></p>
 </div>
 <% } %>
 <% } %>
@@ -62,24 +69,24 @@
 
 <!-- Create key form -->
 <div class="card">
-<h3>Create New API Key</h3>
+<h3><%= tr('apiKeys.createTitle') %></h3>
 <form action="/admin/api-keys" method="post">
 <div class="form-row">
 <div class="form-group">
-<label for="name">Name</label>
-<input type="text" id="name" name="name" required placeholder="e.g. Production bot">
+<label for="name"><%= tr('components.fieldName') %></label>
+<input type="text" id="name" name="name" required placeholder="<%= tr('apiKeys.namePlaceholder') %>">
 </div>
 <div class="form-group">
-<label>Permissions</label>
+<label><%= tr('apiKeys.permissions') %></label>
 <div class="checkbox-list">
-<label><input type="checkbox" name="permissions" value="read" checked> Read</label>
-<label><input type="checkbox" name="permissions" value="write" checked> Write</label>
-<label><input type="checkbox" name="permissions" value="admin"> Admin</label>
+<label><input type="checkbox" name="permissions" value="read" checked> <%= tr('apiKeys.permRead') %></label>
+<label><input type="checkbox" name="permissions" value="write" checked> <%= tr('apiKeys.permWrite') %></label>
+<label><input type="checkbox" name="permissions" value="admin"> <%= tr('apiKeys.permAdmin') %></label>
 </div>
 </div>
 </div>
 <div class="form-actions" style="margin-top:0;padding-top:0;border-top:none">
-<button type="submit" class="btn btn-primary">Create Key</button>
+<button type="submit" class="btn btn-primary"><%= tr('apiKeys.createButton') %></button>
 </div>
 </form>
 </div>
@@ -88,7 +95,7 @@
 <% if (keys && keys.length > 0) { %>
 <div class="table-container">
 <table class="admin-table">
-<thead><tr><th>Name</th><th>Key</th><th>Permissions</th><th>Active</th><th>Created</th><th>Actions</th></tr></thead>
+<thead><tr><th><%= tr('components.thName') %></th><th><%= tr('apiKeys.thKey') %></th><th><%= tr('apiKeys.permissions') %></th><th><%= tr('apiKeys.active') %></th><th><%= tr('components.thCreated') %></th><th><%= tr('components.thActions') %></th></tr></thead>
 <tbody>
 <% keys.forEach(k => { %>
 <tr>
@@ -96,30 +103,30 @@
 <td>
 <div class="key-display">
 <code><%= k.key_prefix %>••••••••••••••••••••••••••••</code>
-<small class="text-muted">Only shown on creation</small>
+<small class="text-muted"><%= tr('apiKeys.onlyOnCreation') %></small>
 </div>
 </td>
 <td>
 <% var perms = k.permissions; if (typeof perms === 'string') { try { perms = JSON.parse(perms); } catch(e) { perms = []; } } %>
 <% (perms || []).forEach(p => { %>
-<span class="perm-tag perm-<%= p %>"><%= p %></span>
+<span class="perm-tag perm-<%= p %>"><%= permLabel(p) %></span>
 <% }) %>
 </td>
-<td><span class="status-badge <%= k.is_active ? 'status-operational' : 'status-major_outage' %>"><%= k.is_active ? 'Active' : 'Revoked' %></span></td>
+<td><span class="status-badge <%= k.is_active ? 'status-operational' : 'status-major_outage' %>"><%= k.is_active ? tr('apiKeys.active') : tr('apiKeys.revoked') %></span></td>
 <td><%= k.created_at %></td>
 <td class="actions">
 <% if (k.is_active) { %>
-<form action="/admin/api-keys/<%= k.id %>" method="post" class="delete-form" onsubmit="return confirm('Revoke this API key?')">
+<form action="/admin/api-keys/<%= k.id %>" method="post" class="delete-form" onsubmit="return confirm('<%= tr('apiKeys.confirmRevoke') %>')">
 <input type="hidden" name="_method" value="DELETE">
-<button type="submit" class="btn btn-sm btn-danger">Revoke</button>
+<button type="submit" class="btn btn-sm btn-danger"><%= tr('apiKeys.revoke') %></button>
 </form>
-<form action="/admin/api-keys/<%= k.id %>/permanent" method="post" class="delete-form" onsubmit="return confirm('Permanently delete this API key? This cannot be undone.')">
+<form action="/admin/api-keys/<%= k.id %>/permanent" method="post" class="delete-form" onsubmit="return confirm('<%= tr('apiKeys.confirmDelete') %>')">
 <input type="hidden" name="_method" value="DELETE">
-<button type="submit" class="btn btn-sm" style="color:#dc2626;border-color:#fecaca;">Delete</button>
+<button type="submit" class="btn btn-sm" style="color:#dc2626;border-color:#fecaca;"><%= tr('common.delete') %></button>
 </form>
 <% } else { %>
-<form action="/admin/api-keys/<%= k.id %>/reactivate" method="post" onsubmit="return confirm('Reactivate this API key?')">
-<button type="submit" class="btn btn-sm" style="color:#10b981;border-color:var(--border);background:var(--bg);">Reactivate</button>
+<form action="/admin/api-keys/<%= k.id %>/reactivate" method="post" onsubmit="return confirm('<%= tr('apiKeys.confirmReactivate') %>')">
+<button type="submit" class="btn btn-sm" style="color:#10b981;border-color:var(--border);background:var(--bg);"><%= tr('apiKeys.reactivate') %></button>
 </form>
 <% } %>
 </td>
@@ -129,7 +136,7 @@
 </table>
 </div>
 <% } else { %>
-<div class="card"><p class="empty-state">No API keys yet. Create one above.</p></div>
+<div class="card"><p class="empty-state"><%= tr('apiKeys.none') %></p></div>
 <% } %>
 </main>
 </div>

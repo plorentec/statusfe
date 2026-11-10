@@ -1,9 +1,15 @@
+<%# i18n (5.0.0): every user-visible string goes through `t` (res.locals). The
+    fallback keeps standalone rendering working when a harness renders the
+    template without the session middleware. %>
+<% const tr = (typeof t === 'function') ? t : function (k) { return k; }; %>
+<% const pt = (typeof pageTitle === 'function') ? pageTitle : function (x) { return x; }; %>
+<% const loc = (typeof locale === 'string' && locale) ? locale : 'en'; %>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<%= loc %>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><%= title %> - StatusFe Admin</title>
+<title><%= pt(title) %> - <%= tr('common.adminTitle') %></title>
 <link rel="stylesheet" href="/css/admin.css">
 <script>document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('dark');});</script>
 </head>
@@ -12,7 +18,7 @@
 <%- include('../partials/_sidebar'); %>
 <main class="admin-main">
 <div class="admin-header">
-<h1><%= title %></h1>
+<h1><%= pt(title) %></h1>
 <% if (message) { %>
 <div class="flash flash-<%= messageType %>"><%= message %></div>
 <% } %>
@@ -20,30 +26,30 @@
 
 <% if (groupMode === 'list') { %>
 <div class="card-header-row">
-<h2>All Groups</h2>
-<a href="/admin/groups/new" class="btn btn-primary">+ New Group</a>
+<h2><%= tr('groups.all') %></h2>
+<a href="/admin/groups/new" class="btn btn-primary">+ <%= tr('nav.newGroup') %></a>
 </div>
 
 <div class="table-container">
 <table class="admin-table">
 <thead>
 <tr>
-<th>Name</th>
-<th>Pages</th>
-<th>Position</th>
-<th>Components</th>
-<th>Created</th>
-<th>Actions</th>
+<th><%= tr('components.thName') %></th>
+<th><%= tr('dashboard.pages') %></th>
+<th><%= tr('components.thPosition') %></th>
+<th><%= tr('dashboard.components') %></th>
+<th><%= tr('components.thCreated') %></th>
+<th><%= tr('components.thActions') %></th>
 </tr>
 </thead>
 <tbody>
 <% if (groups.length === 0) { %>
-<tr><td colspan="6" class="empty-cell">No groups yet. <a href="/admin/groups/new">Create your first group</a>.</td></tr>
+<tr><td colspan="6" class="empty-cell"><%= tr('pages.noGroupsYet') %> <a href="/admin/groups/new"><%= tr('groups.createFirst') %></a>.</td></tr>
 <% } else { %>
 <% groups.forEach(g => { %>
 <tr>
 <td><strong><%= g.name %></strong></td>
-<td><% const gs = groupPageMap[g.id] || []; if (g.is_global == 1) { %><span class="badge badge-success">Global</span><% } else if (gs.length === 0) { %><span class="badge badge-warning">No pages</span><% } else { %>
+<td><% const gs = groupPageMap[g.id] || []; if (g.is_global == 1) { %><span class="badge badge-success"><%= tr('groups.global') %></span><% } else if (gs.length === 0) { %><span class="badge badge-warning"><%= tr('groups.noPages') %></span><% } else { %>
   <% gs.forEach((p, i) => { %>
     <span class="badge badge-info"><%= p.name %><% if (i < gs.length-1) { %>, <% } %></span>
   <% }) %>
@@ -52,9 +58,9 @@
 <td><%= groupComponentCounts[g.id] || 0 %></td>
 <td><%= g.created_at %></td>
 <td class="actions">
-<a href="/admin/groups/<%= g.id %>/edit" class="btn btn-sm">Edit</a>
-<form action="/admin/groups/<%= g.id %>?_method=DELETE" method="post" class="delete-form" onsubmit="return confirm('Delete this group? Components will be unassigned.')">
-<button type="submit" class="btn btn-sm btn-danger">Delete</button>
+<a href="/admin/groups/<%= g.id %>/edit" class="btn btn-sm"><%= tr('common.edit') %></a>
+<form action="/admin/groups/<%= g.id %>?_method=DELETE" method="post" class="delete-form" onsubmit="return confirm('<%= tr('groups.confirmDelete') %>')">
+<button type="submit" class="btn btn-sm btn-danger"><%= tr('common.delete') %></button>
 </form>
 </td>
 </tr>
@@ -67,23 +73,23 @@
 
 <% if (groupMode === 'create' || groupMode === 'edit') { %>
 <div class="card">
-<h3><%= groupMode === 'create' ? 'Create New Group' : 'Edit Group' %></h3>
+<h3><%= groupMode === 'create' ? tr('groups.createTitle') : tr('nav.editGroup') %></h3>
 <form action="<%= groupMode === 'create' ? '/admin/groups' : '/admin/groups/' + group.id %>" method="post">
 <% if (groupMode === 'edit') { %>
 <input type="hidden" name="_method" value="PUT">
 <% } %>
 <div class="form-group">
-<label for="name">Group Name</label>
-<input type="text" id="name" name="name" value="<%= group.name || '' %>" required placeholder="Infrastructure, Application, etc.">
+<label for="name"><%= tr('groups.nameLabel') %></label>
+<input type="text" id="name" name="name" value="<%= group.name || '' %>" required placeholder="<%= tr('groups.namePlaceholder') %>">
 </div>
 <div class="form-group checkbox-group">
 <label>
 <input type="checkbox" id="is_global" name="is_global" <%= (group.is_global == 1) ? 'checked' : '' %> onchange="document.getElementById('pageList').style.display = this.checked ? 'none' : 'block';">
-Global group (visible on every page)
+<%= tr('groups.globalLabel') %>
 </label>
 </div>
 <div class="form-group" id="pageList" style="<%= (group.is_global == 1) ? 'display:none;' : '' %>">
-<label>Pages (select one or more to restrict this group)</label>
+<label><%= tr('groups.pagesLabel') %></label>
 <div class="checkbox-group" style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; padding: 10px;">
 <% pages.forEach(p => { %>
 <label class="checkbox-label" style="display: block; padding: 4px 0;">
@@ -92,34 +98,34 @@ Global group (visible on every page)
 </label>
 <% }) %>
 </div>
-<small class="text-muted">Select the pages this group appears on. Leave the Global checkbox on to show it on all pages.</small>
+<small class="text-muted"><%= tr('groups.pagesHelp') %></small>
 </div>
 <div class="form-group">
-<label for="position">Position</label>
+<label for="position"><%= tr('components.fieldPosition') %></label>
 <input type="number" id="position" name="position" value="<%= group.position || 0 %>" min="0">
 </div>
 <div class="form-group">
-<label>Group members (components)</label>
+<label><%= tr('groups.membersLabel') %></label>
 <% if (components && components.length > 0) { %>
-<input type="text" id="memberFilter" class="filter-input" placeholder="Type to search components...">
+<input type="text" id="memberFilter" class="filter-input" placeholder="<%= tr('pages.compFilterPlaceholder') %>">
 <div class="component-checkboxes" id="memberList">
 <% components.forEach(c => { %>
 <label class="component-checkbox" data-filter-row data-filter-text="<%= c.name %> <%= c.group_name || '' %>">
 <input type="checkbox" name="member_component_ids" value="<%= c.id %>" <%= (selectedMemberIds || []).includes(c.id) ? 'checked' : '' %>>
-<%= c.name %> <small class="text-muted">(<%= c.group_name || 'Other' %>)</small>
+<%= c.name %> <small class="text-muted">(<%= c.group_name || tr('pages.groupFallback') %>)</small>
 </label>
 <% }) %>
-<div data-filter-empty style="display:none;" class="text-muted">No components match your search.</div>
+<div data-filter-empty style="display:none;" class="text-muted"><%= tr('components.noMatchHint') %></div>
 </div>
-<small class="text-muted">Manage the group from here too: check the components that belong to it. A component can belong to several groups. Unchecking removes it from this group (it stays in any other groups it has).</small>
+<small class="text-muted"><%= tr('groups.membersHelp') %></small>
 <% } else { %>
-<small class="text-muted">No components created yet. <a href="/admin/components/new">Create components first</a>.</small>
+<small class="text-muted"><%= tr('pages.noComponents') %> <a href="/admin/components/new"><%= tr('pages.createComponentsFirst') %></a>.</small>
 <% } %>
 </div>
 <div class="form-actions">
-<button type="submit" class="btn btn-primary"><%= groupMode === 'create' ? 'Create Group' : 'Save Changes' %></button>
+<button type="submit" class="btn btn-primary"><%= groupMode === 'create' ? tr('groups.createButton') : tr('components.saveButton') %></button>
 <% if (groupMode === 'edit') { %>
-<a href="/admin/groups" class="btn">Cancel</a>
+<a href="/admin/groups" class="btn"><%= tr('common.cancel') %></a>
 <% } %>
 </div>
 </form>

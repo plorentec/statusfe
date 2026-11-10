@@ -1,9 +1,15 @@
+<%# i18n (5.0.0): every user-visible string goes through `t` (res.locals). The
+    fallback keeps standalone rendering working when a harness renders the
+    template without the session middleware. %>
+<% const tr = (typeof t === 'function') ? t : function (k) { return k; }; %>
+<% const pt = (typeof pageTitle === 'function') ? pageTitle : function (x) { return x; }; %>
+<% const loc = (typeof locale === 'string' && locale) ? locale : 'en'; %>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<%= loc %>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><%= title %> - StatusFe Admin</title>
+<title><%= pt(title) %> - <%= tr('common.adminTitle') %></title>
 <link rel="stylesheet" href="/css/admin.css">
 <script>document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('dark');});</script>
 </head>
@@ -12,31 +18,31 @@
 <%- include('../partials/_sidebar'); %>
 <main class="admin-main">
 <div class="admin-header">
-<h1><%= title %></h1>
+<h1><%= pt(title) %></h1>
 <% if (message) { %>
 <div class="flash flash-<%= messageType %>"><%= message %></div>
 <% } %>
 </div>
 
 <div class="card-header-row">
-<h2>All Users</h2>
-<button class="btn btn-primary" onclick="document.getElementById('userForm').style.display='block'">+ New User</button>
+<h2><%= tr('users.all') %></h2>
+<button class="btn btn-primary" onclick="document.getElementById('userForm').style.display='block'">+ <%= tr('users.newUser') %></button>
 </div>
 
 <div class="table-container">
 <table class="admin-table">
 <thead>
 <tr>
-<th>Name</th>
-<th>Email</th>
-<th>Role</th>
-<th>Created</th>
-<th>Actions</th>
+<th><%= tr('components.thName') %></th>
+<th><%= tr('subs.thEmail') %></th>
+<th><%= tr('users.thRole') %></th>
+<th><%= tr('components.thCreated') %></th>
+<th><%= tr('components.thActions') %></th>
 </tr>
 </thead>
 <tbody>
 <% if (users.length === 0) { %>
-<tr><td colspan="5" class="empty-cell">No users found.</td></tr>
+<tr><td colspan="5" class="empty-cell"><%= tr('users.none') %></td></tr>
 <% } else { %>
 <% users.forEach(u => { %>
 <tr>
@@ -46,11 +52,11 @@
 <td><%= u.created_at %></td>
 <td class="actions">
 <% if (u.id !== user.id || users.filter(x => x.role === 'admin' && x.id !== u.id).length > 0) { %>
-<form action="/admin/users/<%= u.id %>?_method=DELETE" method="post" class="delete-form" onsubmit="return confirm('Delete this user?')">
-<button type="submit" class="btn btn-sm btn-danger">Delete</button>
+<form action="/admin/users/<%= u.id %>?_method=DELETE" method="post" class="delete-form" onsubmit="return confirm('<%= tr('users.confirmDelete') %>')">
+<button type="submit" class="btn btn-sm btn-danger"><%= tr('common.delete') %></button>
 </form>
 <% } else { %>
-<span class="text-muted">You</span>
+<span class="text-muted"><%= tr('audit.you') %></span>
 <% } %>
 </td>
 </tr>
@@ -61,32 +67,32 @@
 </div>
 
 <div class="card" id="userForm" style="display:none;">
-<h3>Create New User</h3>
+<h3><%= tr('users.createTitle') %></h3>
 <form action="/admin/users" method="post">
 <div class="form-row">
 <div class="form-group">
-<label for="name">Name</label>
+<label for="name"><%= tr('components.fieldName') %></label>
 <input type="text" id="name" name="name" required>
 </div>
 <div class="form-group">
-<label for="email">Email</label>
+<label for="email"><%= tr('subs.thEmail') %></label>
 <input type="email" id="email" name="email" required>
 </div>
 </div>
 <div class="form-row">
 <div class="form-group">
-<label for="password">Password</label>
+<label for="password"><%= tr('email.password') %></label>
 <div style="display:flex;gap:8px;align-items:center;">
 <input type="password" id="password" name="password" required minlength="6" style="flex:1;">
-<button type="button" class="btn" id="genPassword" title="Genera una contraseña aleatoria">Generar</button>
+<button type="button" class="btn" id="genPassword" title="<%= tr('users.generateTitle') %>"><%= tr('users.generate') %></button>
 </div>
-<p class="text-muted" style="margin:6px 0 0;font-size:12px;">Se mostrará una vez; el usuario puede cambiarla después.</p>
+<p class="text-muted" style="margin:6px 0 0;font-size:12px;"><%= tr('users.passwordHelp') %></p>
 </div>
 <div class="form-group">
-<label for="role">Role</label>
+<label for="role"><%= tr('users.thRole') %></label>
 <select id="role" name="role">
-<option value="user">User</option>
-<option value="admin">Admin</option>
+<option value="user"><%= tr('users.roleUser') %></option>
+<option value="admin"><%= tr('users.roleAdmin') %></option>
 </select>
 </div>
 </div>
@@ -94,14 +100,14 @@
 <label style="display:flex;align-items:center;gap:8px;margin-bottom:12px;cursor:pointer;">
 <% if (typeof smtpReady !== 'undefined' && smtpReady) { %>
 <input type="checkbox" id="send_welcome" name="send_welcome" value="1" checked>
-<span>Enviar correo de bienvenida con el enlace para poner contraseña</span>
+<span><%= tr('users.sendWelcome') %></span>
 <% } else { %>
 <input type="checkbox" id="send_welcome" name="send_welcome" value="1" disabled>
-<span style="opacity:.6;">Correo de bienvenida no disponible: configura el SMTP en Correo</span>
+<span style="opacity:.6;"><%= tr('users.welcomeUnavailable') %></span>
 <% } %>
 </label>
-<button type="submit" class="btn btn-primary">Create User</button>
-<button type="button" class="btn" onclick="document.getElementById('userForm').style.display='none'">Cancel</button>
+<button type="submit" class="btn btn-primary"><%= tr('users.createButton') %></button>
+<button type="button" class="btn" onclick="document.getElementById('userForm').style.display='none'"><%= tr('common.cancel') %></button>
 </div>
 </form>
 </div>

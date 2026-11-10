@@ -1,9 +1,15 @@
+<%# i18n (5.0.0): every user-visible string goes through `t` (res.locals). The
+    fallback keeps standalone rendering working when a harness renders the
+    template without the session middleware. %>
+<% const tr = (typeof t === 'function') ? t : function (k) { return k; }; %>
+<% const pt = (typeof pageTitle === 'function') ? pageTitle : function (x) { return x; }; %>
+<% const loc = (typeof locale === 'string' && locale) ? locale : 'en'; %>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<%= loc %>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><%= title %> - StatusFe Admin</title>
+<title><%= pt(title) %> - <%= tr('common.adminTitle') %></title>
 <link rel="stylesheet" href="/css/admin.css">
 <script>document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('dark');});</script>
 </head>
@@ -11,29 +17,29 @@
 <div class="admin-layout">
 <%- include('../partials/_sidebar'); %>
 <main class="admin-main">
-<div class="admin-header"><h1><%= title %></h1>
+<div class="admin-header"><h1><%= pt(title) %></h1>
 <% if (message) { %>
 <div class="flash flash-<%= messageType %>"><%= message %></div>
 <% } %>
 </div>
 
 <div class="card">
-<h3 style="font-size:16px;font-weight:600;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border);">Add Dependency</h3>
+<h3 style="font-size:16px;font-weight:600;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border);"><%= tr('deps.add') %></h3>
 <form action="/admin/dependencies" method="post">
 <div class="form-row">
 <div class="form-group">
-<label for="component_id">Component (depends on the hub)</label>
+<label for="component_id"><%= tr('deps.componentLabel') %></label>
 <select id="component_id" name="component_id" required>
-<option value="">Select component...</option>
+<option value=""><%= tr('deps.selectComponent') %></option>
 <% components.forEach(c => { %>
 <option value="<%= c.id %>"><%= c.name %></option>
 <% }) %>
 </select>
 </div>
 <div class="form-group">
-<label for="depends_on">Depends On (shared hub)</label>
+<label for="depends_on"><%= tr('deps.dependsOnLabel') %></label>
 <select id="depends_on" name="depends_on" required>
-<option value="">Select component...</option>
+<option value=""><%= tr('deps.selectComponent') %></option>
 <% components.forEach(c => { %>
 <option value="<%= c.id %>"><%= c.name %></option>
 <% }) %>
@@ -43,14 +49,14 @@
 <div class="form-group checkbox-group">
 <label>
 <input type="checkbox" id="cascade_status" name="cascade_status" checked>
-Cascade status (if the hub is down, mark this component as affected)
+<%= tr('deps.cascadeLabel') %>
 </label>
 </div>
 <div class="form-actions">
-<button type="submit" class="btn btn-primary">Add Dependency</button>
+<button type="submit" class="btn btn-primary"><%= tr('deps.add') %></button>
 </div>
 </form>
-<p class="text-muted" style="margin-top:8px;">Many components can depend on a single shared hub.<br>Example: API, Database and Cache all depend on <em>Base de datos</em>.</p>
+<p class="text-muted" style="margin-top:8px;"><%= tr('deps.helpLine1') %><br><%= tr('deps.helpLine2Prefix') %> <em>Base de datos</em>.</p>
 </div>
 
 <% if (hubGroups && hubGroups.length > 0) { %>
@@ -58,21 +64,21 @@ Cascade status (if the hub is down, mark this component as affected)
 <div class="card" style="margin-top:20px;">
 <h3 style="font-size:16px;font-weight:600;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border);">
 <i class="dot dot-operational" style="display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;"></i>
-<strong><%= group.name %></strong> <span class="text-muted" style="font-size:13px;">— <%= group.dependents.length %> dependent<%= group.dependents.length !== 1 ? 's' : '' %></span>
+<strong><%= group.name %></strong> <span class="text-muted" style="font-size:13px;">— <%= group.dependents.length %> <%= tr(group.dependents.length !== 1 ? 'deps.dependentMany' : 'deps.dependentOne') %></span>
 </h3>
 <div class="table-container">
 <table class="admin-table">
 <thead>
-<tr><th>Dependent Component</th><th>Cascade</th><th>Actions</th></tr>
+<tr><th><%= tr('deps.thDependent') %></th><th><%= tr('deps.thCascade') %></th><th><%= tr('components.thActions') %></th></tr>
 </thead>
 <tbody>
 <% group.dependents.forEach(d => { %>
 <tr>
 <td><strong><%= d.name %></strong></td>
-<td><span class="<%= d.cascade ? 'yes' : 'no' %>"><%= d.cascade ? 'Yes' : 'No' %></span></td>
+<td><span class="<%= d.cascade ? 'yes' : 'no' %>"><%= d.cascade ? tr('common.yes') : tr('common.no') %></span></td>
 <td class="actions">
 <form action="/admin/dependencies/<%= d.id %>?_method=DELETE" method="post" class="delete-form">
-<button type="submit" class="btn btn-sm btn-danger">Remove</button>
+<button type="submit" class="btn btn-sm btn-danger"><%= tr('subs.remove') %></button>
 </form>
 </td>
 </tr>
@@ -83,7 +89,7 @@ Cascade status (if the hub is down, mark this component as affected)
 </div>
 <% }) %>
 <% } else { %>
-<div class="card" style="margin-top:20px;"><p class="text-muted">No dependencies configured.</p></div>
+<div class="card" style="margin-top:20px;"><p class="text-muted"><%= tr('deps.none') %></p></div>
 <% } %>
 </main>
 </div>

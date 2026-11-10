@@ -1,9 +1,16 @@
+<%# i18n (5.0.0): every user-visible string goes through `t` (res.locals). The
+    fallback keeps standalone rendering working when a harness renders the
+    template without the session middleware. %>
+<% const tr = (typeof t === 'function') ? t : function (k) { return k; }; %>
+<% const pt = (typeof pageTitle === 'function') ? pageTitle : function (x) { return x; }; %>
+<% const loc = (typeof locale === 'string' && locale) ? locale : 'en'; %>
+<% const heading = pageMode === 'create' ? tr('nav.newIncident') : tr('incidents.editTitle'); %>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<%= loc %>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><%= title %> - StatusFe Admin</title>
+<title><%= heading %> - <%= tr('common.adminTitle') %></title>
 <link rel="stylesheet" href="/css/admin.css">
 <script>document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('dark');});</script>
 </head>
@@ -11,80 +18,80 @@
 <div class="admin-layout">
 <%- include('../partials/_sidebar'); %>
 <main class="admin-main">
-<div class="admin-header"><h1><%= title %></h1>
+<div class="admin-header"><h1><%= heading %></h1>
 <% if (message) { %><div class="flash flash-<%= messageType %>"><%= message %></div><% } %>
 </div>
 
 <div class="card">
-<h3><%= pageMode === 'create' ? 'Create New Incident' : 'Edit Incident' %></h3>
+<h3><%= pageMode === 'create' ? tr('incidents.createHeading') : tr('incidents.editTitle') %></h3>
 <form action="<%= pageMode === 'create' ? '/admin/incidents' : '/admin/incidents/' + incident.id %>" method="post">
 <% if (pageMode === 'edit') { %>
 <input type="hidden" name="_method" value="PUT">
 <% } %>
 <div class="form-group">
-<label for="component_id">Component</label>
+<label for="component_id"><%= tr('incidents.component') %></label>
 <select id="component_id" name="component_id" required>
-<option value="">-- Select component --</option>
+<option value=""><%= tr('incidents.selectComponent') %></option>
 <% components.forEach(c => { %>
 <option value="<%= c.id %>" <%= incident.component_id === c.id ? 'selected' : '' %>><%= c.name %></option>
 <% }) %>
 </select>
 </div>
 <div class="form-group">
-<label for="name">Name</label>
-<input type="text" id="name" name="name" value="<%= incident.name || '' %>" required placeholder="e.g. API Outage">
+<label for="name"><%= tr('components.fieldName') %></label>
+<input type="text" id="name" name="name" value="<%= incident.name || '' %>" required placeholder="<%= tr('incidents.namePlaceholder') %>">
 </div>
 <div class="form-row">
 <div class="form-group">
-<label for="status">Status</label>
+<label for="status"><%= tr('components.fieldStatus') %></label>
 <select id="status" name="status">
-<option value="investigating" <%= (incident.status || 'investigating') === 'investigating' ? 'selected' : '' %>>Investigating</option>
-<option value="identified" <%= incident.status === 'identified' ? 'selected' : '' %>>Identified</option>
-<option value="monitoring" <%= incident.status === 'monitoring' ? 'selected' : '' %>>Monitoring</option>
-<option value="resolved" <%= incident.status === 'resolved' ? 'selected' : '' %>>Resolved</option>
+<option value="investigating" <%= (incident.status || 'investigating') === 'investigating' ? 'selected' : '' %>><%= tr('incidents.statusInvestigating') %></option>
+<option value="identified" <%= incident.status === 'identified' ? 'selected' : '' %>><%= tr('incidents.statusIdentified') %></option>
+<option value="monitoring" <%= incident.status === 'monitoring' ? 'selected' : '' %>><%= tr('incidents.statusMonitoring') %></option>
+<option value="resolved" <%= incident.status === 'resolved' ? 'selected' : '' %>><%= tr('incidents.statusResolved') %></option>
 </select>
 </div>
 <div class="form-group">
-<label for="impact">Impact</label>
+<label for="impact"><%= tr('incidents.impact') %></label>
 <select id="impact" name="impact">
-<option value="none" <%= (!incident.impact || incident.impact === 'none') ? 'selected' : '' %>>None</option>
-<option value="minor" <%= incident.impact === 'minor' ? 'selected' : '' %>>Minor</option>
-<option value="major" <%= incident.impact === 'major' ? 'selected' : '' %>>Major</option>
-<option value="critical" <%= incident.impact === 'critical' ? 'selected' : '' %>>Critical</option>
+<option value="none" <%= (!incident.impact || incident.impact === 'none') ? 'selected' : '' %>><%= tr('incidents.impactNone') %></option>
+<option value="minor" <%= incident.impact === 'minor' ? 'selected' : '' %>><%= tr('incidents.impactMinor') %></option>
+<option value="major" <%= incident.impact === 'major' ? 'selected' : '' %>><%= tr('incidents.impactMajor') %></option>
+<option value="critical" <%= incident.impact === 'critical' ? 'selected' : '' %>><%= tr('incidents.impactCritical') %></option>
 </select>
 </div>
 <div class="form-group">
-<label for="cascade_status">Cascade to dependent components</label>
+<label for="cascade_status"><%= tr('incidents.cascadeLabel') %></label>
 <select id="cascade_status" name="cascade_status">
-<option value="same" <%= (!incident.cascade_status || incident.cascade_status === 'same') ? 'selected' : '' %>>Same status (e.g. monitoring → monitoring)</option>
-<option value="criticality" <%= incident.cascade_status === 'criticality' ? 'selected' : '' %>>Map by criticality (e.g. monitoring → degraded_performance)</option>
-<option value="none" <%= incident.cascade_status === 'none' ? 'selected' : '' %>>None (components unchanged)</option>
+<option value="same" <%= (!incident.cascade_status || incident.cascade_status === 'same') ? 'selected' : '' %>><%= tr('incidents.cascadeSame') %></option>
+<option value="criticality" <%= incident.cascade_status === 'criticality' ? 'selected' : '' %>><%= tr('incidents.cascadeCriticality') %></option>
+<option value="none" <%= incident.cascade_status === 'none' ? 'selected' : '' %>><%= tr('incidents.cascadeNone') %></option>
 </select>
 </div>
 </div>
 <div class="form-group">
-<label for="message">Message</label>
+<label for="message"><%= tr('notif.thMessage') %></label>
 <textarea id="message" name="message" rows="5" required><%= incident.message || '' %></textarea>
 </div>
 <div class="form-row">
 <div class="form-group">
-<label for="starts_at">Starts At</label>
+<label for="starts_at"><%= tr('incidents.startsAt') %></label>
 <input type="datetime-local" id="starts_at" name="starts_at" value="<%= incident.starts_at ? new Date(incident.starts_at).toISOString().slice(0,16) : new Date().toISOString().slice(0,16) %>">
 </div>
 <div class="form-group">
-<label for="resolved_at">Resolved At</label>
+<label for="resolved_at"><%= tr('incidents.resolvedAt') %></label>
 <input type="datetime-local" id="resolved_at" name="resolved_at" value="<%= incident.resolved_at ? new Date(incident.resolved_at).toISOString().slice(0,16) : '' %>">
 </div>
 </div>
 <div class="form-group checkbox-group">
 <label>
 <input type="checkbox" id="visible" name="visible" <%= incident.visible ? 'checked' : '' %>>
-Visible on public status page
+<%= tr('incidents.visiblePublic') %>
 </label>
 </div>
 <div class="form-actions">
-<button type="submit" class="btn btn-primary"><%= pageMode === 'create' ? 'Create Incident' : 'Save Changes' %></button>
-<a href="/admin/incidents" class="btn">Cancel</a>
+<button type="submit" class="btn btn-primary"><%= pageMode === 'create' ? tr('incidents.createButton') : tr('components.saveButton') %></button>
+<a href="/admin/incidents" class="btn"><%= tr('common.cancel') %></a>
 </div>
 </form>
 </div>

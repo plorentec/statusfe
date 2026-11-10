@@ -9,6 +9,25 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [5.2.0] — 2026-11-08
+
+### Added
+- **Panel bilingüe, fase 2 (lote 2)**: traducidas **once vistas más** — incidentes
+  (lista y formulario), mantenimiento (lista y formulario), grupos, dependencias,
+  usuarios, API keys, ajustes de correo, estados y mapeos de configuración.
+  **519 claves por idioma**, paridad exacta. Con esto, **16 de las 25 vistas** del
+  panel están en los dos idiomas.
+
+### Fixed
+- **Mantenimiento mostraba `<span class="text-muted">` literal** en la columna de
+  componente cuando la ventana aplica a todos. Mismo defecto que la tabla de
+  suscriptores en 5.1.0: marcado dentro de una cadena que se escapa.
+
+### Verified
+- Paridad 519/519 claves, sin HTML en los valores, y las 187 claves referenciadas
+  por las once vistas existen en los dos idiomas.
+- Suite: **971 checks** en 34 arneses.
+
 ## [5.1.0] — 2026-11-08
 
 ### Added
