@@ -1,9 +1,15 @@
+<%# i18n (5.0.0): every user-visible string goes through `t` (res.locals). The
+    fallback keeps standalone rendering working when a harness renders the
+    template without the session middleware. %>
+<% const tr = (typeof t === 'function') ? t : function (k) { return k; }; %>
+<% const pt = (typeof pageTitle === 'function') ? pageTitle : function (x) { return x; }; %>
+<% const loc = (typeof locale === 'string' && locale) ? locale : 'en'; %>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<%= loc %>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><%= title %> - StatusFe Admin</title>
+<title><%= pt(title) %> - <%= tr('common.adminTitle') %></title>
 <link rel="stylesheet" href="/css/admin.css">
 <style>
 .chart-bar { display: flex; align-items: flex-end; gap: 2px; height: 120px; margin-top: 12px; }
@@ -26,7 +32,7 @@
 <div class="admin-layout">
 <%- include('../partials/_sidebar'); %>
 <main class="admin-main">
-<div class="admin-header"><h1><%= title %></h1>
+<div class="admin-header"><h1><%= pt(title) %></h1>
 <% if (message) { %>
 <div class="flash flash-<%= messageType %>"><%= message %></div>
 <% } %>
@@ -34,21 +40,21 @@
 
 <!-- Disk Usage -->
 <div class="card" style="margin-bottom:20px;">
-<h2 style="font-size: 16px; font-weight: 600; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border);">Disk Usage</h2>
+<h2 style="font-size: 16px; font-weight: 600; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border);"><%= tr('dashboard.diskUsage') %></h2>
 <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
 <div style="flex:1;min-width:200px;">
 <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:6px;">
-<span>Storage</span>
-<span style="font-weight:600;"><%= diskInfo.dbSize ? (diskInfo.dbSize / (1024*1024)).toFixed(1) + ' MB (DB)' : diskInfo.percentage + '% used' %></span>
+<span><%= tr('dashboard.storage') %></span>
+<span style="font-weight:600;"><%= diskInfo.dbSize ? tr('dashboard.mbDb', { size: (diskInfo.dbSize / (1024*1024)).toFixed(1) }) : tr('dashboard.percentUsed', { percent: diskInfo.percentage }) %></span>
 </div>
 <div style="height:10px;background:var(--border);border-radius:5px;overflow:hidden;">
 <div style="height:100%;width:<%= diskInfo.percentage || 0 %>%;background:<%= parseFloat(diskInfo.percentage) >= 90 ? '#ef4444' : parseFloat(diskInfo.percentage) >= 75 ? '#f59e0b' : '#10b981' %>;border-radius:5px;transition:width 0.5s;"></div>
 </div>
 <% if (diskInfo.total > 0) { %>
-<div style="font-size:12px;color:var(--text-muted);margin-top:6px;"><%= (diskInfo.used / (1024*1024*1024)).toFixed(2) %> GB used of <%= (diskInfo.total / (1024*1024*1024)).toFixed(2) %> GB</div>
+<div style="font-size:12px;color:var(--text-muted);margin-top:6px;"><%= tr('dashboard.gbUsedOf', { used: (diskInfo.used / (1024*1024*1024)).toFixed(2), total: (diskInfo.total / (1024*1024*1024)).toFixed(2) }) %></div>
 <% } %>
 <% if (diskInfo.dbOnly) { %>
-<div style="font-size:12px;color:var(--text-muted);margin-top:6px;">Database: <%= (diskInfo.dbSize / 1024).toFixed(0) %> KB</div>
+<div style="font-size:12px;color:var(--text-muted);margin-top:6px;"><%= tr('dashboard.databaseSize', { size: (diskInfo.dbSize / 1024).toFixed(0) }) %></div>
 <% } %>
 </div>
 </div>
@@ -56,36 +62,36 @@
 
 <!-- Retention Settings -->
 <div class="retention-bar">
-<label for="retentionSelect">Data retention:</label>
+<label for="retentionSelect"><%= tr('analytics.dataRetention') %></label>
 <select id="retentionSelect">
-<option value="30" <%= parseInt(retention) === 30 ? 'selected' : '' %>>30 days</option>
-<option value="90" <%= parseInt(retention) === 90 ? 'selected' : '' %>>3 months</option>
-<option value="180" <%= parseInt(retention) === 180 ? 'selected' : '' %>>6 months</option>
-<option value="365" <%= parseInt(retention) === 365 ? 'selected' : '' %>>1 year</option>
-<option value="730" <%= parseInt(retention) === 730 ? 'selected' : '' %>>2 years</option>
-<option value="1825" <%= parseInt(retention) === 1825 ? 'selected' : '' %>>5 years</option>
+<option value="30" <%= parseInt(retention) === 30 ? 'selected' : '' %>><%= tr('analytics.days30') %></option>
+<option value="90" <%= parseInt(retention) === 90 ? 'selected' : '' %>><%= tr('analytics.months3') %></option>
+<option value="180" <%= parseInt(retention) === 180 ? 'selected' : '' %>><%= tr('analytics.months6') %></option>
+<option value="365" <%= parseInt(retention) === 365 ? 'selected' : '' %>><%= tr('analytics.year1') %></option>
+<option value="730" <%= parseInt(retention) === 730 ? 'selected' : '' %>><%= tr('analytics.years2') %></option>
+<option value="1825" <%= parseInt(retention) === 1825 ? 'selected' : '' %>><%= tr('analytics.years5') %></option>
 </select>
-<button class="btn btn-sm btn-primary" onclick="changeRetention()">Apply</button>
-<button class="btn btn-sm btn-danger" onclick="cleanupData()">Clean old data now</button>
-<span class="time-range-label">Older data will be permanently deleted</span>
+<button class="btn btn-sm btn-primary" onclick="changeRetention()"><%= tr('analytics.apply') %></button>
+<button class="btn btn-sm btn-danger" onclick="cleanupData()"><%= tr('analytics.cleanNow') %></button>
+<span class="time-range-label"><%= tr('analytics.olderDeleted') %></span>
 </div>
 
 <!-- Selector: Page or Component -->
 <div class="select-bar">
-<label>View analytics for:</label>
+<label><%= tr('analytics.viewFor') %></label>
 <select id="analyticsType" onchange="toggleAnalytics()">
-<option value="">— Select type —</option>
-<option value="page">Page</option>
-<option value="component">Component</option>
+<option value=""><%= tr('analytics.selectType') %></option>
+<option value="page"><%= tr('analytics.typePage') %></option>
+<option value="component"><%= tr('analytics.typeComponent') %></option>
 </select>
 <select id="pageSelect" style="display:none;" onchange="loadAnalytics()">
-<option value="">Select a page...</option>
+<option value=""><%= tr('analytics.selectPage') %></option>
 <% pages.forEach(p => { %>
 <option value="<%= p.id %>"><%= p.name %></option>
 <% }) %>
 </select>
 <select id="compSelect" style="display:none;" onchange="loadAnalytics()">
-<option value="">Select a component...</option>
+<option value=""><%= tr('analytics.selectComponent') %></option>
 <% components.forEach(c => { %>
 <option value="<%= c.id %>"><%= c.name %></option>
 <% }) %>
@@ -95,22 +101,22 @@
 <!-- Chart area -->
 <div id="chartArea" style="display:none;">
 <div class="select-bar">
-<label>Chart style:</label>
+<label><%= tr('analytics.chartStyle') %></label>
 <select id="chartStyle" onchange="redrawChart()">
-<option value="chart">Line Chart</option>
-<option value="bar">Bar Chart</option>
+<option value="chart"><%= tr('analytics.lineChart') %></option>
+<option value="bar"><%= tr('analytics.barChart') %></option>
 </select>
-<label style="margin-left:16px;">Time range:</label>
+<label style="margin-left:16px;"><%= tr('analytics.timeRange') %></label>
 <select id="timeRange" onchange="loadAnalytics()">
-<option value="1">Last 1 hour</option>
-<option value="2">Last 2 hours</option>
-<option value="4" selected>Last 4 hours</option>
-<option value="8">Last 8 hours</option>
-<option value="16">Last 16 hours</option>
-<option value="24">Last 24 hours</option>
-<option value="48">Last 48 hours</option>
-<option value="168">Last 7 days</option>
-<option value="720">Last 30 days</option>
+<option value="1"><%= tr('analytics.lastHour') %></option>
+<option value="2"><%= tr('analytics.lastHours', { n: 2 }) %></option>
+<option value="4" selected><%= tr('analytics.lastHours', { n: 4 }) %></option>
+<option value="8"><%= tr('analytics.lastHours', { n: 8 }) %></option>
+<option value="16"><%= tr('analytics.lastHours', { n: 16 }) %></option>
+<option value="24"><%= tr('analytics.lastHours', { n: 24 }) %></option>
+<option value="48"><%= tr('analytics.lastHours', { n: 48 }) %></option>
+<option value="168"><%= tr('analytics.lastDays', { n: 7 }) %></option>
+<option value="720"><%= tr('analytics.lastDays', { n: 30 }) %></option>
 </select>
 <span class="time-range-label" id="chartTitle"></span>
 </div>
@@ -121,16 +127,16 @@
 
 <!-- Component Uptime Overview -->
 <div class="card">
-<h2 style="font-size: 16px; font-weight: 600; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border);">All Components Uptime Overview</h2>
+<h2 style="font-size: 16px; font-weight: 600; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border);"><%= tr('analytics.uptimeOverview') %></h2>
 <% if (componentUptime.length === 0) { %>
-<p class="text-muted">No components yet.</p>
+<p class="text-muted"><%= tr('components.noneYet') %></p>
 <% } else { %>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;">
 <% componentUptime.forEach(c => { %>
 <div style="background:var(--bg);border-radius:var(--radius);padding:16px;text-align:center;">
 <div style="font-size:14px;font-weight:600;margin-bottom:8px;"><%= c.name %></div>
 <div style="font-size:32px;font-weight:700;color:<%= parseFloat(c.uptime) >= 99 ? 'var(--success)' : parseFloat(c.uptime) >= 95 ? 'var(--warning)' : 'var(--danger)' %>"><%= c.uptime %>%</div>
-<div style="font-size:12px;color:var(--text-muted);margin-top:4px;">uptime (30d)</div>
+<div style="font-size:12px;color:var(--text-muted);margin-top:4px;"><%= tr('analytics.uptime30d') %></div>
 <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden;margin-top:8px;">
 <div style="height:100%;width:<%= c.uptime %>%;background:<%= parseFloat(c.uptime) >= 99 ? '#10b981' : parseFloat(c.uptime) >= 95 ? '#f59e0b' : '#ef4444' %>;border-radius:4px;"></div>
 </div>
@@ -142,15 +148,15 @@
 
 <!-- Page Views Overview -->
 <div class="card">
-<h2 style="font-size: 16px; font-weight: 600; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border);">Page Views Overview</h2>
+<h2 style="font-size: 16px; font-weight: 600; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border);"><%= tr('analytics.pageViewsOverview') %></h2>
 <% if (pages.length === 0) { %>
-<p class="text-muted">No pages configured.</p>
+<p class="text-muted"><%= tr('analytics.noPages') %></p>
 <% } else { %>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;">
 <% pages.forEach(p => { %>
 <div class="metric-card">
 <div class="metric-value"><%= p.totalViews || 0 %></div>
-<div class="metric-label">Views — <%= p.name %></div>
+<div class="metric-label"><%= tr('analytics.viewsOf', { name: p.name }) %></div>
 </div>
 <% }) %>
 </div>
@@ -161,8 +167,24 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
  <script src="/js/admin.js"></script>
  <script>
+window.SF_I18N = <%- JSON.stringify({
+  lastHours: tr('analytics.lastHours'),
+  lastDays: tr('analytics.lastDays'),
+  loadFailed: tr('analytics.loadFailed'),
+  confirmCleanup: tr('analytics.confirmCleanup'),
+  deletedRecords: tr('analytics.deletedRecords')
+}).replace(/</g, '\\u003c') %>;
+</script>
+ <script>
 
 let mainChart = null;
+
+// Local interpolation of {placeholders} for strings rendered inside this
+// script (same helper the other translated admin views use).
+var I18N = window.SF_I18N || {};
+function fmt(s, vars) {
+  return String(s == null ? '' : s).replace(/\{(\w+)\}/g, function (m, k) { return vars[k] == null ? m : String(vars[k]); });
+}
 
 const isDark = true;
 const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
@@ -204,15 +226,14 @@ function loadAnalytics() {
       document.getElementById('chartArea').style.display = '';
       const h = data.hours || hours;
       let rangeLabel = '';
-      if (h <= 24) rangeLabel = 'Last ' + h + ' hours';
-      else if (h <= 720) rangeLabel = 'Last ' + (h / 24) + ' days';
-      else rangeLabel = 'Last ' + (h / 24) + ' days';
+      if (h <= 24) rangeLabel = fmt(I18N.lastHours, { n: h });
+      else rangeLabel = fmt(I18N.lastDays, { n: h / 24 });
       document.getElementById('chartTitle').textContent = data.name + ' — ' + rangeLabel;
       buildChart(data);
     })
     .catch(err => {
       console.error('Analytics error:', err);
-      showToast('Failed to load data: ' + err.message, 'error');
+      showToast(fmt(I18N.loadFailed, { error: err.message }), 'error');
     });
 }
 
@@ -258,12 +279,12 @@ function changeRetention() {
 }
 
 function cleanupData() {
-  if (!confirm('Delete all analytics data older than the retention period? This cannot be undone.')) return;
+  if (!confirm(I18N.confirmCleanup || '')) return;
   fetch('/admin/analytics/cleanup', { method: 'POST', headers: { 'X-CSRF-Token': document.getElementById('csrfToken').value } })
     .then(r => r.json())
     .then(data => {
       if (data.ok) {
-        alert('Deleted ' + data.deleted + ' old records.');
+        alert(fmt(I18N.deletedRecords, { count: data.deleted }));
         location.reload();
       }
     });

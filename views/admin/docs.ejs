@@ -1,294 +1,308 @@
+<%# i18n (5.0.0): only the prose is translated. HTTP verbs, paths, JSON samples,
+    field names, data-curl attributes and the curl examples are DATA and stay
+    exactly as they are. %>
+<% const tr = (typeof t === 'function') ? t : function (k) { return k; }; %>
 <!-- API Key Selector (admin only) -->
 <% if (user.role === 'admin') { %>
 <div class="doc-key-selector">
-<label>API Key:</label>
+<label><%= tr('docs.apiKeyLabel') %></label>
 <% if (keys && keys.length > 0) { %>
 <select id="apiKeySelect" onchange="onKeyChange()">
-<option value="__custom__">-- Paste your key below --</option>
+<option value="__custom__"><%= tr('docs.pasteKeyOption') %></option>
 <% keys.forEach(function(k) { %>
-<option value="__custom__"><%= k.name %> (<%= k.key_prefix %>...) — paste below</option>
+<option value="__custom__"><%= tr('docs.pasteKeyOptionNamed', { name: k.name, prefix: k.key_prefix }) %></option>
 <% }); %>
 </select>
 <% } %>
-<input type="text" id="customApiKey" placeholder="Pega tu API key aqu\u00ed..." oninput="onCustomKeyChange()">
-<div class="doc-key-hint">Por seguridad la key se muestra s\u00f3lo al crearla. Pega la tuya para completar los curls autom\u00e1ticamente.</div>
+<input type="text" id="customApiKey" placeholder="<%= tr('docs.keyPlaceholder') %>" oninput="onCustomKeyChange()">
+<div class="doc-key-hint"><%= tr('docs.keyHint') %></div>
 </div>
 <% } %>
 
 <!-- Tab Navigation -->
 <div class="doc-tabs">
-<button class="doc-tab-btn active" onclick="showTab('auth', this)">Authentication</button>
-<button class="doc-tab-btn" onclick="showTab('info', this)">Info</button>
-<button class="doc-tab-btn" onclick="showTab('pages', this)">Pages</button>
-<button class="doc-tab-btn" onclick="showTab('components', this)">Components</button>
-<button class="doc-tab-btn" onclick="showTab('incidents', this)">Incidents</button>
-<button class="doc-tab-btn" onclick="showTab('apikeys', this)">API Keys</button>
-<button class="doc-tab-btn" onclick="showTab('webhooks', this)">Webhooks</button>
-<button class="doc-tab-btn" onclick="showTab('settings', this)">Settings</button>
+<button class="doc-tab-btn active" onclick="showTab('auth', this)"><%= tr('docs.tabAuth') %></button>
+<button class="doc-tab-btn" onclick="showTab('info', this)"><%= tr('docs.tabInfo') %></button>
+<button class="doc-tab-btn" onclick="showTab('pages', this)"><%= tr('nav.pages') %></button>
+<button class="doc-tab-btn" onclick="showTab('components', this)"><%= tr('nav.components') %></button>
+<button class="doc-tab-btn" onclick="showTab('incidents', this)"><%= tr('nav.incidents') %></button>
+<button class="doc-tab-btn" onclick="showTab('apikeys', this)"><%= tr('nav.apiKeys') %></button>
+<button class="doc-tab-btn" onclick="showTab('webhooks', this)"><%= tr('docs.tabWebhooks') %></button>
+<button class="doc-tab-btn" onclick="showTab('settings', this)"><%= tr('docs.tabSettings') %></button>
 </div>
 
 <!-- AUTH TAB -->
 <div id="tab-auth" class="doc-tab-content active">
-<h2 class="doc-section-title">Authentication</h2>
-<p class="doc-desc">Include your API key in the <code data-curl="Authorization">Authorization</code> header. Admin permissions imply all others.</p>
+<h2 class="doc-section-title"><%= tr('docs.tabAuth') %></h2>
+<p class="doc-desc"><%= tr('docs.authIntroPrefix') %> <code data-curl="Authorization">Authorization</code> <%= tr('docs.authIntroSuffix') %></p>
 <div class="doc-code-block">
-<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<button class="doc-copy-btn" onclick="copyCurl(this)"><%= tr('docs.copy') %></button>
 <code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/info&quot;">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/info"</code>
 </div>
-<p class="doc-desc">Alternative auth methods:</p>
-<p class="doc-desc">Header: <code data-curl="x-api-key: &lt;key&gt;">x-api-key: &lt;key&gt;</code></p>
-<p class="doc-desc">Query param: <code data-curl="?api_key=&lt;key&gt;">?api_key=&lt;key&gt;</code></p>
+<p class="doc-desc"><%= tr('docs.altAuth') %></p>
+<p class="doc-desc"><%= tr('docs.headerLabel') %> <code data-curl="x-api-key: &lt;key&gt;">x-api-key: &lt;key&gt;</code></p>
+<p class="doc-desc"><%= tr('docs.queryParamLabel') %> <code data-curl="?api_key=&lt;key&gt;">?api_key=&lt;key&gt;</code></p>
 </div>
 
 <!-- INFO TAB -->
 <div id="tab-info" class="doc-tab-content">
-<h2 class="doc-section-title">Info</h2>
+<h2 class="doc-section-title"><%= tr('docs.tabInfo') %></h2>
 
 <h3 class="doc-h1">GET /api/v1/info</h3>
-<p class="doc-desc">Get authenticated user info and permissions</p>
-<p class="doc-desc">Permissions: <code data-curl="read">read</code>, <code data-curl="write">write</code>, <code data-curl="admin">admin</code> (admin implies all)</p>
+<p class="doc-desc"><%= tr('docs.infoGet') %></p>
+<p class="doc-desc"><%= tr('docs.permissionsPrefix') %> <code data-curl="read">read</code>, <code data-curl="write">write</code>, <code data-curl="admin">admin</code> <%= tr('docs.permissionsSuffix') %></p>
 <div class="doc-code-block">
-<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<button class="doc-copy-btn" onclick="copyCurl(this)"><%= tr('docs.copy') %></button>
 <code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/info&quot;">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/info"</code>
 </div>
 </div>
 
 <!-- PAGES TAB -->
 <div id="tab-pages" class="doc-tab-content">
-<h2 class="doc-section-title">Pages <span class="doc-auth-badge">API Key required</span></h2>
+<h2 class="doc-section-title"><%= tr('nav.pages') %> <span class="doc-auth-badge"><%= tr('docs.apiKeyRequired') %></span></h2>
 
 <h3 class="doc-h2">GET /api/v1/pages</h3>
-<p class="doc-desc">List all pages (including private)</p>
+<p class="doc-desc"><%= tr('docs.pagesList') %></p>
 <div class="doc-code-block">
-<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<button class="doc-copy-btn" onclick="copyCurl(this)"><%= tr('docs.copy') %></button>
 <code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/pages&quot;">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/pages"</code>
 </div>
 
 <h3 class="doc-h2">GET /api/v1/pages/:id</h3>
-<p class="doc-desc">Get page by ID or slug</p>
+<p class="doc-desc"><%= tr('docs.pagesGet') %></p>
 <div class="doc-code-block">
-<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<button class="doc-copy-btn" onclick="copyCurl(this)"><%= tr('docs.copy') %></button>
 <code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/pages/admin&quot;">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/pages/admin"</code>
 </div>
 
 <h3 class="doc-h2">POST /api/v1/pages <span class="doc-perm-badge perm-write">[write]</span></h3>
-<p class="doc-desc">Create a new page</p>
-<p class="doc-params-label">Body parameters:</p>
-<p class="doc-desc"><code data-curl="name">name</code> (required) \u2014 <code data-curl="slug">slug</code> (required, lowercase + hyphens only) \u2014 <code data-curl="description">description</code> \u2014 <code data-curl="status">status</code> \u2014 <code data-curl="template">template</code> (default/grid/dark) \u2014 <code data-curl="timezone">timezone</code> \u2014 <code data-curl="logo_url">logo_url</code> \u2014 <code data-curl="custom_css">custom_css</code> \u2014 <code data-curl="custom_html">custom_html</code> \u2014 <code data-curl="is_public">is_public</code> (boolean)</p>
+<p class="doc-desc"><%= tr('docs.pagesCreate') %></p>
+<p class="doc-params-label"><%= tr('docs.bodyParams') %></p>
+<p class="doc-desc"><code data-curl="name">name</code> (<%= tr('docs.required') %>) — <code data-curl="slug">slug</code> (<%= tr('docs.requiredSlug') %>) — <code data-curl="description">description</code> — <code data-curl="status">status</code> — <code data-curl="template">template</code> (default/grid/dark) — <code data-curl="timezone">timezone</code> — <code data-curl="logo_url">logo_url</code> — <code data-curl="custom_css">custom_css</code> — <code data-curl="custom_html">custom_html</code> — <code data-curl="is_public">is_public</code> (<%= tr('docs.boolean') %>)</p>
 <div class="doc-code-block">
-<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<button class="doc-copy-btn" onclick="copyCurl(this)"><%= tr('docs.copy') %></button>
 <code data-curl="$ curl -X POST -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d &#39;{&quot;name&quot;:&quot;My Service&quot;,&quot;slug&quot;:&quot;my-service&quot;,&quot;status&quot;:&quot;operational&quot;,&quot;template&quot;:&quot;grid&quot;,&quot;is_public&quot;:1}&#39; BASE_URL + &quot;/api/v1/pages&quot;">$ curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" -d '{"name":"My Service","slug":"my-service","status":"operational","template":"grid","is_public":1}' BASE_URL + "/api/v1/pages"</code>
 </div>
 
 <h3 class="doc-h2">PUT /api/v1/pages/:id <span class="doc-perm-badge perm-write">[write]</span></h3>
-<p class="doc-desc">Update a page \u2014 any combination of the body parameters above</p>
+<p class="doc-desc"><%= tr('docs.pagesUpdate') %></p>
 <div class="doc-code-block">
-<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<button class="doc-copy-btn" onclick="copyCurl(this)"><%= tr('docs.copy') %></button>
 <code data-curl="$ curl -X PUT -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d &#39;{&quot;status&quot;:&quot;degraded_performance&quot;}&#39; BASE_URL + &quot;/api/v1/pages/admin&quot;">$ curl -X PUT -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" -d '{"status":"degraded_performance"}' BASE_URL + "/api/v1/pages/admin"</code>
 </div>
 
 <h3 class="doc-h2">DELETE /api/v1/pages/:id <span class="doc-perm-badge perm-admin">[admin]</span></h3>
-<p class="doc-desc">Delete a page</p>
+<p class="doc-desc"><%= tr('docs.pagesDelete') %></p>
 <div class="doc-code-block">
-<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<button class="doc-copy-btn" onclick="copyCurl(this)"><%= tr('docs.copy') %></button>
 <code data-curl="$ curl -X DELETE -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/pages/admin&quot;">$ curl -X DELETE -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/pages/admin"</code>
 </div>
 </div>
 
 <!-- COMPONENTS TAB -->
 <div id="tab-components" class="doc-tab-content">
-<h2 class="doc-section-title">Components <span class="doc-auth-badge">API Key required</span></h2>
+<h2 class="doc-section-title"><%= tr('nav.components') %> <span class="doc-auth-badge"><%= tr('docs.apiKeyRequired') %></span></h2>
 
 <h3 class="doc-h2">GET /api/v1/components</h3>
-<p class="doc-desc">List components. Query filters: <code data-curl="?status=">?status=</code> <code data-curl="?group=">?group=</code></p>
+<p class="doc-desc"><%= tr('docs.componentsListPrefix') %> <code data-curl="?status=">?status=</code> <code data-curl="?group=">?group=</code></p>
 <div class="doc-code-block">
-<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<button class="doc-copy-btn" onclick="copyCurl(this)"><%= tr('docs.copy') %></button>
 <code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/components&quot;">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/components"</code>
 </div>
 
 <h3 class="doc-h2">GET /api/v1/components/:id</h3>
-<p class="doc-desc">Get component with pages assigned</p>
+<p class="doc-desc"><%= tr('docs.componentGet') %></p>
 <div class="doc-code-block">
-<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<button class="doc-copy-btn" onclick="copyCurl(this)"><%= tr('docs.copy') %></button>
 <code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/components/UUID&quot;">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/components/UUID"</code>
 </div>
 
 <h3 class="doc-h2">POST /api/v1/components <span class="doc-perm-badge perm-write">[write]</span></h3>
-<p class="doc-desc">Create component</p>
-<p class="doc-params-label">Body parameters:</p>
-<p class="doc-desc"><code data-curl="name">name</code> (required) \u2014 <code data-curl="description">description</code> \u2014 <code data-curl="status">status</code> \u2014 <code data-curl="group_name">group_name</code> \u2014 <code data-curl="group_ids">group_ids</code> (array: put the component in several groups) \u2014 <code data-curl="position">position</code></p>
+<p class="doc-desc"><%= tr('docs.componentCreate') %></p>
+<p class="doc-params-label"><%= tr('docs.bodyParams') %></p>
+<p class="doc-desc"><code data-curl="name">name</code> (<%= tr('docs.required') %>) — <code data-curl="description">description</code> — <code data-curl="status">status</code> — <code data-curl="group_name">group_name</code> — <code data-curl="group_ids">group_ids</code> (<%= tr('docs.groupIdsHelp') %>) — <code data-curl="position">position</code></p>
 <div class="doc-code-block">
-<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<button class="doc-copy-btn" onclick="copyCurl(this)"><%= tr('docs.copy') %></button>
 <code data-curl="$ curl -X POST -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d &#39;{&quot;name&quot;:&quot;CDN&quot;,&quot;group_ids&quot;:[&quot;GROUP_UUID_1&quot;,&quot;GROUP_UUID_2&quot;],&quot;status&quot;:&quot;operational&quot;}&#39; BASE_URL + &quot;/api/v1/components&quot;">$ curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" -d '{"name":"CDN","group_ids":["GROUP_UUID_1","GROUP_UUID_2"],"status":"operational"}' BASE_URL + "/api/v1/components"</code>
 </div>
 
 <h3 class="doc-h2">PUT /api/v1/components/:id <span class="doc-perm-badge perm-write">[write]</span></h3>
-<p class="doc-desc">Update component \u2014 any combination of the body parameters above</p>
+<p class="doc-desc"><%= tr('docs.componentUpdate') %></p>
 <div class="doc-code-block">
-<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<button class="doc-copy-btn" onclick="copyCurl(this)"><%= tr('docs.copy') %></button>
 <code data-curl="$ curl -X PUT -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d &#39;{&quot;status&quot;:&quot;partial_outage&quot;}&#39; BASE_URL + &quot;/api/v1/components/UUID&quot;">$ curl -X PUT -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" -d '{"status":"partial_outage"}' BASE_URL + "/api/v1/components/UUID"</code>
 </div>
 
 <h3 class="doc-h2">DELETE /api/v1/components/:id <span class="doc-perm-badge perm-admin">[admin]</span></h3>
 <div class="doc-code-block">
-<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<button class="doc-copy-btn" onclick="copyCurl(this)"><%= tr('docs.copy') %></button>
 <code data-curl="$ curl -X DELETE -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/components/UUID&quot;">$ curl -X DELETE -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/components/UUID"</code>
 </div>
 
 <h3 class="doc-h2">PUT /api/v1/components/:id/status <span class="doc-perm-badge perm-write">[write]</span></h3>
-<p class="doc-desc">Update component status</p>
-<p class="doc-params-label">Body parameters:</p>
-<p class="doc-desc"><code data-curl="status">status</code> (required) \u2014 <code data-curl="page_id">page_id</code> (optional, can be UUID or slug)</p>
-<p class="doc-desc">Valid statuses: <code data-curl="operational">operational</code>, <code data-curl="degraded_performance">degraded_performance</code>, <code data-curl="partial_outage">partial_outage</code>, <code data-curl="major_outage">major_outage</code>, <code data-curl="under_maintenance">under_maintenance</code></p>
+<p class="doc-desc"><%= tr('docs.componentStatus') %></p>
+<p class="doc-params-label"><%= tr('docs.bodyParams') %></p>
+<p class="doc-desc"><code data-curl="status">status</code> (<%= tr('docs.required') %>) — <code data-curl="page_id">page_id</code> (<%= tr('docs.pageIdHelp') %>)</p>
+<p class="doc-desc"><%= tr('docs.validStatuses') %> <code data-curl="operational">operational</code>, <code data-curl="degraded_performance">degraded_performance</code>, <code data-curl="partial_outage">partial_outage</code>, <code data-curl="major_outage">major_outage</code>, <code data-curl="under_maintenance">under_maintenance</code></p>
 <div class="doc-code-block">
-<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<button class="doc-copy-btn" onclick="copyCurl(this)"><%= tr('docs.copy') %></button>
 <code data-curl="$ curl -X PUT -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d &#39;{&quot;status&quot;:&quot;major_outage&quot;,&quot;page_id&quot;:&quot;UUID&quot;}&#39; BASE_URL + &quot;/api/v1/components/UUID/status&quot;">$ curl -X PUT -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" -d '{"status":"major_outage","page_id":"UUID"}' BASE_URL + "/api/v1/components/UUID/status"</code>
 </div>
 
 <h3 class="doc-h2">GET /api/v1/components/:id/history</h3>
-<p class="doc-desc">Status history for a component</p>
-<p class="doc-params-label">Query filters:</p>
-<p class="doc-desc"><code data-curl="?page_id=UUID">?page_id=UUID</code> \u2014 <code data-curl="?limit=50">?limit=50</code></p>
+<p class="doc-desc"><%= tr('docs.componentsHistory') %></p>
+<p class="doc-params-label"><%= tr('docs.queryFilters') %></p>
+<p class="doc-desc"><code data-curl="?page_id=UUID">?page_id=UUID</code> — <code data-curl="?limit=50">?limit=50</code></p>
 <div class="doc-code-block">
-<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<button class="doc-copy-btn" onclick="copyCurl(this)"><%= tr('docs.copy') %></button>
 <code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/components/UUID/history&quot;">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/components/UUID/history"</code>
 </div>
 
 <h3 class="doc-h2">POST /api/v1/pages/:pageId/components/:componentId <span class="doc-perm-badge perm-write">[write]</span></h3>
-<p class="doc-desc">Assign a component to a page</p>
-<p class="doc-params-label">Body parameters:</p>
-<p class="doc-desc"><code data-curl="position">position</code> (integer)</p>
+<p class="doc-desc"><%= tr('docs.assignComponent') %></p>
+<p class="doc-params-label"><%= tr('docs.bodyParams') %></p>
+<p class="doc-desc"><code data-curl="position">position</code> (<%= tr('docs.integer') %>)</p>
 <div class="doc-code-block">
-<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<button class="doc-copy-btn" onclick="copyCurl(this)"><%= tr('docs.copy') %></button>
 <code data-curl="$ curl -X POST -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d &#39;{&quot;position&quot;:1}&#39; BASE_URL + &quot;/api/v1/pages/UUID/components/UUID&quot;">$ curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" -d '{"position":1}' BASE_URL + "/api/v1/pages/UUID/components/UUID"</code>
 </div>
 
 <h3 class="doc-h2">DELETE /api/v1/pages/:pageId/components/:componentId <span class="doc-perm-badge perm-write">[write]</span></h3>
 <div class="doc-code-block">
-<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<button class="doc-copy-btn" onclick="copyCurl(this)"><%= tr('docs.copy') %></button>
 <code data-curl="$ curl -X DELETE -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/pages/UUID/components/UUID&quot;">$ curl -X DELETE -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/pages/UUID/components/UUID"</code>
 </div>
 </div>
 
 <!-- INCIDENTS TAB -->
 <div id="tab-incidents" class="doc-tab-content">
-<h2 class="doc-section-title">Incidents <span class="doc-auth-badge">API Key required</span></h2>
+<h2 class="doc-section-title"><%= tr('nav.incidents') %> <span class="doc-auth-badge"><%= tr('docs.apiKeyRequired') %></span></h2>
 
 <h3 class="doc-h2">GET /api/v1/incidents</h3>
-<p class="doc-desc">List visible incidents</p>
-<p class="doc-params-label">Query filters:</p>
-<p class="doc-desc"><code data-curl="?page_id=UUID">?page_id=UUID</code> \u2014 <code data-curl="?status=">?status=</code> \u2014 <code data-curl="?limit=5">?limit=5</code></p>
+<p class="doc-desc"><%= tr('docs.incidentsList') %></p>
+<p class="doc-params-label"><%= tr('docs.queryFilters') %></p>
+<p class="doc-desc"><code data-curl="?page_id=UUID">?page_id=UUID</code> — <code data-curl="?status=">?status=</code> — <code data-curl="?limit=5">?limit=5</code></p>
 <div class="doc-code-block">
-<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<button class="doc-copy-btn" onclick="copyCurl(this)"><%= tr('docs.copy') %></button>
 <code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/incidents&quot;">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/incidents"</code>
 </div>
 
 <h3 class="doc-h2">GET /api/v1/incidents/:id</h3>
-<p class="doc-desc">Get incident by ID</p>
+<p class="doc-desc"><%= tr('docs.incidentGet') %></p>
 <div class="doc-code-block">
-<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<button class="doc-copy-btn" onclick="copyCurl(this)"><%= tr('docs.copy') %></button>
 <code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/incidents/UUID&quot;">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/incidents/UUID"</code>
 </div>
 
 <h3 class="doc-h2">POST /api/v1/incidents <span class="doc-perm-badge perm-write">[write]</span></h3>
-<p class="doc-desc">Create incident</p>
-<p class="doc-params-label">Body parameters:</p>
-<p class="doc-desc"><code data-curl="page_id">page_id</code> (required) \u2014 <code data-curl="name">name</code> (required) \u2014 <code data-curl="message">message</code> (required) \u2014 <code data-curl="status">status</code> \u2014 <code data-curl="impact">impact</code> \u2014 <code data-curl="starts_at">starts_at</code> \u2014 <code data-curl="resolved_at">resolved_at</code> \u2014 <code data-curl="visible">visible</code></p>
-<p class="doc-desc">Incident statuses: <code data-curl="investigating">investigating</code>, <code data-curl="identified">identified</code>, <code data-curl="monitoring">monitoring</code>, <code data-curl="resolved">resolved</code></p>
+<p class="doc-desc"><%= tr('docs.incidentCreate') %></p>
+<p class="doc-params-label"><%= tr('docs.bodyParams') %></p>
+<p class="doc-desc"><code data-curl="page_id">page_id</code> (<%= tr('docs.required') %>) — <code data-curl="name">name</code> (<%= tr('docs.required') %>) — <code data-curl="message">message</code> (<%= tr('docs.required') %>) — <code data-curl="status">status</code> — <code data-curl="impact">impact</code> — <code data-curl="starts_at">starts_at</code> — <code data-curl="resolved_at">resolved_at</code> — <code data-curl="visible">visible</code></p>
+<p class="doc-desc"><%= tr('docs.incidentStatuses') %> <code data-curl="investigating">investigating</code>, <code data-curl="identified">identified</code>, <code data-curl="monitoring">monitoring</code>, <code data-curl="resolved">resolved</code></p>
 <div class="doc-code-block">
-<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<button class="doc-copy-btn" onclick="copyCurl(this)"><%= tr('docs.copy') %></button>
 <code data-curl="$ curl -X POST -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d &#39;{&quot;page_id&quot;:&quot;UUID&quot;,&quot;name&quot;:&quot;API Outage&quot;,&quot;status&quot;:&quot;investigating&quot;,&quot;impact&quot;:&quot;critical&quot;,&quot;message&quot;:&quot;Investigating API issues&quot;}&#39; BASE_URL + &quot;/api/v1/incidents&quot;">$ curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" -d '{"page_id":"UUID","name":"API Outage","status":"investigating","impact":"critical","message":"Investigating API issues"}' BASE_URL + "/api/v1/incidents"</code>
 </div>
 
 <h3 class="doc-h2">PUT /api/v1/incidents/:id <span class="doc-perm-badge perm-write">[write]</span></h3>
-<p class="doc-desc">Update incident \u2014 any combination of the body parameters above</p>
+<p class="doc-desc"><%= tr('docs.incidentUpdate') %></p>
 <div class="doc-code-block">
-<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<button class="doc-copy-btn" onclick="copyCurl(this)"><%= tr('docs.copy') %></button>
 <code data-curl="$ curl -X PUT -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d &#39;{&quot;status&quot;:&quot;monitoring&quot;}&#39; BASE_URL + &quot;/api/v1/incidents/UUID&quot;">$ curl -X PUT -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" -d '{"status":"monitoring"}' BASE_URL + "/api/v1/incidents/UUID"</code>
 </div>
 
 <h3 class="doc-h2">DELETE /api/v1/incidents/:id <span class="doc-perm-badge perm-admin">[admin]</span></h3>
 <div class="doc-code-block">
-<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<button class="doc-copy-btn" onclick="copyCurl(this)"><%= tr('docs.copy') %></button>
 <code data-curl="$ curl -X DELETE -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/incidents/UUID&quot;">$ curl -X DELETE -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/incidents/UUID"</code>
 </div>
 </div>
 
 <!-- API KEYS TAB -->
 <div id="tab-apikeys" class="doc-tab-content">
-<h2 class="doc-section-title">API Keys <span class="doc-auth-badge">API Key required</span></h2>
+<h2 class="doc-section-title"><%= tr('nav.apiKeys') %> <span class="doc-auth-badge"><%= tr('docs.apiKeyRequired') %></span></h2>
 
 <h3 class="doc-h2">GET /api/v1/api-keys <span class="doc-perm-badge perm-admin">[admin]</span></h3>
 <div class="doc-code-block">
-<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<button class="doc-copy-btn" onclick="copyCurl(this)"><%= tr('docs.copy') %></button>
 <code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/api-keys&quot;">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/api-keys"</code>
 </div>
 
 <h3 class="doc-h2">POST /api/v1/api-keys <span class="doc-perm-badge perm-admin">[admin]</span></h3>
-<p class="doc-desc">Create API key</p>
-<p class="doc-params-label">Body parameters:</p>
-<p class="doc-desc"><code data-curl="name">name</code> (required) \u2014 <code data-curl="permissions">permissions</code> \u2014 <code data-curl="page_id">page_id</code> \u2014 <code data-curl="rate_limit">rate_limit</code> \u2014 <code data-curl="expires_at">expires_at</code></p>
+<p class="doc-desc"><%= tr('docs.apiKeyCreate') %></p>
+<p class="doc-params-label"><%= tr('docs.bodyParams') %></p>
+<p class="doc-desc"><code data-curl="name">name</code> (<%= tr('docs.required') %>) — <code data-curl="permissions">permissions</code> — <code data-curl="page_id">page_id</code> — <code data-curl="rate_limit">rate_limit</code> — <code data-curl="expires_at">expires_at</code></p>
 <div class="doc-code-block">
-<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<button class="doc-copy-btn" onclick="copyCurl(this)"><%= tr('docs.copy') %></button>
 <code data-curl="$ curl -X POST -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d &#39;{&quot;name&quot;:&quot;Bot&quot;,&quot;permissions&quot;:[&quot;read&quot;,&quot;write&quot;]}&#39; BASE_URL + &quot;/api/v1/api-keys&quot;">$ curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" -d '{"name":"Bot","permissions":["read","write"]}' BASE_URL + "/api/v1/api-keys"</code>
 </div>
 
 <h3 class="doc-h2">DELETE /api/v1/api-keys/:id <span class="doc-perm-badge perm-admin">[admin]</span></h3>
 <div class="doc-code-block">
-<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<button class="doc-copy-btn" onclick="copyCurl(this)"><%= tr('docs.copy') %></button>
 <code data-curl="$ curl -X DELETE -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/api-keys/UUID&quot;">$ curl -X DELETE -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/api-keys/UUID"</code>
 </div>
 </div>
 
 <!-- WEBHOOKS TAB -->
 <div id="tab-webhooks" class="doc-tab-content">
-<h2 class="doc-section-title">Webhooks <span class="doc-auth-badge">API Key required</span></h2>
+<h2 class="doc-section-title"><%= tr('docs.tabWebhooks') %> <span class="doc-auth-badge"><%= tr('docs.apiKeyRequired') %></span></h2>
 
 <h3 class="doc-h2">GET /api/v1/pages/:pageId/webhooks</h3>
-<p class="doc-desc">List webhooks for a page</p>
+<p class="doc-desc"><%= tr('docs.webhooksList') %></p>
 <div class="doc-code-block">
-<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<button class="doc-copy-btn" onclick="copyCurl(this)"><%= tr('docs.copy') %></button>
 <code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/pages/UUID/webhooks&quot;">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/pages/UUID/webhooks"</code>
 </div>
 
 <h3 class="doc-h2">POST /api/v1/pages/:pageId/webhooks <span class="doc-perm-badge perm-write">[write]</span></h3>
-<p class="doc-desc">Create webhook</p>
-<p class="doc-params-label">Body parameters:</p>
-<p class="doc-desc"><code data-curl="url">url</code> (required) \u2014 <code data-curl="events">events</code> \u2014 <code data-curl="secret">secret</code></p>
-<p class="doc-desc">Events: <code data-curl="status.updated">status.updated</code>, <code data-curl="incident.created">incident.created</code>, <code data-curl="incident.updated">incident.updated</code>, <code data-curl="incident.deleted">incident.deleted</code>, <code data-curl="component.assigned">component.assigned</code></p>
+<p class="doc-desc"><%= tr('docs.webhookCreate') %></p>
+<p class="doc-params-label"><%= tr('docs.bodyParams') %></p>
+<p class="doc-desc"><code data-curl="url">url</code> (<%= tr('docs.required') %>) — <code data-curl="events">events</code> — <code data-curl="secret">secret</code></p>
+<p class="doc-desc"><%= tr('docs.events') %> <code data-curl="status.updated">status.updated</code>, <code data-curl="incident.created">incident.created</code>, <code data-curl="incident.updated">incident.updated</code>, <code data-curl="incident.deleted">incident.deleted</code>, <code data-curl="component.assigned">component.assigned</code></p>
 <div class="doc-code-block">
-<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<button class="doc-copy-btn" onclick="copyCurl(this)"><%= tr('docs.copy') %></button>
 <code data-curl="$ curl -X POST -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d &#39;{&quot;url&quot;:&quot;https://hooks.example.com/status&quot;,&quot;events&quot;:[&quot;status.updated&quot;,&quot;incident.created&quot;],&quot;secret&quot;:&quot;mysecret&quot;}&#39; BASE_URL + &quot;/api/v1/pages/UUID/webhooks&quot;">$ curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" -d '{"url":"https://hooks.example.com/status","events":["status.updated","incident.created"],"secret":"mysecret"}' BASE_URL + "/api/v1/pages/UUID/webhooks"</code>
 </div>
 
 <h3 class="doc-h2">PUT /api/v1/webhooks/:id <span class="doc-perm-badge perm-write">[write]</span></h3>
-<p class="doc-desc">Update webhook</p>
-<p class="doc-params-label">Body parameters:</p>
-<p class="doc-desc"><code data-curl="url">url</code> \u2014 <code data-curl="events">events</code> \u2014 <code data-curl="is_active">is_active</code> \u2014 <code data-curl="secret">secret</code></p>
+<p class="doc-desc"><%= tr('docs.webhookUpdate') %></p>
+<p class="doc-params-label"><%= tr('docs.bodyParams') %></p>
+<p class="doc-desc"><code data-curl="url">url</code> — <code data-curl="events">events</code> — <code data-curl="is_active">is_active</code> — <code data-curl="secret">secret</code></p>
 <div class="doc-code-block">
-<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<button class="doc-copy-btn" onclick="copyCurl(this)"><%= tr('docs.copy') %></button>
 <code data-curl="$ curl -X PUT -H &quot;Authorization: Bearer $API_KEY&quot; -H &quot;Content-Type: application/json&quot; -d &#39;{&quot;is_active&quot;:0}&#39; BASE_URL + &quot;/api/v1/webhooks/UUID&quot;">$ curl -X PUT -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" -d '{"is_active":0}' BASE_URL + "/api/v1/webhooks/UUID"</code>
 </div>
 
 <h3 class="doc-h2">DELETE /api/v1/webhooks/:id <span class="doc-perm-badge perm-admin">[admin]</span></h3>
 <div class="doc-code-block">
-<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<button class="doc-copy-btn" onclick="copyCurl(this)"><%= tr('docs.copy') %></button>
 <code data-curl="$ curl -X DELETE -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/webhooks/UUID&quot;">$ curl -X DELETE -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/webhooks/UUID"</code>
 </div>
 </div>
 
 <!-- SETTINGS TAB -->
 <div id="tab-settings" class="doc-tab-content">
-<h2 class="doc-section-title">Settings <span class="doc-auth-badge">API Key required</span></h2>
+<h2 class="doc-section-title"><%= tr('docs.tabSettings') %> <span class="doc-auth-badge"><%= tr('docs.apiKeyRequired') %></span></h2>
 
 <h3 class="doc-h2">GET /api/v1/settings <span class="doc-perm-badge perm-admin">[admin]</span></h3>
 <div class="doc-code-block">
-<button class="doc-copy-btn" onclick="copyCurl(this)">Copy</button>
+<button class="doc-copy-btn" onclick="copyCurl(this)"><%= tr('docs.copy') %></button>
 <code data-curl="$ curl -H &quot;Authorization: Bearer $API_KEY&quot; BASE_URL + &quot;/api/v1/settings&quot;">$ curl -H "Authorization: Bearer $API_KEY" BASE_URL + "/api/v1/settings"</code>
 </div>
 </div>
 
 <script>
+// i18n (5.0.0): strings used from JS go through a JSON bridge — the dictionary
+// values are plain text, the markup stays here.
+window.SF_I18N = <%- JSON.stringify({
+  nothingToCopy: tr('docs.nothingToCopy'),
+  copied: tr('docs.copied'),
+  copyFailed: tr('docs.copyFailed')
+}).replace(/</g, '\\u003c') %>;
+</script>
+<script>
+var I18N = window.SF_I18N || {};
 const BASE_URL = window.location.origin;
 let currentKey = '';
 
@@ -343,7 +357,7 @@ function copyCurl(btn) {
   var text = ta.value;
 
   if (!text) {
-    showToast('Nothing to copy', 'error');
+    showToast(I18N.nothingToCopy || '', 'error');
     return;
   }
 
@@ -355,7 +369,7 @@ function copyCurl(btn) {
 
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).then(function() {
-      showToast('Copied to clipboard!', 'success');
+      showToast(I18N.copied || '', 'success');
     }).catch(function() {
       fallbackCopy(text);
     });
@@ -373,9 +387,9 @@ function fallbackCopy(text) {
   textarea.select();
   try {
     document.execCommand('copy');
-    showToast('Copied to clipboard!', 'success');
+    showToast(I18N.copied || '', 'success');
   } catch (e) {
-    showToast('Failed to copy', 'error');
+    showToast(I18N.copyFailed || '', 'error');
   }
   document.body.removeChild(textarea);
 }

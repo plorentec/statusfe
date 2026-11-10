@@ -1,9 +1,13 @@
+<%# i18n (5.0.0): the release notes themselves are DATA (they come from
+    CHANGELOG.md) and are rendered as-is; only the page chrome and the update
+    status messages are translated. %>
+<% const tr = (typeof t === 'function') ? t : function (k) { return k; }; %>
 <div class="card">
 <h3>🚀 <%= version %></h3>
-<p class="text-muted">Current installed version. The release notes below are synced with the repository changelog.</p>
+<p class="text-muted"><%= tr('changelog.currentHelp') %></p>
 
 <% if (typeof releases !== 'undefined' && releases.length) { %>
-<h4 style="margin-top: 20px; color: var(--info);">📜 Release history</h4>
+<h4 style="margin-top: 20px; color: var(--info);">📜 <%= tr('changelog.releaseHistory') %></h4>
 <% releases.forEach(function (r) { %>
 <details class="card" style="margin-top: 10px; padding: 12px; border: 1px solid var(--border);">
 <summary style="cursor: pointer; font-weight: 700;"><%= r.version %></summary>
@@ -11,17 +15,51 @@
 </details>
 <% }); %>
 <% } else { %>
-<p class="text-muted">No CHANGELOG.md found next to the application.</p>
+<p class="text-muted"><%= tr('changelog.noFile') %></p>
 <% } %>
 
-<h4>🔄 Check for Updates</h4>
+<h4>🔄 <%= tr('changelog.checkUpdates') %></h4>
 <div id="updateStatus" style="padding: 10px 0;">
-<button class="btn btn-primary" onclick="checkUpdate()">Check for Updates</button>
+<button class="btn btn-primary" onclick="checkUpdate()"><%= tr('changelog.checkUpdates') %></button>
 </div>
 </div>
 </div>
 
 <script>
+// i18n (5.0.0): strings used from JS go through a JSON bridge — the dictionary
+// values are plain text, the markup (and the emoji) stays here.
+window.SF_I18N = <%- JSON.stringify({
+  checking: tr('changelog.checking'),
+  newVersion: tr('changelog.newVersion'),
+  currentPublished: tr('changelog.currentPublished'),
+  viewReleaseNotes: tr('changelog.viewReleaseNotes'),
+  updateNow: tr('changelog.updateNow'),
+  upToDate: tr('changelog.upToDate'),
+  ahead: tr('changelog.ahead'),
+  checkFailed: tr('changelog.checkFailed'),
+  starting: tr('changelog.starting'),
+  queued: tr('changelog.queued'),
+  queueFailed: tr('changelog.queueFailed'),
+  requestFailed: tr('changelog.requestFailed'),
+  timedOut: tr('changelog.timedOut'),
+  statusUnavailable: tr('changelog.statusUnavailable'),
+  updated: tr('changelog.updated'),
+  rolledBack: tr('changelog.rolledBack'),
+  updateFailed: tr('changelog.updateFailed'),
+  errorLabel: tr('changelog.errorLabel'),
+  noAgent: tr('changelog.noAgent'),
+  waitingAgent: tr('changelog.waitingAgent'),
+  target: tr('changelog.target'),
+  waitingBack: tr('changelog.waitingBack'),
+  inProgress: tr('changelog.inProgress')
+}).replace(/</g, '\\u003c') %>;
+</script>
+<script>
+var I18N = window.SF_I18N || {};
+function fmt(s, vars) {
+  return String(s == null ? '' : s).replace(/\{(\w+)\}/g, function (m, k) { return vars[k] == null ? m : String(vars[k]); });
+}
+
 function esc(s) {
   if (!s) return '';
   return String(s).replace(/[&<>"']/g, function(c) {
@@ -35,32 +73,32 @@ var _consecutiveErrors = 0;
 
 function checkUpdate() {
   var el = document.getElementById('updateStatus');
-  el.innerHTML = '<p style="color: var(--info);">Checking...</p>';
+  el.innerHTML = '<p style="color: var(--info);">' + esc(I18N.checking) + '</p>';
   fetch('/admin/check-update')
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data.hasUpdate) {
-        el.innerHTML = '<p style="color: var(--warning);">⚠️ New version available: <strong>' + esc(data.latestVersion) + '</strong></p>' +
-          '<p>Current: ' + esc(data.currentVersion) + ' — Published: ' + esc(data.publishedAt) + '</p>' +
-          '<a href="' + esc(data.url) + '" target="_blank" class="btn btn-primary">View Release Notes</a> ' +
-          '<button class="btn btn-primary" onclick="startUpdate()">⬆️ Update now to v' + esc(data.latestVersion) + '</button>';
+        el.innerHTML = '<p style="color: var(--warning);">⚠️ ' + esc(I18N.newVersion) + ' <strong>' + esc(data.latestVersion) + '</strong></p>' +
+          '<p>' + esc(fmt(I18N.currentPublished, { current: data.currentVersion, published: data.publishedAt })) + '</p>' +
+          '<a href="' + esc(data.url) + '" target="_blank" class="btn btn-primary">' + esc(I18N.viewReleaseNotes) + '</a> ' +
+          '<button class="btn btn-primary" onclick="startUpdate()">⬆️ ' + esc(fmt(I18N.updateNow, { version: data.latestVersion })) + '</button>';
       } else if (data.currentVersion === data.latestVersion) {
-        el.innerHTML = '<p style="font-weight: 700; color: var(--success);">✅ You are running the latest version: ' + esc(data.currentVersion) + '</p>';
+        el.innerHTML = '<p style="font-weight: 700; color: var(--success);">✅ ' + esc(fmt(I18N.upToDate, { version: data.currentVersion })) + '</p>';
       } else if (data.currentVersion && data.latestVersion) {
         // latest is older than current (e.g. running dev version ahead of releases)
-        el.innerHTML = '<p style="font-weight: 700; color: var(--success);">✅ You are ahead of latest release: ' + esc(data.currentVersion) + ' > ' + esc(data.latestVersion) + '</p>';
+        el.innerHTML = '<p style="font-weight: 700; color: var(--success);">✅ ' + esc(fmt(I18N.ahead, { current: data.currentVersion })) + ' > ' + esc(data.latestVersion) + '</p>';
       } else {
-        el.innerHTML = '<p style="font-weight: 700; color: var(--success);">✅ You are running the latest version: ' + esc(data.currentVersion) + '</p>';
+        el.innerHTML = '<p style="font-weight: 700; color: var(--success);">✅ ' + esc(fmt(I18N.upToDate, { version: data.currentVersion })) + '</p>';
       }
     })
     .catch(function(err) {
-      el.innerHTML = '<p style="color: var(--danger);">Could not check for updates: ' + esc(err.message) + '</p>';
+      el.innerHTML = '<p style="color: var(--danger);">' + esc(fmt(I18N.checkFailed, { error: err.message })) + '</p>';
     });
 }
 
 function startUpdate() {
   var el = document.getElementById('updateStatus');
-  el.innerHTML = '<p style="color: var(--info);">Starting update…</p>';
+  el.innerHTML = '<p style="color: var(--info);">' + esc(I18N.starting) + '</p>';
 
   fetch('/admin/update', {
     method: 'POST',
@@ -69,24 +107,24 @@ function startUpdate() {
   .then(function(r) { return r.json(); })
   .then(function(data) {
     if (data.status === 'queued') {
-      el.innerHTML = '<p style="color: var(--info);">Update queued — waiting for agent…</p>';
+      el.innerHTML = '<p style="color: var(--info);">' + esc(I18N.queued) + '</p>';
       _pollStop = Date.now() + 180000; // 3 min
       pollStatus();
     } else {
-      el.innerHTML = '<p style="color: var(--danger);">Failed to queue update: ' + esc(data.error) + '</p>' +
-        '<a href="https://github.com/plorentec/statusfe/releases/latest" target="_blank" class="btn btn-secondary">View Release Notes</a>';
+      el.innerHTML = '<p style="color: var(--danger);">' + esc(fmt(I18N.queueFailed, { error: data.error })) + '</p>' +
+        '<a href="https://github.com/plorentec/statusfe/releases/latest" target="_blank" class="btn btn-secondary">' + esc(I18N.viewReleaseNotes) + '</a>';
     }
   })
   .catch(function(err) {
-    el.innerHTML = '<p style="color: var(--danger);">Update request failed: ' + esc(err.message) + '</p>';
+    el.innerHTML = '<p style="color: var(--danger);">' + esc(fmt(I18N.requestFailed, { error: err.message })) + '</p>';
   });
 }
 
 function pollStatus() {
   var el = document.getElementById('updateStatus');
   if (Date.now() > _pollStop) {
-    el.innerHTML = '<p style="color: var(--danger);">Update timed out after 3 minutes. Check the release page for manual update.</p>' +
-      '<a href="https://github.com/plorentec/statusfe/releases/latest" target="_blank" class="btn btn-secondary">View Release Notes</a>';
+    el.innerHTML = '<p style="color: var(--danger);">' + esc(I18N.timedOut) + '</p>' +
+      '<a href="https://github.com/plorentec/statusfe/releases/latest" target="_blank" class="btn btn-secondary">' + esc(I18N.viewReleaseNotes) + '</a>';
     _pollTimer = null;
     return;
   }
@@ -95,41 +133,41 @@ function pollStatus() {
     headers: { 'X-CSRF-Token': document.getElementById('csrfToken') ? document.getElementById('csrfToken').value : '' }
   })
   .then(function(r) {
-    if (!r.ok) throw new Error('Status endpoint unavailable');
+    if (!r.ok) throw new Error(I18N.statusUnavailable || '');
     return r.json();
   })
   .then(function(data) {
     _consecutiveErrors = 0;
     if (data.status === 'done') {
-      el.innerHTML = '<p style="color: var(--success);">✅ Updated to v' + esc(data.targetVersion) + ' — reloading…</p>';
+      el.innerHTML = '<p style="color: var(--success);">✅ ' + esc(fmt(I18N.updated, { version: data.targetVersion })) + '</p>';
       _pollTimer && clearInterval(_pollTimer);
       _pollTimer = null;
       setTimeout(function() { location.reload(); }, 3000);
     } else if (data.status === 'failed' || data.status === 'rolled_back') {
-      var msg = data.status === 'rolled_back' ? '⚠️ Update was rolled back' : '❌ Update failed';
-      el.innerHTML = '<p style="color: var(--danger);">' + esc(msg) + '.</p>' +
-        (data.error ? '<p style="color: var(--danger);">Error: ' + esc(data.error) + '</p>' : '') +
-        '<a href="https://github.com/plorentec/statusfe/releases/latest" target="_blank" class="btn btn-secondary">View Release Notes</a>';
+      var msg = data.status === 'rolled_back' ? '⚠️ ' + esc(I18N.rolledBack) : '❌ ' + esc(I18N.updateFailed);
+      el.innerHTML = '<p style="color: var(--danger);">' + msg + '.</p>' +
+        (data.error ? '<p style="color: var(--danger);">' + esc(I18N.errorLabel) + ' ' + esc(data.error) + '</p>' : '') +
+        '<a href="https://github.com/plorentec/statusfe/releases/latest" target="_blank" class="btn btn-secondary">' + esc(I18N.viewReleaseNotes) + '</a>';
       _pollTimer && clearInterval(_pollTimer);
       _pollTimer = null;
     } else if (data.status === 'no_agent') {
-      el.innerHTML = '<p style="color: var(--warning);">⚠️ ' + esc(data.hint || 'No update agent is configured on this host') + '</p>' +
-        '<a href="https://github.com/plorentec/statusfe/releases/latest" target="_blank" class="btn btn-secondary">View Release Notes</a>';
+      el.innerHTML = '<p style="color: var(--warning);">⚠️ ' + esc(data.hint || I18N.noAgent) + '</p>' +
+        '<a href="https://github.com/plorentec/statusfe/releases/latest" target="_blank" class="btn btn-secondary">' + esc(I18N.viewReleaseNotes) + '</a>';
       _pollTimer && clearInterval(_pollTimer);
       _pollTimer = null;
     } else {
       // in_progress, queued — render phase
-      var phaseText = data.phase ? esc(data.phase) : 'Waiting for agent…';
+      var phaseText = data.phase ? esc(data.phase) : (I18N.waitingAgent || '');
       var statusLabel = phaseText.charAt(0).toUpperCase() + phaseText.slice(1);
       el.innerHTML = '<p style="color: var(--info);">⏳ ' + statusLabel + '</p>' +
-        (data.targetVersion ? '<p style="color: var(--info);">Target: v' + esc(data.targetVersion) + '</p>' : '');
+        (data.targetVersion ? '<p style="color: var(--info);">' + esc(fmt(I18N.target, { version: data.targetVersion })) + '</p>' : '');
       _pollTimer = setTimeout(pollStatus, 2000);
     }
   })
   .catch(function(err) {
     _consecutiveErrors++;
     var el = document.getElementById('updateStatus');
-    el.innerHTML = '<p style="color: var(--warning);">Update running — waiting for the app to come back… (' + _consecutiveErrors + ')</p>';
+    el.innerHTML = '<p style="color: var(--warning);">' + esc(fmt(I18N.waitingBack, { count: _consecutiveErrors })) + '</p>';
     _pollTimer = setTimeout(pollStatus, 2000);
   });
 }
@@ -143,7 +181,7 @@ function pollStatus() {
   .then(function(data) {
     if (data.status === 'in_progress' || data.status === 'queued') {
       var el = document.getElementById('updateStatus');
-      el.innerHTML = '<p style="color: var(--info);">⏳ Update in progress — checking status…</p>';
+      el.innerHTML = '<p style="color: var(--info);">⏳ ' + esc(I18N.inProgress) + '</p>';
       _pollStop = Date.now() + 180000;
       pollStatus();
     }

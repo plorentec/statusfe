@@ -9,6 +9,32 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [5.3.0] — 2026-11-08
+
+### Added
+- **Panel bilingüe completo (fase 2, lote 3)**: analítica, personalize, 2FA
+  (configuración y verificación), docs y changelog. Con esto, **las 25 vistas del
+  panel están en español y en inglés**: **674 claves por idioma**, paridad exacta.
+
+### Fixed
+- **Dependencias mostraba «Base de datos» en inglés**: el ejemplo estaba
+  hardcodeado en español dentro de una frase traducida. Ahora es una clave.
+- **Docs mostraba `\u2014` literal** en 34 sitios: eran secuencias de escape
+  escritas como texto. Ahora son rayas de verdad.
+
+### Notes
+- En docs se traduce la prosa; los verbos HTTP, rutas, JSON, nombres de campo y
+  ejemplos de curl se quedan **verbatim** — son la referencia, no texto.
+- El changelog traduce su interfaz; las notas de versión vienen de
+  `CHANGELOG.md` y se muestran como dato.
+- Sigue sin traducirse lo que es **dato**: columnas de enum, claves de plan y
+  valores almacenados. Traducirlos rompería las comparaciones que dependen de
+  ellos.
+
+### Verified
+- Paridad 674/674, sin HTML en los valores, ninguna clave vacía.
+- Suite: **971 checks** en 34 arneses.
+
 ## [5.2.0] — 2026-11-08
 
 ### Added

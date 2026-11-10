@@ -1,9 +1,14 @@
+<%# i18n (5.0.0): every user-visible string goes through `t` (res.locals). The
+    fallback keeps standalone rendering working when a harness renders the
+    template without the session middleware. %>
+<% const tr = (typeof t === 'function') ? t : function (k) { return k; }; %>
+<% const loc = (typeof locale === 'string' && locale) ? locale : 'en'; %>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<%= loc %>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>2FA Verification - StatusFe</title>
+<title><%= tr('twofa.verifyTitle') %> - StatusFe</title>
 <link rel="stylesheet" href="/css/admin.css">
 <script>document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('dark');});</script>
 </head>
@@ -12,21 +17,21 @@
 <div class="auth-card">
 <div class="auth-header">
 <h1>StatusFe</h1>
-<p>Two-factor authentication</p>
+<p><%= tr('twofa.verifySubtitle') %></p>
 </div>
 <% if (msg === 'invalid') { %>
-<div class="flash flash-error">Invalid code. Please try again.</div>
+<div class="flash flash-error"><%= tr('twofa.invalidCode') %></div>
 <% } %>
 <form action="/admin/2fa/verify" method="post" class="auth-form">
 <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
 <div class="form-group">
-<label for="code">Verification Code</label>
-<input type="text" id="code" name="code" required autofocus placeholder="Enter 6-digit code" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code">
-<small class="text-muted">Open your authenticator app and enter the code.</small>
+<label for="code"><%= tr('twofa.verificationCode') %></label>
+<input type="text" id="code" name="code" required autofocus placeholder="<%= tr('twofa.enterCodePlaceholder') %>" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code">
+<small class="text-muted"><%= tr('twofa.openApp') %></small>
 </div>
-<button type="submit" class="btn btn-primary btn-full">Verify</button>
+<button type="submit" class="btn btn-primary btn-full"><%= tr('twofa.verifyBtn') %></button>
 </form>
-<form action="/auth/logout" method="post" class="auth-footer"><button type="submit" class="link-button">Logout</button></form>
+<form action="/auth/logout" method="post" class="auth-footer"><button type="submit" class="link-button"><%= tr('nav.logout') %></button></form>
 </div>
 </div>
 </body>
