@@ -36,6 +36,12 @@ All notable changes to StatusFe.
   ya en 003, cambio de idioma por POST, selector en las dos sidebars, rechazo de
   un idioma inválido, y los flashes en español.
 - Suite: **970 checks** en 33 arneses.
+- Review nativo (tier **high**, lentes riesgo y fiabilidad): **APPROVED**. La
+  lente de fiabilidad falló una vez con `reviewer-empty-output` (28k tokens de
+  razonamiento y cero texto) y pasó al reintentar. Aviso que se queda como
+  limitación conocida: el idioma se cachea en la sesión, así que un cambio
+  afecta a la sesión actual y las otras lo ven al volver a entrar (evita una
+  consulta por request).
 
 ## [4.0.3] — 2026-11-08
 
