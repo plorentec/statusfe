@@ -4,9 +4,18 @@ const ejs = require('ejs');
 const { sanitizeCss, sanitizeHtml } = require('../src/utils/sanitize');
 
 let failures = 0;
+// i18n (5.0.0): the admin views call `t`/`pageTitle`/`locale` from res.locals.
+// Every render below gets them (English), so no template can crash on a
+// missing local when it is rendered standalone.
+const i18n = require('../src/i18n');
+const I18N_LOCALS = {
+  locale: 'en',
+  t: (k, v) => i18n.t('en', k, v),
+  pageTitle: (title) => i18n.translateTitle(title, 'en'),
+};
 const render = (name, file, locals) => {
   try {
-    const html = ejs.render(require('fs').readFileSync(file, 'utf8'), locals, { filename: file, root: path.join(__dirname, '..'), views: [path.join(__dirname, '..', 'views')] });
+    const html = ejs.render(require('fs').readFileSync(file, 'utf8'), { ...I18N_LOCALS, ...locals }, { filename: file, root: path.join(__dirname, '..'), views: [path.join(__dirname, '..', 'views')] });
     console.log('OK  ' + name + ' (' + html.length + ' chars)');
     return html;
   } catch (e) {

@@ -1,9 +1,14 @@
+<%# i18n (5.0.0): every user-visible string goes through `t` (res.locals); the
+    fallback keeps standalone rendering working. %>
+<% const tr = (typeof t === 'function') ? t : function (k) { return k; }; %>
+<% const pt = (typeof pageTitle === 'function') ? pageTitle : function (x) { return x; }; %>
+<% const loc = (typeof locale === 'string' && locale) ? locale : 'en'; %>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<%= loc %>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><%= title %> - StatusFe Admin</title>
+<title><%= pt(title) %> - <%= tr('common.adminTitle') %></title>
 <link rel="stylesheet" href="/css/admin.css">
 <script>document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('dark');});</script>
 </head>
@@ -11,27 +16,29 @@
 <div class="admin-layout">
 <%- include('../partials/_sidebar'); %>
 <main class="admin-main">
-<div class="admin-header"><h1><%= title %></h1>
+<div class="admin-header"><h1><%= pt(title) %></h1>
 <% if (message) { %><div class="flash flash-<%= messageType %>"><%= message %></div><% } %>
 </div>
 <div class="card">
-<p>Email watchers of your status pages (double opt-in). Only confirmed subscribers receive notifications.</p>
+<p><%= tr('subs.help') %></p>
 <table>
-<thead><tr><th>Email</th><th>Page</th><th>Status</th><th>Subscribed</th><th></th></tr></thead>
+<thead><tr><th><%= tr('subs.thEmail') %></th><th><%= tr('subs.thPage') %></th><th><%= tr('components.thStatus') %></th><th><%= tr('subs.thSubscribed') %></th><th></th></tr></thead>
 <tbody>
 <% if (rows.length === 0) { %>
-<tr><td colspan="5">No subscribers yet.</td></tr>
+<tr><td colspan="5"><%= tr('subs.empty') %></td></tr>
 <% } %>
 <% rows.forEach(s => { %>
 <tr>
 <td><%= s.email %></td>
 <td><%= s.page_name %> (<%= s.page_slug %>)</td>
-<td><%= s.confirmed === 1 ? '<strong>confirmed</strong>' : 'pending' %></td>
+<%# 5.0.3: el marcado va en la plantilla; antes se escapaba y se veia literal %>` con las etiquetas dentro de la cadena, así que la
+    tabla mostraba literalmente <strong>Confirmado</strong>. El marcado va aquí. %>
+<td><% if (s.confirmed === 1) { %><strong><%= tr('subs.confirmed') %></strong><% } else { %><%= tr('subs.pending') %><% } %></td>
 <td><%= new Date(s.created_at).toISOString().slice(0,19).replace('T',' ') %> UTC</td>
 <td>
-<form method="post" action="/admin/subscribers/<%= s.id %>/delete" onsubmit="return confirm('Remove this subscriber?')">
+<form method="post" action="/admin/subscribers/<%= s.id %>/delete" onsubmit="return confirm('<%= tr('subs.confirmDelete') %>')">
 <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-<button type="submit" class="btn btn-sm">Remove</button>
+<button type="submit" class="btn btn-sm"><%= tr('subs.remove') %></button>
 </form>
 </td>
 </tr>

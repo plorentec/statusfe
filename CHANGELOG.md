@@ -9,6 +9,26 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [5.1.0] — 2026-11-08
+
+### Added
+- **Panel bilingüe, fase 2 (lote 1)**: traducidas **páginas, organizaciones,
+  audit, suscriptores y notificaciones** — 135 claves nuevas por idioma
+  (**386 en cada uno**, con paridad verificada). Incluye las explicaciones de los
+  campos, los textos de `<option>`, los diálogos de confirmación, los estados
+  vacíos y las cadenas de los scripts en línea (`window.SF_I18N`).
+
+### Fixed
+- **La tabla de suscriptores mostraba `<strong>Confirmado</strong>` literal**: el
+  marcado estaba dentro de una cadena con `<%= %>`, así que se escapaba. Ahora la
+  negrita la pone la plantilla.
+
+### Verified
+- `verify_i18n_admin.js`: paridad 386/386 claves, sin HTML en los valores.
+- `verify_render.js` ahora pasa `t`/`locale`/`pageTitle` a **todos** sus renders,
+  así ninguna vista puede romperse por un local ausente.
+- Suite: **971 checks**.
+
 ## [5.0.2] — 2026-11-08
 
 ### Fixed

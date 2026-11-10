@@ -1,9 +1,14 @@
+<%# i18n (5.0.0): see odd/tasks/admin-i18n-5.0.0.md. The fallbacks keep
+    standalone rendering (verify_render) working without the middleware. %>
+<% const tr = (typeof t === 'function') ? t : function (k) { return k; }; %>
+<% const pt = (typeof pageTitle === 'function') ? pageTitle : function (x) { return x; }; %>
+<% const loc = (typeof locale === 'string' && locale) ? locale : 'en'; %>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<%= loc %>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><%= title %> - StatusFe Admin</title>
+<title><%= pt(title) %> - <%= tr('common.adminTitle') %></title>
 <link rel="stylesheet" href="/css/admin.css">
 <script>document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('dark');});</script>
 </head>
@@ -11,46 +16,46 @@
 <div class="admin-layout">
 <%- include('../partials/_sidebar'); %>
 <main class="admin-main">
-<div class="admin-header"><h1><%= title %></h1>
+<div class="admin-header"><h1><%= pt(title) %></h1>
 <% if (message) { %><div class="flash flash-<%= messageType %>"><%= message %></div><% } %>
 </div>
 <div class="card">
-<h3>Create organization</h3>
+<h3><%= tr('orgs.create') %></h3>
 <form method="post" action="/admin/organizations">
 <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 <div class="form-row">
-<div class="form-group"><label>Name</label><input type="text" name="name" required placeholder="Acme Corp"></div>
-<div class="form-group"><label>Slug</label><input type="text" name="slug" required pattern="[a-z0-9-]{1,64}" placeholder="acme"></div>
+<div class="form-group"><label><%= tr('components.fieldName') %></label><input type="text" name="name" required placeholder="Acme Corp"></div>
+<div class="form-group"><label><%= tr('pages.slug') %></label><input type="text" name="slug" required pattern="[a-z0-9-]{1,64}" placeholder="acme"></div>
 </div>
 <div class="form-group">
-<label>Members (users)</label>
+<label><%= tr('orgs.members') %></label>
 <div class="component-checkboxes">
 <% users.forEach(u => { %>
 <label class="component-checkbox"><input type="checkbox" name="member_ids" value="<%= u.id %>"> <%= u.name %> &lt;<%= u.email %>&gt;</label>
 <% }) %>
 </div>
 </div>
-<button type="submit" class="btn btn-primary">Create</button>
+<button type="submit" class="btn btn-primary"><%= tr('orgs.createButton') %></button>
 </form>
 </div>
 <div class="card">
-<h3>Self-service registration</h3>
-<p style="font-size:13px;color:var(--text-muted);">When enabled, anyone can create their own account, organization and status page from <code>/register</code>. Off by default.</p>
+<h3><%= tr('orgs.selfService') %></h3>
+<p style="font-size:13px;color:var(--text-muted);"><%= tr('orgs.selfServiceHelpPrefix') %> <code>/register</code><%= tr('orgs.selfServiceHelpSuffix') %></p>
 <form method="post" action="/admin/organizations/self-registration">
 <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
 <input type="checkbox" name="enabled" value="on" <%= (typeof selfRegistration !== 'undefined' && selfRegistration) ? 'checked' : '' %>>
-Public registration enabled
+<%= tr('orgs.publicRegistration') %>
 </label>
-<button type="submit" class="btn btn-sm" style="margin-top:8px;">Save</button>
+<button type="submit" class="btn btn-sm" style="margin-top:8px;"><%= tr('orgs.save') %></button>
 </form>
 </div>
 <div class="card">
-<h3>Organizations (<%= orgs.length %>)</h3>
+<h3><%= tr('nav.organizations') %> (<%= orgs.length %>)</h3>
 <table>
-<thead><tr><th>Name</th><th>Slug</th><th>Members</th><th>Plan &amp; usage</th><th>Edit members</th><th></th></tr></thead>
+<thead><tr><th><%= tr('components.thName') %></th><th><%= tr('pages.slug') %></th><th><%= tr('orgs.thMembers') %></th><th><%= tr('orgs.thPlan') %></th><th><%= tr('orgs.thEditMembers') %></th><th></th></tr></thead>
 <tbody>
-<% if (orgs.length === 0) { %><tr><td colspan="6">No organizations yet.</td></tr><% } %>
+<% if (orgs.length === 0) { %><tr><td colspan="6"><%= tr('orgs.noneYet') %></td></tr><% } %>
 <% orgs.forEach(o => { %>
 <tr>
 <td><strong><%= o.name %></strong></td>
@@ -70,7 +75,7 @@ Public registration enabled
 <%
   const u = usageByOrg[o.id] || {};
   const l = limitsByOrg[o.id] || {};
-  const rows = [['pages','maxPages'],['keys','maxApiKeys'],['comp','maxComponents'],['subs','maxSubscribers']];
+  const rows = [[tr('orgs.usagePages'),'maxPages'],[tr('orgs.usageKeys'),'maxApiKeys'],[tr('orgs.usageComponents'),'maxComponents'],[tr('orgs.usageSubscribers'),'maxSubscribers']];
 %>
 <% rows.forEach(([label, key]) => {
   const used = u[key] || 0; const cap = l[key];
@@ -82,14 +87,14 @@ Public registration enabled
 </div>
 <% }); %>
 <details style="font-size:11px;margin-top:4px;">
-<summary style="cursor:pointer;">edit limits</summary>
+<summary style="cursor:pointer;"><%= tr('orgs.editLimits') %></summary>
 <form method="post" action="/admin/organizations/<%= o.id %>/limits" style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:4px;">
 <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-<input type="number" name="maxPages" min="1" placeholder="pages" value="<%= l.maxPages || '' %>" style="width:100%;font-size:11px;padding:2px 4px;">
-<input type="number" name="maxApiKeys" min="1" placeholder="keys" value="<%= l.maxApiKeys || '' %>" style="width:100%;font-size:11px;padding:2px 4px;">
-<input type="number" name="maxComponents" min="1" placeholder="comp" value="<%= l.maxComponents || '' %>" style="width:100%;font-size:11px;padding:2px 4px;">
-<input type="number" name="maxSubscribers" min="1" placeholder="subs" value="<%= l.maxSubscribers || '' %>" style="width:100%;font-size:11px;padding:2px 4px;">
-<button type="submit" class="btn btn-sm" style="grid-column:span 2;">Save limits (empty = unlimited)</button>
+<input type="number" name="maxPages" min="1" placeholder="<%= tr('orgs.usagePages') %>" value="<%= l.maxPages || '' %>" style="width:100%;font-size:11px;padding:2px 4px;">
+<input type="number" name="maxApiKeys" min="1" placeholder="<%= tr('orgs.usageKeys') %>" value="<%= l.maxApiKeys || '' %>" style="width:100%;font-size:11px;padding:2px 4px;">
+<input type="number" name="maxComponents" min="1" placeholder="<%= tr('orgs.usageComponents') %>" value="<%= l.maxComponents || '' %>" style="width:100%;font-size:11px;padding:2px 4px;">
+<input type="number" name="maxSubscribers" min="1" placeholder="<%= tr('orgs.usageSubscribers') %>" value="<%= l.maxSubscribers || '' %>" style="width:100%;font-size:11px;padding:2px 4px;">
+<button type="submit" class="btn btn-sm" style="grid-column:span 2;"><%= tr('orgs.saveLimits') %></button>
 </form>
 </details>
 </td>
@@ -101,24 +106,24 @@ Public registration enabled
 <option value="<%= u.id %>" <%= members[o.id].some(m => m.id === u.id) ? 'selected' : '' %>><%= u.name %></option>
 <% }) %>
 </select>
-<button type="submit" class="btn btn-sm">Save members</button>
+<button type="submit" class="btn btn-sm"><%= tr('orgs.saveMembers') %></button>
 </form>
 </td>
 <td>
 <form method="post" action="/admin/organizations/<%= o.id %>/invite" style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">
 <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 <input type="email" name="email" placeholder="teammate@company.com" required style="min-width:170px;padding:4px 8px;">
-<button type="submit" class="btn btn-sm">Invite</button>
+<button type="submit" class="btn btn-sm"><%= tr('orgs.invite') %></button>
 </form>
 <% ((typeof invites !== 'undefined' && invites[o.id]) || []).forEach(inv => { %>
 <div style="font-size:12px;color:var(--text-muted);">
-<%= inv.email || '(no email)' %> ·
-<% if (inv.accepted_at) { %>accepted<% } else { %>pending · <form method="post" action="/admin/organizations/invites/<%= inv.id %>/revoke" style="display:inline;"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button type="submit" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px;">revoke</button></form><% } %>
+<%= inv.email || tr('orgs.noEmail') %> ·
+<% if (inv.accepted_at) { %><%= tr('orgs.accepted') %><% } else { %><%= tr('orgs.pending') %> · <form method="post" action="/admin/organizations/invites/<%= inv.id %>/revoke" style="display:inline;"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button type="submit" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px;"><%= tr('orgs.revoke') %></button></form><% } %>
 </div>
 <% }); %>
-<form method="post" action="/admin/organizations/<%= o.id %>/delete" onsubmit="return confirm('Delete organization? Pages will remain without an org.')">
+<form method="post" action="/admin/organizations/<%= o.id %>/delete" onsubmit="return confirm('<%= tr('orgs.confirmDelete') %>')">
 <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-<button type="submit" class="btn btn-sm">Delete</button>
+<button type="submit" class="btn btn-sm"><%= tr('common.delete') %></button>
 </form>
 </td>
 </tr>

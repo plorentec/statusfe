@@ -1,13 +1,16 @@
+<%# i18n (5.0.0): every user-visible string goes through `t` (res.locals); the
+    fallback keeps standalone rendering working. %>
+<% const tr = (typeof t === 'function') ? t : function (k) { return k; }; %>
 <div class="card">
-<h3>Audit Log</h3>
+<h3><%= tr('nav.auditLog') %></h3>
 <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
 <button class="btn btn-primary" onclick="downloadLog()">
 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-Download Log
+<%= tr('audit.download') %>
 </button>
 <button class="btn" onclick="showCleanupModal()">
 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-Cleanup Old Entries
+<%= tr('audit.cleanup') %>
 </button>
 <small class="text-muted" id="logInfo"></small>
 </div>
@@ -15,22 +18,22 @@ Cleanup Old Entries
 <table class="admin-table">
 <thead>
 <tr>
-<th>Date</th>
-<th>User</th>
-<th>Action</th>
-<th>Target</th>
-<th>Details</th>
-<th>IP</th>
+<th><%= tr('audit.thDate') %></th>
+<th><%= tr('audit.thUser') %></th>
+<th><%= tr('audit.thAction') %></th>
+<th><%= tr('audit.thTarget') %></th>
+<th><%= tr('audit.thDetails') %></th>
+<th><%= tr('audit.thIp') %></th>
 </tr>
 </thead>
 <tbody>
 <% if (logs.length === 0) { %>
-<tr><td colspan="6" class="empty-cell">No audit entries yet.</td></tr>
+<tr><td colspan="6" class="empty-cell"><%= tr('audit.empty') %></td></tr>
 <% } else { %>
 <% logs.forEach(l => { %>
 <tr>
 <td><%= l.created_at %></td>
-<td><%= l.user_id ? (l.user_id === userId ? 'You' : l.user_id.substring(0,8)) : '—' %></td>
+<td><%= l.user_id ? (l.user_id === userId ? tr('audit.you') : l.user_id.substring(0,8)) : '—' %></td>
 <td>
 <span class="status-badge <%= l.action === 'login' ? 'status-operational' : l.action === 'login_failed' || l.action === '2fa_failed' ? 'status-major_outage' : 'status-degraded_performance' %>">
 <%= l.action.replace(/_/g, ' ') %>
@@ -46,9 +49,9 @@ Cleanup Old Entries
 </table>
 <% if (typeof pagination !== 'undefined' && pagination && pagination.pages > 1) { %>
 <div class="pg-controls">
-<% if (pagination.page > 1) { %><a class="btn btn-sm" href="?page=<%= pagination.page - 1 %>&per_page=<%= pagination.perPage %>">&lsaquo; Prev</a><% } %>
-<span>Page <%= pagination.page %> / <%= pagination.pages %> (<%= pagination.total %> entries)</span>
-<% if (pagination.page < pagination.pages) { %><a class="btn btn-sm" href="?page=<%= pagination.page + 1 %>&per_page=<%= pagination.perPage %>">Next &rsaquo;</a><% } %>
+<% if (pagination.page > 1) { %><a class="btn btn-sm" href="?page=<%= pagination.page - 1 %>&per_page=<%= pagination.perPage %>"><%= tr('components.prev') %></a><% } %>
+<span><%= tr('audit.pageOf', { page: pagination.page, pages: pagination.pages, total: pagination.total }) %></span>
+<% if (pagination.page < pagination.pages) { %><a class="btn btn-sm" href="?page=<%= pagination.page + 1 %>&per_page=<%= pagination.perPage %>"><%= tr('components.next') %></a><% } %>
 </div>
 <% } %>
 </div>
@@ -57,19 +60,24 @@ Cleanup Old Entries
 <!-- Cleanup Modal -->
 <div id="cleanupModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.7); z-index:1000; align-items:center; justify-content:center;">
 <div class="card" style="max-width:400px; margin:auto;">
-<h3>Clean Old Audit Entries</h3>
-<p class="text-muted">Delete audit log entries older than a specified number of days.</p>
+<h3><%= tr('audit.cleanTitle') %></h3>
+<p class="text-muted"><%= tr('audit.cleanHelp') %></p>
 <div class="form-group">
-<label for="retention_days">Keep entries from last X days</label>
+<label for="retention_days"><%= tr('audit.keepDays') %></label>
 <input type="number" id="retention_days" name="retention_days" value="90" min="1" max="3650">
 </div>
 <div class="form-actions">
-<button class="btn btn-primary" onclick="doCleanup()">Delete Old Entries</button>
-<button class="btn" onclick="closeCleanupModal()">Cancel</button>
+<button class="btn btn-primary" onclick="doCleanup()"><%= tr('audit.deleteOld') %></button>
+<button class="btn" onclick="closeCleanupModal()"><%= tr('common.cancel') %></button>
 </div>
 </div>
 </div>
 
+<script>
+// 5.0.0: strings built by this inline script come from the dictionary, already
+// resolved for THIS user's locale (same pattern as the components list).
+window.SF_I18N = <%- JSON.stringify({ totalEntries: tr('audit.totalEntries') }) %>;
+</script>
 <script>
 function downloadLog() {
   window.open('/admin/audit/download', 'audit_log');
@@ -97,9 +105,10 @@ function doCleanup() {
 }
 
 // Show log count
+var I18N = window.SF_I18N || {};
 fetch('/admin/audit/count')
   .then(r => r.json())
   .then(data => {
-    document.getElementById('logInfo').textContent = 'Total entries: ' + data.total;
+    document.getElementById('logInfo').textContent = (I18N.totalEntries || '') + ' ' + data.total;
   });
 </script>

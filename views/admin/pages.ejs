@@ -1,9 +1,15 @@
+<%# i18n (5.0.0): every user-visible string goes through `t` (res.locals). The
+    fallback keeps standalone rendering working when a harness renders the
+    template without the session middleware. %>
+<% const tr = (typeof t === 'function') ? t : function (k) { return k; }; %>
+<% const pt = (typeof pageTitle === 'function') ? pageTitle : function (x) { return x; }; %>
+<% const loc = (typeof locale === 'string' && locale) ? locale : 'en'; %>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<%= loc %>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><%= title %> - StatusFe Admin</title>
+<title><%= pt(title) %> - <%= tr('common.adminTitle') %></title>
 <link rel="stylesheet" href="/css/admin.css">
 <script>document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('dark');});</script>
 </head>
@@ -12,7 +18,7 @@
 <%- include('../partials/_sidebar'); %>
 <main class="admin-main">
 <div class="admin-header">
-<h1><%= title %></h1>
+<h1><%= pt(title) %></h1>
 <% if (message) { %>
 <div class="flash flash-<%= messageType %>"><%= message %></div>
 <% } %>
@@ -20,43 +26,43 @@
 
 <% if (pageMode === 'list') { %>
 <div class="card-header-row">
-<h2>All Pages</h2>
-<a href="/admin/pages/new" class="btn btn-primary">+ New Page</a>
+<h2><%= tr('pages.allPages') %></h2>
+<a href="/admin/pages/new" class="btn btn-primary"><%= tr('pages.new') %></a>
 </div>
 
 <div class="table-container">
 <table class="admin-table">
 <thead>
 <tr>
-<th>Name</th>
-<th>Slug</th>
-<th>External ID</th>
-<th>Template</th>
-<th>Status</th>
-<th>Public</th>
-<th>Refresh</th>
-<th>Created</th>
-<th>Actions</th>
+<th><%= tr('components.thName') %></th>
+<th><%= tr('pages.slug') %></th>
+<th><%= tr('components.thExternalId') %></th>
+<th><%= tr('pages.template') %></th>
+<th><%= tr('components.thStatus') %></th>
+<th><%= tr('pages.thPublic') %></th>
+<th><%= tr('pages.thRefresh') %></th>
+<th><%= tr('components.thCreated') %></th>
+<th><%= tr('components.thActions') %></th>
 </tr>
 </thead>
 <tbody>
 <% if (pages.length === 0) { %>
-<tr><td colspan="9" class="empty-cell">No pages yet. <a href="/admin/pages/new">Create your first page</a>.</td></tr>
+<tr><td colspan="9" class="empty-cell"><%= tr('pages.noneYet') %> <a href="/admin/pages/new"><%= tr('pages.createFirst') %></a>.</td></tr>
 <% } else { %>
 <% pages.forEach(p => { %>
 <tr>
 <td><strong><%= p.name %></strong></td>
-<td><code><%= p.slug %></code> <a href="/status/<%= p.slug %>" target="_blank" class="btn btn-sm btn-visit" title="Visit page">↗</a></td>
+<td><code><%= p.slug %></code> <a href="/status/<%= p.slug %>" target="_blank" class="btn btn-sm btn-visit" title="<%= tr('pages.visit') %>">↗</a></td>
 <td><small><code><%= p.external_id || '-' %></code></small></td>
-<td><span class="template-badge template-<%= p.template || 'default' %>"><%= p.template === 'grid' ? 'Grid' : p.template === 'dark' ? 'Dark' : 'Default' %></span></td>
+<td><span class="template-badge template-<%= p.template || 'default' %>"><%= p.template === 'grid' ? tr('pages.tplGrid') : p.template === 'dark' ? tr('pages.tplDark') : tr('pages.tplDefault') %></span></td>
 <td><span class="status-badge status-<%= p.status %>"><%= p.status %></span></td>
-<td><span class="<%= p.is_public ? 'yes' : 'no' %>"><%= p.is_public ? 'Yes' : 'No' %></span></td>
+<td><span class="<%= p.is_public ? 'yes' : 'no' %>"><%= p.is_public ? tr('common.yes') : tr('common.no') %></span></td>
 <td><%= p.refresh_interval ? p.refresh_interval + 's' : '—' %></td>
 <td><%= p.created_at %></td>
 <td class="actions">
-<a href="/admin/pages/<%= p.id %>/edit" class="btn btn-sm">Edit</a>
-<form action="/admin/pages/<%= p.id %>?_method=DELETE" method="post" class="delete-form" onsubmit="return confirm('Delete this page?')">
-<button type="submit" class="btn btn-sm btn-danger">Delete</button>
+<a href="/admin/pages/<%= p.id %>/edit" class="btn btn-sm"><%= tr('common.edit') %></a>
+<form action="/admin/pages/<%= p.id %>?_method=DELETE" method="post" class="delete-form" onsubmit="return confirm('<%= tr('pages.confirmDelete') %>')">
+<button type="submit" class="btn btn-sm btn-danger"><%= tr('common.delete') %></button>
 </form>
 </td>
 </tr>
@@ -69,77 +75,77 @@
 
 <% if (pageMode === 'create' || pageMode === 'edit') { %>
 <div class="card">
-<h3><%= pageMode === 'create' ? 'Create New Page' : 'Edit Page' %></h3>
+<h3><%= pageMode === 'create' ? tr('pages.createTitle') : tr('nav.editPage') %></h3>
 <form action="<%= pageMode === 'create' ? '/admin/pages' : '/admin/pages/' + page.id %>" method="post">
 <% if (pageMode === 'edit') { %>
 <input type="hidden" name="_method" value="PUT">
 <% } %>
 <div class="form-group">
-<label for="name">Name</label>
-<input type="text" id="name" name="name" value="<%= page.name || '' %>" required placeholder="My Service Status">
+<label for="name"><%= tr('components.fieldName') %></label>
+<input type="text" id="name" name="name" value="<%= page.name || '' %>" required placeholder="<%= tr('pages.namePlaceholder') %>">
 </div>
 <div class="form-group">
-<label for="slug">Slug</label>
-<input type="text" id="slug" name="slug" value="<%= page.slug || '' %>" required placeholder="my-service-status">
-<small class="text-muted">Auto-generated from name, or edit manually. Only lowercase letters, numbers, and hyphens</small>
+<label for="slug"><%= tr('pages.slug') %></label>
+<input type="text" id="slug" name="slug" value="<%= page.slug || '' %>" required placeholder="<%= tr('pages.slugPlaceholder') %>">
+<small class="text-muted"><%= tr('pages.slugHelp') %></small>
 </div>
 <div class="form-group">
-<label for="description">Description</label>
+<label for="description"><%= tr('components.fieldDescription') %></label>
 <textarea id="description" name="description" rows="2"><%= page.description || '' %></textarea>
 </div>
 <div class="form-group">
-<label for="external_id">External ID</label>
-<input type="text" id="external_id" name="external_id" value="<%= page.external_id || '' %>" placeholder="ID from external system">
-<small class="text-muted">Used to link this status page with external monitoring systems.</small>
+<label for="external_id"><%= tr('components.fieldExternalId') %></label>
+<input type="text" id="external_id" name="external_id" value="<%= page.external_id || '' %>" placeholder="<%= tr('pages.externalIdPlaceholder') %>">
+<small class="text-muted"><%= tr('pages.externalIdHelp') %></small>
 </div>
 <div class="form-group">
-<label for="locale">Page language (public)</label>
+<label for="locale"><%= tr('pages.fieldLanguage') %></label>
 <select id="locale" name="locale">
-<option value="en" <%= (page.locale || 'en') === 'en' ? 'selected' : '' %>>English</option>
-<option value="es" <%= page.locale === 'es' ? 'selected' : '' %>>Español</option>
+<option value="en" <%= (page.locale || 'en') === 'en' ? 'selected' : '' %>><%= tr('nav.langEnTitle') %></option>
+<option value="es" <%= page.locale === 'es' ? 'selected' : '' %>><%= tr('nav.langEsTitle') %></option>
 </select>
-<small class="text-muted">Language of the public status page (labels and texts).</small>
+<small class="text-muted"><%= tr('pages.languageHelp') %></small>
 </div>
 <div class="form-group">
-<label for="organization_id">Organization (optional)</label>
+<label for="organization_id"><%= tr('pages.fieldOrganization') %></label>
 <select id="organization_id" name="organization_id">
-<option value="">— None —</option>
+<option value=""><%= tr('pages.orgNone') %></option>
 <% (typeof orgs !== 'undefined' ? orgs : []).forEach(o => { %>
 <option value="<%= o.id %>" <%= page.organization_id === o.id ? 'selected' : '' %>><%= o.name %> (<%= o.slug %>)</option>
 <% }) %>
 </select>
 </div>
 <div class="form-group">
-<label for="logo_url">Page logo URL (optional)</label>
+<label for="logo_url"><%= tr('pages.fieldLogoUrl') %></label>
 <input type="url" id="logo_url" name="logo_url" value="<%= page.logo_url || '' %>" placeholder="https://.../logo.png">
-<small class="text-muted">Shown instead of the global Customize logo on this page's status page.</small>
+<small class="text-muted"><%= tr('pages.logoHelp') %></small>
 </div>
 <div class="form-group">
-<label for="status">Status</label>
+<label for="status"><%= tr('components.fieldStatus') %></label>
 <select id="status" name="status">
-<option value="operational" <%= page.status === 'operational' ? 'selected' : '' %>>Operational</option>
-<option value="degraded_performance" <%= page.status === 'degraded_performance' ? 'selected' : '' %>>Degraded Performance</option>
-<option value="partial_outage" <%= page.status === 'partial_outage' ? 'selected' : '' %>>Partial Outage</option>
-<option value="major_outage" <%= page.status === 'major_outage' ? 'selected' : '' %>>Major Outage</option>
-<option value="under_maintenance" <%= page.status === 'under_maintenance' ? 'selected' : '' %>>Under Maintenance</option>
+<option value="operational" <%= page.status === 'operational' ? 'selected' : '' %>><%= tr('components.statusLongOperational') %></option>
+<option value="degraded_performance" <%= page.status === 'degraded_performance' ? 'selected' : '' %>><%= tr('components.statusLongDegraded') %></option>
+<option value="partial_outage" <%= page.status === 'partial_outage' ? 'selected' : '' %>><%= tr('components.statusLongPartial') %></option>
+<option value="major_outage" <%= page.status === 'major_outage' ? 'selected' : '' %>><%= tr('components.statusLongMajor') %></option>
+<option value="under_maintenance" <%= page.status === 'under_maintenance' ? 'selected' : '' %>><%= tr('components.statusLongMaintenance') %></option>
 </select>
 </div>
 <div class="form-group">
-<label>Template</label>
+<label><%= tr('pages.template') %></label>
 <div class="template-preview-grid">
 <% ['default', 'grid', 'dark'].forEach(t => { %>
 <label class="template-option <%= (pageMode === 'edit' && page.template === t) || (pageMode === 'create' && t === 'default') ? 'selected' : '' %>">
 <input type="radio" name="template" value="<%= t %>" <%= (pageMode === 'edit' && page.template === t) || (pageMode === 'create' && t === 'default') ? 'checked' : '' %> onchange="updateTemplateSelection(this)">
 <div class="template-card">
 <div class="template-card-header">
-<span class="template-card-name"><%= t === 'default' ? 'Default' : t === 'grid' ? 'Grid' : 'Dark' %></span>
+<span class="template-card-name"><%= t === 'default' ? tr('pages.tplDefault') : t === 'grid' ? tr('pages.tplGrid') : tr('pages.tplDark') %></span>
 </div>
 <div class="template-card-preview">
 <% if (t === 'default') { %>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 200">
 <rect width="280" height="200" fill="#ffffff" rx="8"/>
 <rect x="20" y="16" width="100" height="16" rx="8" fill="#dcffe4"/>
-<text x="24" y="28" font-size="8" fill="#065f46" font-family="sans-serif">System Status</text>
+<text x="24" y="28" font-size="8" fill="#065f46" font-family="sans-serif"><%= tr('pages.previewTitle') %></text>
 <line x1="20" y1="44" x2="260" y2="44" stroke="#f0f0f0" stroke-width="1"/>
 <rect x="20" y="54" width="16" height="16" rx="8" fill="#10b981"/>
 <rect x="44" y="56" width="80" height="8" rx="4" fill="#e2e8f0"/>
@@ -210,41 +216,41 @@
 <div class="form-group checkbox-group">
 <label>
 <input type="checkbox" id="is_public" name="is_public" <%= page.is_public ? 'checked' : '' %>>
-Make page public
+<%= tr('pages.makePublic') %>
 </label>
 </div>
 <div class="form-group">
-<label for="refresh_interval">Public Page Refresh Interval (seconds)</label>
+<label for="refresh_interval"><%= tr('pages.fieldRefresh') %></label>
 <select id="refresh_interval" name="refresh_interval">
-<option value="15" <%= (page.refresh_interval || 15) === 15 ? 'selected' : '' %>>15 seconds</option>
-<option value="30" <%= (page.refresh_interval || 15) === 30 ? 'selected' : '' %>>30 seconds</option>
-<option value="60" <%= (page.refresh_interval || 15) === 60 ? 'selected' : '' %>>1 minute</option>
-<option value="120" <%= (page.refresh_interval || 15) === 120 ? 'selected' : '' %>>2 minutes</option>
-<option value="300" <%= (page.refresh_interval || 15) === 300 ? 'selected' : '' %>>5 minutes</option>
+<option value="15" <%= (page.refresh_interval || 15) === 15 ? 'selected' : '' %>><%= tr('pages.every15s') %></option>
+<option value="30" <%= (page.refresh_interval || 15) === 30 ? 'selected' : '' %>><%= tr('pages.every30s') %></option>
+<option value="60" <%= (page.refresh_interval || 15) === 60 ? 'selected' : '' %>><%= tr('pages.minute1') %></option>
+<option value="120" <%= (page.refresh_interval || 15) === 120 ? 'selected' : '' %>><%= tr('pages.minutes2') %></option>
+<option value="300" <%= (page.refresh_interval || 15) === 300 ? 'selected' : '' %>><%= tr('pages.minutes5') %></option>
 </select>
 </div>
 <div class="form-group">
-<label>Components</label>
+<label><%= tr('nav.components') %></label>
 <% if (components && components.length > 0) { %>
-<input type="text" id="pageCompFilter" class="filter-input" placeholder="Type to search components...">
+<input type="text" id="pageCompFilter" class="filter-input" placeholder="<%= tr('pages.compFilterPlaceholder') %>">
 <div class="component-checkboxes" id="pageCompList">
 <% components.forEach(c => { %>
 <label class="component-checkbox" data-filter-row data-filter-text="<%= c.name %> <%= c.group_name || '' %>">
 <input type="checkbox" name="component_ids" value="<%= c.id %>" <%= (assignedComponentIds || []).includes(c.id) ? 'checked' : '' %>>
-<%= c.name %> <small class="text-muted">(<%= c.group_name || 'Other' %>)</small>
+<%= c.name %> <small class="text-muted">(<%= c.group_name || tr('pages.groupFallback') %>)</small>
 </label>
 <% }) %>
-<div data-filter-empty style="display:none;" class="text-muted">No components match your search.</div>
+<div data-filter-empty style="display:none;" class="text-muted"><%= tr('components.noMatchHint') %></div>
 </div>
-<small class="text-muted"><%= components.length %> component<%= components.length === 1 ? '' : 's' %> — assigned ones stay checked while you search.</small>
+<small class="text-muted"><%= tr(components.length === 1 ? 'pages.countOne' : 'pages.countMany', { count: components.length }) %></small>
 <% } else { %>
-<small class="text-muted">No components created yet. <a href="/admin/components/new">Create components first</a>.</small>
+<small class="text-muted"><%= tr('pages.noComponents') %> <a href="/admin/components/new"><%= tr('pages.createComponentsFirst') %></a>.</small>
 <% } %>
 </div>
 <div class="form-group">
-<label>Groups shown on this page</label>
+<label><%= tr('pages.groupsLabel') %></label>
 <% if (groups && groups.length > 0) { %>
-<input type="text" id="pageGroupFilter" class="filter-input" placeholder="Type to search groups...">
+<input type="text" id="pageGroupFilter" class="filter-input" placeholder="<%= tr('components.groupFilterPlaceholder') %>">
 <div class="component-checkboxes" id="pageGroupList">
 <% groups.forEach(g => { %>
 <label class="component-checkbox" data-filter-row data-filter-text="<%= g.name %>">
@@ -252,45 +258,45 @@ Make page public
 <%= g.name %>
 </label>
 <% }) %>
-<div data-filter-empty style="display:none;" class="text-muted">No groups match your search.</div>
+<div data-filter-empty style="display:none;" class="text-muted"><%= tr('components.noGroupMatch') %></div>
 </div>
-<small class="text-muted">All components of the selected groups appear automatically on this page, ordered by group position. Global groups (marked Global) appear on every page.</small>
+<small class="text-muted"><%= tr('pages.groupsHelp') %></small>
 <% } else { %>
-<small class="text-muted">No groups created yet. <a href="/admin/groups/new">Create a group</a> to show its components here automatically.</small>
+<small class="text-muted"><%= tr('pages.noGroupsYet') %> <a href="/admin/groups/new"><%= tr('pages.createGroup') %></a> <%= tr('pages.noGroupsSuffix') %></small>
 <% } %>
 </div>
 <div class="form-group">
-<label for="custom_css">Custom CSS</label>
-<textarea id="custom_css" name="custom_css" rows="6" placeholder="/* Your custom CSS */"><%= page.custom_css || '' %></textarea>
-<small class="text-muted">CSS injected into the status page. Use it to override styles, change colors, fonts, etc.</small>
+<label for="custom_css"><%= tr('pages.fieldCustomCss') %></label>
+<textarea id="custom_css" name="custom_css" rows="6" placeholder="<%= tr('pages.cssPlaceholder') %>"><%= page.custom_css || '' %></textarea>
+<small class="text-muted"><%= tr('pages.cssHelp') %></small>
 </div>
 <div class="form-group">
-<label for="custom_html">Custom HTML (injected before &lt;/body&gt;)</label>
+<label for="custom_html"><%= tr('pages.fieldCustomHtml') %> &lt;/body&gt;)</label>
 <textarea id="custom_html" name="custom_html" rows="6" placeholder="<!-- Your custom HTML -->"><%= (page.custom_html || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') %></textarea>
-<small class="text-muted">HTML injected at the bottom of the status page. Use it for embed widgets, tracking scripts, etc.</small>
+<small class="text-muted"><%= tr('pages.htmlHelp') %></small>
 </div>
 <div class="form-group checkbox-group">
 <label>
 <input type="checkbox" id="custom_layout" name="custom_layout" <%= page.custom_layout ? 'checked' : '' %>>
-Use custom layout (replace entire page design with custom CSS/HTML below)
+<%= tr('pages.useCustomLayout') %>
 </label>
 </div>
 <div id="customLayoutFields" style="<%= page.custom_layout ? '' : 'display:none;' %>">
 <div class="form-group">
-<label for="custom_layout_css">Custom Layout CSS (full page)</label>
-<textarea id="custom_layout_css" name="custom_layout_css" rows="10" placeholder="/* Your full custom CSS */"><%= page.custom_layout_css || '' %></textarea>
-<small class="text-muted">Full CSS for the entire page. You have complete control over the design. Use the data attributes and class names listed below.</small>
+<label for="custom_layout_css"><%= tr('pages.fieldLayoutCss') %></label>
+<textarea id="custom_layout_css" name="custom_layout_css" rows="10" placeholder="<%= tr('pages.layoutCssPlaceholder') %>"><%= page.custom_layout_css || '' %></textarea>
+<small class="text-muted"><%= tr('pages.layoutCssHelp') %></small>
 </div>
 <div class="form-group">
-<label for="custom_layout_html">Custom Layout HTML (full page body)</label>
+<label for="custom_layout_html"><%= tr('pages.fieldLayoutHtml') %></label>
 <textarea id="custom_layout_html" name="custom_layout_html" rows="10" placeholder="<!DOCTYPE html>..."><%= page.custom_layout_html || '' %></textarea>
-<small class="text-muted">Full HTML for the page body. Use <code>{{components}}</code>, <code>{{page_name}}</code>, <code>{{page_status}}</code>, <code>{{incidents}}</code> as placeholders.</small>
+<small class="text-muted"><%= tr('pages.layoutHtmlHelpPrefix') %> <code>{{components}}</code>, <code>{{page_name}}</code>, <code>{{page_status}}</code>, <code>{{incidents}}</code> <%= tr('pages.layoutHtmlHelpSuffix') %></small>
 </div>
 </div>
 <div class="form-actions">
-<button type="submit" class="btn btn-primary"><%= pageMode === 'create' ? 'Create Page' : 'Save Changes' %></button>
+<button type="submit" class="btn btn-primary"><%= pageMode === 'create' ? tr('pages.createButton') : tr('components.saveButton') %></button>
 <% if (pageMode === 'edit') { %>
-<a href="/admin/pages" class="btn">Cancel</a>
+<a href="/admin/pages" class="btn"><%= tr('common.cancel') %></a>
 <% } %>
 </div>
 </form>
