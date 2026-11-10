@@ -26,7 +26,7 @@ por usuario. Hoy el panel está solo en inglés; el `pages.locale` existente afe
 
 | Fase | Alcance | Estado |
 |---|---|---|
-| 1 | Infraestructura (`t()`, diccionarios, columna, selector) + sidebar + dashboard + componentes + canales + flashes | en curso |
+| 1 | Infraestructura (`t()`, diccionarios, columna, selector) + sidebar + dashboard + componentes + canales + flashes | **hecho en 5.0.0** (249 claves/idioma, 44 checks) |
 | 2 | Resto de vistas del panel (páginas, organizaciones, audit, suscriptores, notificaciones, grupos, dependencias, customize, analytics, config, 2FA, docs, changelog) | pendiente |
 | 3 | Revisión de coherencia: buscar literales en inglés que queden en `views/admin/` | pendiente |
 
