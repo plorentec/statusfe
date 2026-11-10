@@ -27,12 +27,14 @@ All notable changes to StatusFe.
   resolución con la IP fijada, rechazo cuando **una** de las respuestas es
   privada, `3xx` sin segunda conexión, y timeout acotado sin lanzar.
 - Suite: **981 checks**.
-- **Review nativo: no pudo completarse.** Se intentó dos veces y el proveedor
-  devolvió `reviewer-empty-output` (una con 32.768 tokens de razonamiento y cero
-  texto; otra con cero tokens). El lineage queda abierto. La cobertura de este
-  cambio es la del arnés —12 aserciones de seguridad nuevas (C9-C12) más una
-  prueba con socket real del transporte— y **no** un revisor independiente.
-  Queda como deuda explícita, igual que la lente de fiabilidad de 3.9.0.
+- **Review nativo: aprobado al tercer intento.** Los dos primeros fallaron por el
+  proveedor (`reviewer-empty-output`: 32.768 tokens de razonamiento sin texto, y
+  después cero tokens). El tercero **aprobó** el cambio, con tres avisos no
+  bloqueantes.
+  **Matiz honesto**: la aprobación no se pudo *quemar* porque este mismo párrafo
+  se añadió en un commit posterior y el árbol dejó de coincidir con el candidato
+  revisado. La aprobación existe como evidencia sobre el código; la autoridad del
+  lineage quedó sin cerrar por ese orden de pasos, no por un hallazgo.
 
 ## [5.3.0] — 2026-11-08
 
