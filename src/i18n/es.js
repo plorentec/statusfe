@@ -60,6 +60,8 @@ module.exports = {
   'nav.auditLog': 'Registro de auditoría',
   'nav.logout': 'Cerrar sesión',
   'nav.language': 'Idioma',
+  'nav.languageHelp': 'Idioma de los textos de este panel. No cambia la página pública de estado.',
+  'nav.languageCurrent': 'Actual',
   'nav.langEn': 'EN',
   'nav.langEs': 'ES',
   'nav.langEnTitle': 'English',

@@ -67,6 +67,8 @@ module.exports = {
   'nav.auditLog': 'Audit Log',
   'nav.logout': 'Logout',
   'nav.language': 'Language',
+  'nav.languageHelp': 'Text language for this panel. It does not change the public status page.',
+  'nav.languageCurrent': 'Current',
   'nav.langEn': 'EN',
   'nav.langEs': 'ES',
   'nav.langEnTitle': 'English',

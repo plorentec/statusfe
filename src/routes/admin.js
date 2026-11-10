@@ -1026,12 +1026,17 @@ router.get('/users', async (req, res) => {
     return res.redirect('/admin?msg=admin&type=error');
   }
   const users = await queryAll('SELECT id, email, name, role, created_at FROM users ORDER BY created_at DESC', []);
+  // 5.0.2: sin SMTP configurado no se puede mandar el correo de bienvenida, así
+  // que la casilla no debe venir marcada por defecto (mentía).
+  const smtp = await settings.getSMTP();
+  const smtpReady = !!(smtp && smtp.host && smtp.from);
   res.render('admin/users', {
     title: 'Users',
     user: req.user,
     message: res.locals.message,
     messageType: res.locals.messageType,
-    users
+    users,
+    smtpReady
   });
 });
 
@@ -1059,8 +1064,11 @@ router.post('/users', async (req, res) => {
     [id, email, passwordHash, name, role || 'user', 0, null]
   );
   
-  // Send welcome email if SMTP is configured
-  const sendWelcome = req.body.send_welcome === '1';
+  // Send welcome email if SMTP is configured. The guard is here too: a request
+  // that asks for the email without SMTP must not create a dangling reset token.
+  const smtpNow = await settings.getSMTP();
+  const smtpReadyNow = !!(smtpNow && smtpNow.host && smtpNow.from);
+  const sendWelcome = req.body.send_welcome === '1' && smtpReadyNow;
   if (sendWelcome) {
     const emailUtils = require('../utils/email');
     const { passwordResets } = require('../db/models');

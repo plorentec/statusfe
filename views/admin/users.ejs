@@ -76,7 +76,11 @@
 <div class="form-row">
 <div class="form-group">
 <label for="password">Password</label>
-<input type="password" id="password" name="password" required minlength="6">
+<div style="display:flex;gap:8px;align-items:center;">
+<input type="password" id="password" name="password" required minlength="6" style="flex:1;">
+<button type="button" class="btn" id="genPassword" title="Genera una contraseña aleatoria">Generar</button>
+</div>
+<p class="text-muted" style="margin:6px 0 0;font-size:12px;">Se mostrará una vez; el usuario puede cambiarla después.</p>
 </div>
 <div class="form-group">
 <label for="role">Role</label>
@@ -88,8 +92,13 @@
 </div>
 <div class="form-actions">
 <label style="display:flex;align-items:center;gap:8px;margin-bottom:12px;cursor:pointer;">
+<% if (typeof smtpReady !== 'undefined' && smtpReady) { %>
 <input type="checkbox" id="send_welcome" name="send_welcome" value="1" checked>
-<span>Send welcome email with password setup link</span>
+<span>Enviar correo de bienvenida con el enlace para poner contraseña</span>
+<% } else { %>
+<input type="checkbox" id="send_welcome" name="send_welcome" value="1" disabled>
+<span style="opacity:.6;">Correo de bienvenida no disponible: configura el SMTP en Correo</span>
+<% } %>
 </label>
 <button type="submit" class="btn btn-primary">Create User</button>
 <button type="button" class="btn" onclick="document.getElementById('userForm').style.display='none'">Cancel</button>
@@ -121,3 +130,16 @@
 </script>
 </body>
 </html>
+<script>
+// 5.0.2: genera una contraseña legible (sin caracteres confundibles) en el navegador.
+document.getElementById('genPassword').addEventListener('click', function () {
+  var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+  var out = '';
+  var buf = new Uint32Array(16);
+  (window.crypto || window.msCrypto).getRandomValues(buf);
+  for (var i = 0; i < 16; i++) { out += chars[buf[i] % chars.length]; }
+  var field = document.getElementById('password');
+  field.value = out;
+  field.type = 'text';
+});
+</script>

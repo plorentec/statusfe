@@ -81,10 +81,14 @@ document.addEventListener('DOMContentLoaded', function() {
     (function(p) {
       p.addEventListener('click', function(e) {
         e.preventDefault();
-        p.classList.toggle('open');
+        // Sync both elements to the SAME target state. Toggling them
+        // independently breaks as soon as the server renders one of them open
+        // (data-submenu-open-guard): the first click would close instead of open.
         var submenu = p.nextElementSibling;
+        var willOpen = !p.classList.contains('open');
+        p.classList.toggle('open', willOpen);
         if (submenu && submenu.classList.contains('sidebar-submenu')) {
-          submenu.classList.toggle('open');
+          submenu.classList.toggle('open', willOpen);
         }
       });
     })(parents[i]);

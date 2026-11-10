@@ -9,6 +9,32 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [5.0.2] — 2026-11-08
+
+### Fixed
+- **El menú lateral se cerraba al primer clic.** El `data-submenu-open-guard`
+  pinta el submenú abierto desde el servidor, pero el JS alternaba el `<a>` y el
+  `<nav>` por separado: al estar uno ya abierto, el primer clic **cerraba**.
+  Ahora ambos se sincronizan al mismo estado.
+- **El correo de bienvenida venía marcado sin SMTP.** La casilla de «enviar
+  correo» aparecía activada aunque no hubiera SMTP configurado: el alta creaba
+  un token de reseteo que nunca se entregaba. Ahora la casilla solo se ofrece si
+  el SMTP está configurado (con aviso claro si no), y la ruta **rechaza** el
+  envío aunque la petición lo pida.
+
+### Added
+- **Botón «Generar» contraseña** en el alta de usuario: 16 caracteres sin
+  caracteres confundibles, generados en el navegador con `crypto.getRandomValues`.
+
+### Changed
+- El **selector de idioma** se movió de la sidebar a **Personalizar**, junto al
+  resto de ajustes de apariencia.
+
+### Verified
+- `verify_i18n_admin.js` actualizado: el selector se comprueba en Personalizar y
+  se verifica que **ya no** está en las sidebars.
+- Suite: **971 checks** en 34 arneses.
+
 ## [5.0.1] — 2026-11-08
 
 ### Changed

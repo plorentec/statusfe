@@ -1,3 +1,5 @@
+<% const __loc = (typeof locale === 'string' && locale) ? locale : 'es'; %>
+<% const __tr = (typeof t === 'function') ? t : function (k) { return k; }; %>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -33,6 +35,17 @@
 </div>
 </div>
 <small class="text-muted">Applied to the logo on all public status pages.</small>
+</div>
+
+<div class="card" style="margin-top:20px;" id="language">
+<h4><%= __tr('nav.language') %></h4>
+<p class="text-muted" style="margin-bottom:12px;"><%= __tr('nav.languageHelp') %></p>
+<form method="post" action="/admin/locale">
+<%- include("../partials/_csrf"); %>
+<button type="submit" name="locale" value="es" class="btn <%= __loc === 'es' ? 'btn-primary' : '' %>" style="margin-right:8px;">Español</button>
+<button type="submit" name="locale" value="en" class="btn <%= __loc === 'en' ? 'btn-primary' : '' %>">English</button>
+<span class="text-muted" style="margin-left:10px;"><%= __tr('nav.languageCurrent') %>: <%= __loc.toUpperCase() %></span>
+</form>
 </div>
 
 <div class="card" style="margin-top:20px;">

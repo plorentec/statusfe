@@ -219,23 +219,25 @@ const storedLocale = async () => (await queryOne("SELECT locale FROM users WHERE
     englishPage.status === 200 && englishPage.body.includes('Incidentes abiertos') && !englishPage.body.includes('Open Incidents'),
     'status ' + englishPage.status);
 
-  // ===== I5. the selector is in BOTH sidebar copies =====================
-  const sidebarFiles = ['views/admin.ejs', 'views/partials/_sidebar.ejs'];
-  for (const f of sidebarFiles) {
+  // ===== I5. el selector vive en Personalizar (5.0.2) ==================
+  const customizeSrc = fs.readFileSync(path.join(ROOT, 'views/admin/customize.ejs'), 'utf8');
+  check('I5: views/admin/customize.ejs posts the selector to /admin/locale with a CSRF token',
+    /<form[^>]*method="post"[^>]*action="\/admin\/locale"/.test(customizeSrc) &&
+    /_csrf/.test(customizeSrc) && /value="en"/.test(customizeSrc) && /value="es"/.test(customizeSrc));
+  for (const f of ['views/admin.ejs', 'views/partials/_sidebar.ejs']) {
     const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
-    const hasForm = /<form[^>]*method="post"[^>]*action="\/admin\/locale"/.test(src);
-    const hasCsrf = /name="_csrf"/.test(src);
-    const hasBoth = /value="en"/.test(src) && /value="es"/.test(src);
-    check('I5: ' + f + ' posts the selector to /admin/locale with a CSRF token', hasForm && hasCsrf && hasBoth,
-      'form=' + hasForm + ' csrf=' + hasCsrf + ' both-buttons=' + hasBoth);
+    check('I5: ' + f + ' ya NO lleva el selector (vive en Personalizar)',
+      !/action="\/admin\/locale"/.test(src));
   }
-  const renderedSelector = englishPage.body.match(/<form[^>]*action="\/admin\/locale"[\s\S]*?<\/form>/);
-  check('I5: the rendered panel carries exactly one selector form with both buttons',
-    !!renderedSelector && /value="en"/.test(renderedSelector[0]) && /value="es"/.test(renderedSelector[0]) &&
+  const customizePage = await req('GET', '/admin/customize', { headers: { Cookie: cookieHeader() } });
+  const renderedSelector = customizePage.body.match(/<form[^>]*action="\/admin\/locale"[\s\S]*?<\/form>/);
+  check('I5: la página de Personalizar trae un selector con los dos botones y CSRF',
+    customizePage.status === 200 && !!renderedSelector &&
+    /value="en"/.test(renderedSelector[0]) && /value="es"/.test(renderedSelector[0]) &&
     /name="_csrf" value="[^"]+"/.test(renderedSelector[0]),
-    renderedSelector ? renderedSelector[0].slice(0, 90).replace(/\s+/g, ' ') : 'no form');
-  check('I5: the current locale is marked active (ES highlighted before the change)',
-    !!renderedSelector && /value="es"[^>]*background:#10b981/.test(renderedSelector[0]) && !/value="en"[^>]*background:#10b981/.test(renderedSelector[0]));
+    customizePage.status + ' / ' + (renderedSelector ? 'form ok' : 'no form'));
+  check('I5: el idioma actual aparece marcado como activo (btn-primary)',
+    !!renderedSelector && /value="es"[^>]*btn-primary/.test(renderedSelector[0]) && !/value="en"[^>]*btn-primary/.test(renderedSelector[0]));
 
   // ===== I4. switching to Spanish ======================================
   const csrf = jar['_csrf'];
@@ -257,9 +259,8 @@ const storedLocale = async () => (await queryOne("SELECT locale FROM users WHERE
   // NOTE: `Disk Usage` also appears in an HTML comment of dashboard.ejs, so the
   // assertion uses visible English chrome only.
   check('I4: the English counterpart is gone', !spanishPage.body.includes('Open Incidents') && !spanishPage.body.includes('Total Incidents'));
-  check('I4: <html lang="es"> and the ES button marked active',
-    spanishPage.body.includes('<html lang="es">') &&
-    !!spanishPage.body.match(/value="es"[^>]*background:#10b981/));
+  check('I4: <html lang="es"> en la página traducida',
+    spanishPage.body.includes('<html lang="es">'));
 
   const esComponents = await req('GET', '/admin/components', { headers: { Cookie: cookieHeader() } });
   check('I4: another translated view follows the same preference (components list)',
