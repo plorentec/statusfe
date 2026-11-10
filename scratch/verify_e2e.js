@@ -231,10 +231,14 @@ const check = (name, cond, extra) => {
   // CHANGELOG.md, not the frozen hardcoded blurb it used to render.
   const chg = await req('GET', '/admin/changelog', { headers: { Cookie: cookieHeader() } });
   const pkgVersion = require(path.join(__dirname, '..', 'package.json')).version;
+  // Se comprueban los TÍTULOS (summary), no el cuerpo: "[Unreleased]" puede
+  // aparecer legítimamente dentro del texto de una entrada.
+  const summaries = (chg.body.match(/<summary[^>]*>([^<]*)<\/summary>/g) || []).map(t => t.replace(/<[^>]+>/g, ''));
   check('/admin/changelog muestra el historial real y la versión instalada',
     chg.status === 200 && chg.body.includes('Release history')
-    && chg.body.includes('[' + pkgVersion + ']') && !chg.body.includes('[Unreleased]'),
-    chg.status + ' / version=' + pkgVersion);
+    && summaries.some(t => t.includes('[' + pkgVersion + ']'))
+    && !summaries.some(t => /^\[\s*unreleased\s*\]/i.test(t)),
+    chg.status + ' / version=' + pkgVersion + ' / ' + summaries.length + ' entradas, primera: ' + (summaries[0] || 'ninguna'));
 
   // 6. Edit component: "No group" clears group
   const upd = await req('PUT', '/admin/components/' + comp.id, {

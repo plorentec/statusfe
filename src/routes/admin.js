@@ -1512,7 +1512,9 @@ function readChangelog(maxEntries) {
       return { version: title, body };
     });
   } catch (e) {
-    console.error('Could not read CHANGELOG.md:', e.message);
+    // Loud on purpose: in production this means the file was not shipped in the
+    // image (see Dockerfile), and the page would look empty with no explanation.
+    console.error('Could not read CHANGELOG.md (missing from the image?):', e.message);
     return [];
   }
 }

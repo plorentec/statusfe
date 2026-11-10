@@ -13,6 +13,10 @@ RUN npm install
 COPY src/ ./src/
 COPY public/ ./public/
 COPY views/ ./views/
+# 4.0.2: the changelog page renders this file server-side, so it has to be in the
+# image. Without it the page silently falls back to "no CHANGELOG.md found" —
+# a gap the harnesses cannot see because they run from the repo, not the image.
+COPY CHANGELOG.md ./CHANGELOG.md
 
 RUN mkdir -p /app/data
 

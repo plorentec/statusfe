@@ -9,6 +9,19 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [4.0.2] — 2026-11-08
+
+### Fixed
+- **La página del Changelog seguía vacía en producción**: `CHANGELOG.md` no se
+  copiaba a la imagen Docker. Los arneses corren desde el repositorio, donde el
+  fichero existe, así que **no podían verlo**; solo al mirar dentro del
+  contenedor apareció. El `Dockerfile` ahora lo incluye, y el log de error dice
+  explícitamente que el fichero falta en la imagen.
+
+### Verified
+- Comprobado en el contenedor de producción que el fichero está presente y la
+  página renderiza el historial real.
+
 ## [4.0.1] — 2026-11-08
 
 ### Fixed
