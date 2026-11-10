@@ -1,9 +1,15 @@
+<%# i18n (5.0.0): every user-visible string goes through `t` (res.locals). The
+    fallback keeps standalone rendering working when a harness renders the
+    template without the session middleware. %>
+<% const tr = (typeof t === 'function') ? t : function (k) { return k; }; %>
+<% const pt = (typeof pageTitle === 'function') ? pageTitle : function (x) { return x; }; %>
+<% const loc = (typeof locale === 'string' && locale) ? locale : 'en'; %>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<%= loc %>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><%= title %> - StatusFe Admin</title>
+<title><%= pt(title) %> - <%= tr('common.adminTitle') %></title>
 <link rel="stylesheet" href="/css/admin.css">
 <script>document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('dark');});</script>
 </head>
@@ -12,7 +18,7 @@
 <%- include('../partials/_sidebar'); %>
 <main class="admin-main">
 <div class="admin-header">
-<h1><%= title %></h1>
+<h1><%= pt(title) %></h1>
 <% if (message) { %>
 <div class="flash flash-<%= messageType %>"><%= message %></div>
 <% } %>
@@ -31,41 +37,41 @@
 <% const tsOf = v => { const t = asDate(v).getTime(); return isNaN(t) ? 0 : t; }; %>
 <% const fmtDate = v => { const d = asDate(v); if (isNaN(d.getTime())) return String(v || ''); const p = n => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); }; %>
 <div class="card-header-row">
-<h2>All Components</h2>
+<h2><%= tr('components.title') %></h2>
 <div style="display:flex;gap:8px;">
-<button type="button" id="bulk-delete-btn" class="btn btn-danger" disabled>Delete Selected</button>
-<a href="/admin/components/new" class="btn btn-primary">+ New Component</a>
+<button type="button" id="bulk-delete-btn" class="btn btn-danger" disabled><%= tr('components.deleteSelected') %></button>
+<a href="/admin/components/new" class="btn btn-primary"><%= tr('components.new') %></a>
 </div>
 </div>
 
 <form id="componentListFilter" class="list-toolbar" method="get" action="/admin/components">
 <div class="search-box">
 <svg class="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.6-3.6"></path></svg>
-<input type="text" class="search-input" id="componentSearchInput" name="q" value="<%= searchQuery %>" placeholder="Search by name, group, ID or description…" autocomplete="off" spellcheck="false" aria-label="Search components">
-<button type="button" class="search-clear" id="componentSearchClear" title="Clear search" aria-label="Clear search"<% if (!searchQuery) { %> hidden<% } %>>&times;</button>
+<input type="text" class="search-input" id="componentSearchInput" name="q" value="<%= searchQuery %>" placeholder="<%= tr('components.searchPlaceholder') %>" autocomplete="off" spellcheck="false" aria-label="<%= tr('components.searchAria') %>">
+<button type="button" class="search-clear" id="componentSearchClear" title="<%= tr('components.clearSearch') %>" aria-label="<%= tr('components.clearSearch') %>"<% if (!searchQuery) { %> hidden<% } %>>&times;</button>
 <input type="hidden" name="sort" id="componentSortInput" value="<%= sortBy %>">
 </div>
-<div class="list-meta" id="componentListMeta"><%= compCount + (compCount === 1 ? ' component' : ' components') %></div>
-<noscript><button type="submit" class="btn btn-sm">Search</button></noscript>
+<div class="list-meta" id="componentListMeta"><%= tr(compCount === 1 ? 'components.countOne' : 'components.countMany', { count: compCount }) %></div>
+<noscript><button type="submit" class="btn btn-sm"><%= tr('components.search') %></button></noscript>
 </form>
 
 <div class="table-container">
 <table id="component-list-table" class="admin-table">
 <thead>
 <tr>
-<th class="th-check"><input type="checkbox" id="select-all-checkbox" aria-label="Select all visible components"></th>
-<%- thTag('name', 'Name') %>
-<%- thTag('external_id', 'External ID') %>
-<%- thTag('group', 'Group') %>
-<%- thTag('status', 'Status') %>
-<%- thTag('position', 'Position') %>
-<%- thTag('created', 'Created') %>
-<th class="th-actions">Actions</th>
+<th class="th-check"><input type="checkbox" id="select-all-checkbox" aria-label="<%= tr('components.selectAll') %>"></th>
+<%- thTag('name', tr('components.thName')) %>
+<%- thTag('external_id', tr('components.thExternalId')) %>
+<%- thTag('group', tr('components.thGroup')) %>
+<%- thTag('status', tr('components.thStatus')) %>
+<%- thTag('position', tr('components.thPosition')) %>
+<%- thTag('created', tr('components.thCreated')) %>
+<th class="th-actions"><%= tr('components.thActions') %></th>
 </tr>
 </thead>
 <tbody>
 <% if (components.length === 0) { %>
-<tr><td colspan="8" class="empty-cell"><% if (searchQuery) { %>No components match <strong><%= searchQuery %></strong>. <a href="/admin/components">Clear the search</a>.<% } else { %>No components yet. <a href="/admin/components/new">Create your first component</a>.<% } %></td></tr>
+<tr><td colspan="8" class="empty-cell"><% if (searchQuery) { %><%= tr('components.noMatchPrefix') %> <strong><%= searchQuery %></strong>. <a href="/admin/components"><%= tr('components.clearSearchLink') %></a>.<% } else { %><%= tr('components.noneYet') %> <a href="/admin/components/new"><%= tr('components.createFirst') %></a>.<% } %></td></tr>
 <% } else { %>
 <% components.forEach(c => {
   const compGroups = c.groups || [];
@@ -74,40 +80,40 @@
   const createdTs = tsOf(c.created_at);
 %>
 <tr class="component-row" data-name="<%= c.name %>" data-external="<%= c.external_id || '' %>" data-group="<%= groupText === '-' ? '' : groupText %>" data-status="<%= c.status %>" data-pos="<%= Number(c.position) || 0 %>" data-ts="<%= createdTs %>" data-search="<%= searchText %>">
-<td><input type="checkbox" name="component_ids" class="component-row-check" value="<%= c.id %>" aria-label="Select <%= c.name %>"></td>
-<td<% if (c.parent_id) { %> class="child-cell"<% } %>><strong><%= c.name %></strong><% if (c.parent_id) { %> <small class="child-parent-tag" title="Child of <%= c.parent_name || 'parent' %>">&#8627; <%= c.parent_name || 'parent' %></small><% } %><br><small class="text-muted"><%= c.description || '' %></small></td>
+<td><input type="checkbox" name="component_ids" class="component-row-check" value="<%= c.id %>" aria-label="<%= tr('components.selectRow', { name: c.name }) %>"></td>
+<td<% if (c.parent_id) { %> class="child-cell"<% } %>><strong><%= c.name %></strong><% if (c.parent_id) { %> <small class="child-parent-tag" title="<%= tr('components.childOf', { name: c.parent_name || tr('components.parentFallback') }) %>">&#8627; <%= c.parent_name || tr('components.parentFallback') %></small><% } %><br><small class="text-muted"><%= c.description || '' %></small></td>
 <td><small><code><%= c.external_id || '-' %></code></small></td>
 <td><%= groupText %></td>
-<td><span class="status-badge status-<%= c.status %>"><%= c.status %></span><% if (c.probe_enabled === 1 || Number(c.probe_enabled) === 1) { %> <span title="Probe: <%= c.probe_url %> — last check <%= Number(c.probe_last_ok) === 1 ? 'OK' : 'FAILED' %>">&#9679;</span><% } %></td>
+<td><span class="status-badge status-<%= c.status %>"><%= c.status %></span><% if (c.probe_enabled === 1 || Number(c.probe_enabled) === 1) { %> <span title="<%= tr('components.probeTitle', { url: c.probe_url, result: Number(c.probe_last_ok) === 1 ? tr('common.ok') : tr('common.failed') }) %>">&#9679;</span><% } %></td>
 <td><%= c.position %></td>
 <td><time<% if (createdTs) { %> datetime="<%= new Date(createdTs).toISOString() %>"<% } %>><%= fmtDate(c.created_at) %></time></td>
 <td class="actions">
-<a href="/admin/components/<%= c.id %>/edit" class="btn btn-sm">Edit</a>
+<a href="/admin/components/<%= c.id %>/edit" class="btn btn-sm"><%= tr('common.edit') %></a>
 <form action="/admin/components/<%= c.id %>/status" method="post" class="inline-status-form" style="display:inline;">
 <select name="status" onchange="this.form.submit()" style="font-size:12px;padding:2px 6px;border:1px solid var(--border);border-radius:4px;">
-<option value="operational" <%= c.status === 'operational' ? 'selected' : '' %>>Operational</option>
-<option value="degraded_performance" <%= c.status === 'degraded_performance' ? 'selected' : '' %>>Degraded</option>
-<option value="partial_outage" <%= c.status === 'partial_outage' ? 'selected' : '' %>>Partial</option>
-<option value="major_outage" <%= c.status === 'major_outage' ? 'selected' : '' %>>Major</option>
-<option value="under_maintenance" <%= c.status === 'under_maintenance' ? 'selected' : '' %>>Maint.</option>
+<option value="operational" <%= c.status === 'operational' ? 'selected' : '' %>><%= tr('components.statusOperational') %></option>
+<option value="degraded_performance" <%= c.status === 'degraded_performance' ? 'selected' : '' %>><%= tr('components.statusDegraded') %></option>
+<option value="partial_outage" <%= c.status === 'partial_outage' ? 'selected' : '' %>><%= tr('components.statusPartial') %></option>
+<option value="major_outage" <%= c.status === 'major_outage' ? 'selected' : '' %>><%= tr('components.statusMajor') %></option>
+<option value="under_maintenance" <%= c.status === 'under_maintenance' ? 'selected' : '' %>><%= tr('components.statusMaintenance') %></option>
 </select>
 </form>
-<form action="/admin/components/<%= c.id %>?_method=DELETE" method="post" class="delete-form" onsubmit="return confirm('Delete this component?')">
+<form action="/admin/components/<%= c.id %>?_method=DELETE" method="post" class="delete-form" onsubmit="return confirm('<%= tr('components.confirmDelete') %>')">
 <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-<button type="submit" class="btn btn-sm btn-danger">Delete</button>
+<button type="submit" class="btn btn-sm btn-danger"><%= tr('common.delete') %></button>
 </form>
 </td>
 </tr>
 <% }) %>
-<tr id="componentNoMatch" class="no-match-row" hidden><td colspan="8" class="empty-cell">No components match your search.</td></tr>
+<tr id="componentNoMatch" class="no-match-row" hidden><td colspan="8" class="empty-cell"><%= tr('components.noMatchHint') %></td></tr>
 <% } %>
 </tbody>
 </table>
 <% if (typeof pagination !== 'undefined' && pagination && pagination.pages > 1) { %>
 <div class="pg-controls">
-<% if (pagination.page > 1) { %><a class="btn btn-sm" href="?page=<%= pagination.page - 1 %>">&lsaquo; Prev</a><% } %>
-<span>Page <%= pagination.page %> / <%= pagination.pages %> (<%= pagination.total %> components)</span>
-<% if (pagination.page < pagination.pages) { %><a class="btn btn-sm" href="?page=<%= pagination.page + 1 %>">Next &rsaquo;</a><% } %>
+<% if (pagination.page > 1) { %><a class="btn btn-sm" href="?page=<%= pagination.page - 1 %>"><%= tr('components.prev') %></a><% } %>
+<span><%= tr('components.pageOf', { page: pagination.page, pages: pagination.pages, total: pagination.total }) %></span>
+<% if (pagination.page < pagination.pages) { %><a class="btn btn-sm" href="?page=<%= pagination.page + 1 %>"><%= tr('components.next') %></a><% } %>
 </div>
 <% } %>
 </div>
@@ -115,25 +121,25 @@
 
 <% if (componentMode === 'create' || componentMode === 'edit') { %>
 <div class="card">
-<h3><%= componentMode === 'create' ? 'Create New Component' : 'Edit Component' %></h3>
+<h3><%= componentMode === 'create' ? tr('components.createTitle') : tr('components.editTitle') %></h3>
 <form action="<%= componentMode === 'create' ? '/admin/components' : '/admin/components/' + component.id %>" method="post">
 <% if (componentMode === 'edit') { %>
 <input type="hidden" name="_method" value="PUT">
 <% } %>
 <div class="form-group">
-<label for="name">Name</label>
+<label for="name"><%= tr('components.fieldName') %></label>
 <input type="text" id="name" name="name" value="<%= component.name || '' %>" required>
 </div>
 <div class="form-group">
-<label for="external_id">External ID</label>
-<input type="text" id="external_id" name="external_id" value="<%= component.external_id || '' %>" placeholder="ID from external system (PRTG, Nagios, etc.)">
-<small class="text-muted">Used to link components in StatusFe with external monitoring systems.</small>
+<label for="external_id"><%= tr('components.fieldExternalId') %></label>
+<input type="text" id="external_id" name="external_id" value="<%= component.external_id || '' %>" placeholder="<%= tr('components.externalIdPlaceholder') %>">
+<small class="text-muted"><%= tr('components.externalIdHelp') %></small>
 </div>
 <div class="form-row">
 <div class="form-group">
-<label>Groups (select one or more)</label>
+<label><%= tr('components.groupsLabel') %></label>
 <% if (groups && groups.length > 0) { %>
-<input type="text" id="compGroupFilter" class="filter-input" placeholder="Type to search groups...">
+<input type="text" id="compGroupFilter" class="filter-input" placeholder="<%= tr('components.groupFilterPlaceholder') %>">
 <% } %>
 <div style="max-height: 180px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; padding: 10px;" id="compGroupList">
 <% if (groups && groups.length > 0) { groups.forEach(g => { %>
@@ -142,84 +148,84 @@
 <%= g.name %>
 </label>
 <% }); %>
-<div data-filter-empty style="display:none;" class="text-muted">No groups match your search.</div>
+<div data-filter-empty style="display:none;" class="text-muted"><%= tr('components.noGroupMatch') %></div>
 <% } else { %>
-<small class="text-muted">No groups yet — type a name below to create one.</small>
+<small class="text-muted"><%= tr('components.noGroups') %></small>
 <% } %>
 </div>
-<small class="text-muted">A component can belong to several groups; it will show up on every page that displays any of them.</small>
+<small class="text-muted"><%= tr('components.groupsHelp') %></small>
 </div>
 <div class="form-group">
-<label for="new_group_name">New Group</label>
-<input type="text" id="new_group_name" name="new_group_name" value="<%= (!component.group_id && !(selectedGroupIds || []).length) ? (component.group_name || '') : '' %>" placeholder="Infrastructure">
-<small class="text-muted">Type a name to create (or reuse) a group and add this component to it. Combined with the checkboxes above.</small>
+<label for="new_group_name"><%= tr('components.newGroup') %></label>
+<input type="text" id="new_group_name" name="new_group_name" value="<%= (!component.group_id && !(selectedGroupIds || []).length) ? (component.group_name || '') : '' %>" placeholder="<%= tr('components.newGroupPlaceholder') %>">
+<small class="text-muted"><%= tr('components.newGroupHelp') %></small>
 </div>
 <div class="form-group">
-<label for="position">Position</label>
+<label for="position"><%= tr('components.fieldPosition') %></label>
 <input type="number" id="position" name="position" value="<%= component.position || 0 %>" min="0">
 </div>
 </div>
 <div class="form-group">
-<label for="description">Description</label>
+<label for="description"><%= tr('components.fieldDescription') %></label>
 <textarea id="description" name="description" rows="2"><%= component.description || '' %></textarea>
 </div>
 <div class="form-group">
-<label for="status">Status</label>
+<label for="status"><%= tr('components.fieldStatus') %></label>
 <select id="status" name="status">
-<option value="operational" <%= component.status === 'operational' ? 'selected' : '' %>>Operational</option>
-<option value="degraded_performance" <%= component.status === 'degraded_performance' ? 'selected' : '' %>>Degraded Performance</option>
-<option value="partial_outage" <%= component.status === 'partial_outage' ? 'selected' : '' %>>Partial Outage</option>
-<option value="major_outage" <%= component.status === 'major_outage' ? 'selected' : '' %>>Major Outage</option>
-<option value="under_maintenance" <%= component.status === 'under_maintenance' ? 'selected' : '' %>>Under Maintenance</option>
+<option value="operational" <%= component.status === 'operational' ? 'selected' : '' %>><%= tr('components.statusLongOperational') %></option>
+<option value="degraded_performance" <%= component.status === 'degraded_performance' ? 'selected' : '' %>><%= tr('components.statusLongDegraded') %></option>
+<option value="partial_outage" <%= component.status === 'partial_outage' ? 'selected' : '' %>><%= tr('components.statusLongPartial') %></option>
+<option value="major_outage" <%= component.status === 'major_outage' ? 'selected' : '' %>><%= tr('components.statusLongMajor') %></option>
+<option value="under_maintenance" <%= component.status === 'under_maintenance' ? 'selected' : '' %>><%= tr('components.statusLongMaintenance') %></option>
 </select>
 </div>
 <div class="form-group">
-<label for="parent_id">Parent component</label>
+<label for="parent_id"><%= tr('components.parentLabel') %></label>
 <select id="parent_id" name="parent_id">
-<option value="">— None (top-level) —</option>
+<option value=""><%= tr('components.parentNone') %></option>
 <% (parents || []).forEach(p => { %>
 <option value="<%= p.id %>" <%= component.parent_id === p.id ? 'selected' : '' %>><%= p.name %></option>
 <% }); %>
 </select>
-<small class="text-muted">A parent shows the worst status among its children. This component and its own descendants are not offered (that would create a cycle).</small>
+<small class="text-muted"><%= tr('components.parentHelp') %></small>
 </div>
 <div class="form-group">
 <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
 <input type="checkbox" id="show_children" name="show_children" <%= Number(component.show_children) === 1 ? 'checked' : '' %>>
-Show child components on the public status page
+<%= tr('components.showChildren') %>
 </label>
-<small class="text-muted">When checked, children appear indented under this component on /status/:slug. When unchecked they are hidden there — the admin list and the API always show them.</small>
+<small class="text-muted"><%= tr('components.showChildrenHelp') %></small>
 </div>
 <div class="form-group">
-<label for="probe_type">Probe type</label>
+<label for="probe_type"><%= tr('probe.type') %></label>
 <select id="probe_type" name="probe_type" onchange="sfToggleProbeFields()">
-<option value="http" <%= (component.probe_type || 'http') === 'http' ? 'selected' : '' %>>HTTP status check</option>
-<option value="cert" <%= component.probe_type === 'cert' ? 'selected' : '' %>>TLS certificate expiry</option>
-<option value="json" <%= component.probe_type === 'json' ? 'selected' : '' %>>JSON API check</option>
-<option value="cmd" <%= component.probe_type === 'cmd' ? 'selected' : '' %>>Command on this server</option>
-<option value="tcp" <%= component.probe_type === 'tcp' ? 'selected' : '' %>>TCP port check</option>
-<option value="dns" <%= component.probe_type === 'dns' ? 'selected' : '' %>>DNS resolution</option>
-<option value="ping" <%= component.probe_type === 'ping' ? 'selected' : '' %>>ICMP ping</option>
-<option value="push" <%= component.probe_type === 'push' ? 'selected' : '' %>>HTTP push (heartbeats from crons)</option>
+<option value="http" <%= (component.probe_type || 'http') === 'http' ? 'selected' : '' %>><%= tr('probe.http') %></option>
+<option value="cert" <%= component.probe_type === 'cert' ? 'selected' : '' %>><%= tr('probe.cert') %></option>
+<option value="json" <%= component.probe_type === 'json' ? 'selected' : '' %>><%= tr('probe.json') %></option>
+<option value="cmd" <%= component.probe_type === 'cmd' ? 'selected' : '' %>><%= tr('probe.cmd') %></option>
+<option value="tcp" <%= component.probe_type === 'tcp' ? 'selected' : '' %>><%= tr('probe.tcp') %></option>
+<option value="dns" <%= component.probe_type === 'dns' ? 'selected' : '' %>><%= tr('probe.dns') %></option>
+<option value="ping" <%= component.probe_type === 'ping' ? 'selected' : '' %>><%= tr('probe.ping') %></option>
+<option value="push" <%= component.probe_type === 'push' ? 'selected' : '' %>><%= tr('probe.push') %></option>
 </select>
 </div>
 <div class="form-group probe-field probe-field-url">
-<label for="probe_url">Probe URL / host</label>
+<label for="probe_url"><%= tr('probe.urlLabel') %></label>
 <input type="text" id="probe_url" name="probe_url" placeholder="https://service.internal/health" value="<%= component.probe_url || '' %>">
-<small class="text-muted">http & json: URL. cert: URL or host[:port]. tcp: host:port. dns/ping: hostname. Internal/LAN allowed — probed only by this server.</small>
+<small class="text-muted"><%= tr('probe.urlHelp') %></small>
 </div>
 <div class="form-group probe-field probe-field-cert">
-<label for="probe_warn_days">Warn when expiring within (days)</label>
+<label for="probe_warn_days"><%= tr('probe.warnDays') %></label>
 <input type="number" id="probe_warn_days" name="probe_warn_days" min="0" max="365" value="<%= component.probe_warn_days || 14 %>">
-<small class="text-muted">Expiring within this many days → Degraded Performance (warning). Expired or unreachable → Major Outage. Self-signed certificates are inspected too (expiry only, no chain validation).</small>
+<small class="text-muted"><%= tr('probe.warnDaysHelp') %></small>
 </div>
 <div class="form-group probe-field probe-field-json">
-<label for="probe_json_path">JSON path</label>
+<label for="probe_json_path"><%= tr('probe.jsonPath') %></label>
 <input type="text" id="probe_json_path" name="probe_json_path" placeholder="status.state or items[0].healthy" value="<%= component.probe_json_path || '' %>">
 </div>
 <div class="form-row probe-field probe-field-json">
 <div class="form-group">
-<label for="probe_json_comparison">Comparison</label>
+<label for="probe_json_comparison"><%= tr('probe.comparison') %></label>
 <select id="probe_json_comparison" name="probe_json_comparison">
 <% ['eq','ne','contains','gt','lt','exists'].forEach(c => { %>
 <option value="<%= c %>" <%= (component.probe_json_comparison || 'eq') === c ? 'selected' : '' %>><%= c %></option>
@@ -227,56 +233,56 @@ Show child components on the public status page
 </select>
 </div>
 <div class="form-group probe-field probe-field-json probe-field-dns">
-<label for="probe_json_expected">Expected value<% if ((component.probe_type || '') === 'dns') { %> (DNS IP)<% } %></label>
+<label for="probe_json_expected"><%= (component.probe_type || '') === 'dns' ? tr('probe.expectedDns') : tr('probe.expected') %></label>
 <input type="text" id="probe_json_expected" name="probe_json_expected" placeholder="ok" value="<%= component.probe_json_expected != null ? component.probe_json_expected : '' %>">
-<% if ((component.probe_type || '') === 'dns') { %><small class="text-muted">Optional: the resolved IPv4 must include this IP.</small><% } %>
+<% if ((component.probe_type || '') === 'dns') { %><small class="text-muted"><%= tr('probe.expectedDnsHelp') %></small><% } %>
 </div>
 </div>
 <div class="form-group probe-field probe-field-cmd">
-<label for="probe_command">Command</label>
+<label for="probe_command"><%= tr('probe.command') %></label>
 <input type="text" id="probe_command" name="probe_command" placeholder="e.g. curl -sf http://host:9200/_cluster/health || exit 1" value="<%= component.probe_command || '' %>">
-<small class="text-muted">Runs ON THIS SERVER (as the StatusFe process user — inside the container in Docker installs; ssh available for remote checks if keys are mounted). OK = exit code 0.</small>
+<small class="text-muted"><%= tr('probe.commandHelp') %></small>
 </div>
 <div class="form-group probe-field probe-field-cmd probe-field-json">
-<label for="probe_output_pattern">Output must match (regex, optional)</label>
+<label for="probe_output_pattern"><%= tr('probe.outputPattern') %></label>
 <input type="text" id="probe_output_pattern" name="probe_output_pattern" placeholder="e.g. status.*green" value="<%= component.probe_output_pattern || '' %>">
 </div>
 <div class="form-group probe-field probe-field-push">
-<label>Push endpoint (heartbeat from your cron)</label>
+<label><%= tr('probe.pushEndpoint') %></label>
 <% if (componentMode === 'edit' && component.probe_push_token) { %>
 <code id="push-url">/push/<%= component.probe_push_token %></code>
-<small class="text-muted">GET or POST to it (with your server's public URL) every &lt;interval. No push within the interval &rarr; Major Outage. The token is the secret: anyone holding it can report health.</small>
+<small class="text-muted"><%= tr('probe.pushHelp') %></small>
 <% } else { %>
-<small class="text-muted">The endpoint URL is generated when you save with the probe enabled.</small>
+<small class="text-muted"><%= tr('probe.pushGenerated') %></small>
 <% } %>
 </div>
 <div class="form-row">
 <div class="form-group">
-<label for="probe_interval_seconds">Interval (seconds)</label>
+<label for="probe_interval_seconds"><%= tr('probe.interval') %></label>
 <input type="number" id="probe_interval_seconds" name="probe_interval_seconds" min="10" max="86400" value="<%= component.probe_interval_seconds || 60 %>">
 </div>
 <div class="form-group probe-field probe-field-http">
-<label for="probe_expected_status">Expected HTTP status</label>
+<label for="probe_expected_status"><%= tr('probe.expectedStatus') %></label>
 <input type="number" id="probe_expected_status" name="probe_expected_status" min="100" max="599" value="<%= component.probe_expected_status || 200 %>">
 </div>
 <div class="form-group">
-<label for="probe_timeout_ms">Timeout (ms)</label>
+<label for="probe_timeout_ms"><%= tr('probe.timeout') %></label>
 <input type="number" id="probe_timeout_ms" name="probe_timeout_ms" min="100" max="30000" step="100" value="<%= component.probe_timeout_ms || 5000 %>">
 </div>
 <div class="form-group probe-field probe-field-http probe-field-cert probe-field-json probe-field-tcp probe-field-dns probe-field-ping probe-field-cmd">
-<label for="probe_confirmations">Confirmations</label>
+<label for="probe_confirmations"><%= tr('probe.confirmations') %></label>
 <input type="number" id="probe_confirmations" name="probe_confirmations" min="1" max="10" value="<%= component.probe_confirmations || 1 %>">
-<small class="text-muted">Consecutive results in the same direction required before the status changes. 2-3 avoids email storms on flapping services.</small>
+<small class="text-muted"><%= tr('probe.confirmationsHelp') %></small>
 </div>
 <div class="form-group">
 <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:26px;">
 <input type="checkbox" id="probe_enabled" name="probe_enabled" <%= Number(component.probe_enabled) === 1 ? 'checked' : '' %>>
-Probe enabled
+<%= tr('probe.enabled') %>
 </label>
 </div>
 </div>
 <% if (componentMode === 'edit' && component.probe_last_checked_at) { %>
-<small class="text-muted">Last check: <%= new Date(component.probe_last_checked_at).toISOString().replace('T',' ').slice(0,19) %> UTC — <%= Number(component.probe_last_ok) === 1 ? 'OK' : 'FAILED' %></small>
+<small class="text-muted"><%= tr('probe.lastCheck', { time: new Date(component.probe_last_checked_at).toISOString().replace('T',' ').slice(0,19), result: Number(component.probe_last_ok) === 1 ? tr('common.ok') : tr('common.failed') }) %></small>
 <% } %>
 <script>
 function sfToggleProbeFields() {
@@ -293,9 +299,9 @@ function sfToggleProbeFields() {
 document.addEventListener('DOMContentLoaded', sfToggleProbeFields);
 </script>
 <div class="form-actions">
-<button type="submit" class="btn btn-primary"><%= componentMode === 'create' ? 'Create Component' : 'Save Changes' %></button>
+<button type="submit" class="btn btn-primary"><%= componentMode === 'create' ? tr('components.createButton') : tr('components.saveButton') %></button>
 <% if (componentMode === 'edit') { %>
-<a href="/admin/components" class="btn">Cancel</a>
+<a href="/admin/components" class="btn"><%= tr('common.cancel') %></a>
 <% } %>
 </div>
 </form>
@@ -307,6 +313,17 @@ document.addEventListener('DOMContentLoaded', sfToggleProbeFields);
 <script src="/js/admin.js"></script>
 
 <%- include("../partials/_csrf"); %>
+<script>
+// 5.0.0: the strings the inline script builds go through the same dictionary,
+// resolved server-side for THIS user's locale.
+window.SF_I18N = <%- JSON.stringify({
+  unitOne: tr('components.unitOne'),
+  unitMany: tr('components.unitMany'),
+  of: tr('common.of'),
+  selectedCount: tr('components.selectedCount'),
+  confirmBulkDelete: tr('components.confirmBulkDelete')
+}) %>;
+</script>
 <script>
 (function() {
   var token = document.getElementById('csrfToken');
@@ -327,6 +344,10 @@ document.addEventListener('DOMContentLoaded', sfToggleProbeFields);
   }
 
   /* ===== Component list: instant search + click-to-sort headers (no page reload) ===== */
+  var I18N = window.SF_I18N || {};
+  var trStatic = function (s, vars) {
+    return String(s).replace(/\{(\w+)\}/g, function (m, k) { return vars[k] == null ? m : String(vars[k]); });
+  };
   var table = document.getElementById('component-list-table');
   var tbody = table && table.tBodies[0];
   if (!tbody) return;
@@ -366,13 +387,15 @@ document.addEventListener('DOMContentLoaded', sfToggleProbeFields);
     if (!bulkBtn) return;
     var n = checkedIds().length;
     bulkBtn.disabled = n === 0;
-    bulkBtn.title = n ? n + ' component(s) selected' : '';
+    bulkBtn.title = n ? trStatic(I18N.selectedCount || '', { count: n }) : '';
   }
   function updateMeta() {
     if (!metaEl) return;
     var vis = visibleCount();
-    var noun = renderedCount === 1 ? ' component' : ' components';
-    metaEl.textContent = vis < renderedCount ? vis + ' of ' + renderedCount + noun : renderedCount + noun;
+    var noun = renderedCount === 1 ? I18N.unitOne : I18N.unitMany;
+    metaEl.textContent = vis < renderedCount
+      ? vis + ' ' + I18N.of + ' ' + renderedCount + ' ' + noun
+      : renderedCount + ' ' + noun;
   }
   function applyFilter() {
     if (!searchInput) return;
@@ -524,7 +547,7 @@ document.addEventListener('DOMContentLoaded', sfToggleProbeFields);
     bulkBtn.addEventListener('click', function() {
       var ids = checkedIds();
       if (ids.length === 0) return;
-      if (!window.confirm('Delete ' + ids.length + ' component(s)? This cannot be undone.')) return;
+      if (!window.confirm(trStatic(I18N.confirmBulkDelete || '', { count: ids.length }))) return;
       /* Nested per-row delete forms forbid putting these inputs in a static
          form around the table — build the POST form dynamically instead. */
       var form = document.createElement('form');

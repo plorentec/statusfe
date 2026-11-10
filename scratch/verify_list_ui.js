@@ -55,6 +55,11 @@ function render(overrides = {}) {
     csrfToken: 'tok',
     searchQuery: '',
     sortBy: 'position_ASC',
+    // 5.0.0: components.ejs is translated, so the render needs the same locals
+    // the session middleware provides (res.locals.locale / t). English is the
+    // default locale, which is what these assertions assert against.
+    locale: 'en',
+    t: (key, vars) => require('../src/i18n').t('en', key, vars),
   }, overrides));
 }
 

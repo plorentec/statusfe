@@ -113,7 +113,7 @@ const count = async (sql, params) => Number((await db.queryOne(sql, params)).n);
   const exported = ['init', 'migrate', 'prepare', 'run', 'queryOne', 'queryAll', 'seedAdminPasswordFile', 'generateSeedPassword'];
   const missing = exported.filter(k => typeof initModule[k] !== 'function');
   check('M0: init.js still exports every function callers import', missing.length === 0, missing.join(',') || 'all present');
-  check('M0: the registry carries the three migrations in order', MIGRATIONS.map(m => m.version).join(',') === '001-baseline,002-columns-and-backfills,003-notification-channels', MIGRATIONS.map(m => m.version).join(','));
+  check('M0: the registry carries the migrations in order', MIGRATIONS.map(m => m.version).join(',') === '001-baseline,002-columns-and-backfills,003-notification-channels,004-user-locale', MIGRATIONS.map(m => m.version).join(','));
   check('M0: every migration exports { version, name, up }', MIGRATIONS.every(m => m.version && m.name && typeof m.up === 'function'));
 
   // ===== M1. fresh database ============================================
@@ -123,7 +123,7 @@ const count = async (sql, params) => Number((await db.queryOne(sql, params)).n);
   const rows1 = await appliedRows();
   check('M1: 001-baseline recorded', rows1.some(r => r.version === '001-baseline'), rows1.map(r => r.version).join(','));
   check('M1: 002-columns-and-backfills recorded', rows1.some(r => r.version === '002-columns-and-backfills'));
-  check('M1: exactly 3 migrations recorded', rows1.length === 3, rows1.length);
+  check('M1: exactly 4 migrations recorded', rows1.length === 4, rows1.length);
   check('M1: every row carries a name, a timestamp and a checksum', rows1.every(r => r.name && r.applied_at && (r.checksum || '').length === 64));
   // The fresh schema is the same one the old createTables() produced.
   const expectedTables = ['api_keys', 'audit_log', 'component_dependencies', 'component_group_members', 'component_groups',
@@ -160,7 +160,7 @@ const count = async (sql, params) => Number((await db.queryOne(sql, params)).n);
   check('M1: una instalación nueva fuerza must_change_password = 1', Number(adminUser && adminUser.must_change_password) === 1, adminUser && adminUser.must_change_password);
   const status = await migrationStatus();
   check('M1: migrationStatus() reports both migrations applied with a matching checksum',
-    status.tableExists && status.migrations.length === 3 && status.migrations.every(m => m.applied && m.checksumMatches === true));
+    status.tableExists && status.migrations.length === 4 && status.migrations.every(m => m.applied && m.checksumMatches === true));
 
   // ===== M2. second boot on the same database ==========================
   await init();
@@ -168,12 +168,12 @@ const count = async (sql, params) => Number((await db.queryOne(sql, params)).n);
   const sameRows = rows1.length === rows2.length &&
     rows1.every((r, i) => r.version === rows2[i].version && String(r.applied_at) === String(rows2[i].applied_at) && r.checksum === rows2[i].checksum);
   check('M2: a second boot applies nothing (same rows, same applied_at)', sameRows, rows2.map(r => r.version).join(','));
-  check('M2: still exactly 3 rows', rows2.length === 3, rows2.length);
+  check('M2: still exactly 4 rows', rows2.length === 4, rows2.length);
   check('M2: counts after the second boot are unchanged', (await count('SELECT COUNT(*) AS n FROM components')) === 6 &&
     (await count('SELECT COUNT(*) AS n FROM pages')) === 1);
   const rerun = await runMigrations();
   check('M2: runMigrations() on an up-to-date database reports nothing applied',
-    rerun.applied.length === 0 && rerun.alreadyApplied.length === 3 && rerun.adopted === false, JSON.stringify(rerun));
+    rerun.applied.length === 0 && rerun.alreadyApplied.length === 4 && rerun.adopted === false, JSON.stringify(rerun));
   const viaMigrate = await migrate();
   check('M2: migrate() is a thin wrapper (same answer, nothing applied)', viaMigrate.applied.length === 0);
 
@@ -234,7 +234,7 @@ const count = async (sql, params) => Number((await db.queryOne(sql, params)).n);
     check('M3: every legacy table is still there and nothing but the bookkeeping table appeared',
       JSON.stringify(adoption.before) === JSON.stringify(adoption.after.filter(t => t !== MIGRATION_TABLE && t !== 'notification_channels')),
       adoption.after.length + ' tables, new: ' + adoption.after.filter(t => !adoption.before.includes(t)).join(',') || 'none');
-    check('M3: the adopted row carries a checksum', adoption.checksums.length === 3 && adoption.checksums.every(n => n === 64), adoption.checksums.join(','));
+    check('M3: the adopted row carries a checksum', adoption.checksums.length === 4 && adoption.checksums.every(n => n === 64), adoption.checksums.join(','));
     check('M3: the data backfill ran (org marker written by 002)', adoption.markers.includes('migration_orgs_backfilled'), adoption.markers.join(','));
   }
 

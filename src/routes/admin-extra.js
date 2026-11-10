@@ -2,12 +2,45 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
-const { requireAuth, requireAdmin } = require('../middleware/session');
-const { notifications, analytics, dependencies, settings, pages, components, componentStatuses, incidentStatuses, statusMappings, notificationChannels } = require('../db/models');
+const { requireAuth, requireAdmin, updateSession } = require('../middleware/session');
+const { notifications, analytics, dependencies, settings, pages, components, componentStatuses, incidentStatuses, statusMappings, notificationChannels, users } = require('../db/models');
+const { SUPPORTED: SUPPORTED_LOCALES } = require('../i18n');
 const notifyChannels = require('../utils/notify-channels');
 const { queryOne, queryAll, run } = require('../db/database');
 
 router.use(requireAuth);
+
+// POST /admin/locale — the panel language, per user (5.0.0, S3).
+//
+// This route lives OUTSIDE /auth, so the global CSRF middleware covers it (the
+// selector form posts the token with every other admin form). The new locale is
+// written to users.locale AND into the live session store, so the very next
+// request renders in the new language without a re-login and without paying an
+// extra query per request.
+function localeBackTo(req) {
+  // Only a same-host referer is followed: anything else would be an open
+  // redirect, and Referer is attacker-controlled.
+  const referer = req.get('Referer') || '';
+  try {
+    const url = new URL(referer);
+    if (url.host === req.get('host')) return url.pathname + (url.search || '');
+  } catch (e) { /* no or malformed referer */ }
+  return '/admin';
+}
+
+router.post('/locale', async (req, res) => {
+  const locale = String((req.body && req.body.locale) || '');
+  if (!SUPPORTED_LOCALES.includes(locale)) {
+    // Rejected, and nothing is written: the stored preference is untouched.
+    return res.status(400).json({ error: 'unsupported_locale', supported: SUPPORTED_LOCALES });
+  }
+  await users.setLocale(req.user.id, locale);
+  if (req.session && req.session.id) {
+    req.session.locale = locale;
+    await updateSession(req.session.id, req.session);
+  }
+  res.redirect(localeBackTo(req));
+});
 
 // GET /admin/notifications
 router.get('/notifications', async (req, res) => {

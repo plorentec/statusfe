@@ -252,10 +252,17 @@ function hotpCode(secretB32, counter) {
   check('S12: /embed sin X-Frame-Options (frameguard off)', !emb.headers['x-frame-options']);
 
   // ===== 8. flash map codes (S10) =====
-  const sessionSrc = require('fs').readFileSync(path.join(__dirname, '..', 'src', 'middleware', 'session.js'), 'utf8');
+  // 5.0.0: los textos de flash viven ahora en los diccionarios i18n, no en
+  // session.js. La regla es la misma (todo código emitido debe tener texto) y
+  // se refuerza: tiene que existir en LOS DOS idiomas.
+  const i18n = require(path.join(__dirname, '..', 'src', 'i18n'));
   const needed = ['invalid_reset', 'password_set', 'status_updated', 'invalid_status', 'last_admin', 'self_dep', 'cycle', 'exists', 'dep_deleted', 'system', 'invalid_retention'];
-  const missing = needed.filter(c => !sessionSrc.includes(`${c}:`));
-  check('S10: todos los flash codes tienen texto en session.js', missing.length === 0, missing.join(','));
+  const missing = needed.filter(c => {
+    const en = i18n.t('en', 'flash.' + c);
+    const es = i18n.t('es', 'flash.' + c);
+    return en === 'flash.' + c || es === 'flash.' + c; // la clave no traducida se devuelve tal cual
+  });
+  check('S10: todos los flash codes tienen texto en los dos idiomas', missing.length === 0, missing.join(','));
   const adminExtraSrc = require('fs').readFileSync(path.join(__dirname, '..', 'src', 'routes', 'admin-extra.js'), 'utf8');
   check('S10: borrar dependencia usa dep_deleted (no el texto de componentes)', adminExtraSrc.includes('msg=dep_deleted'));
 

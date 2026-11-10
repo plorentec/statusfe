@@ -1,9 +1,15 @@
+<%# i18n (5.0.0): every user-visible string goes through `t` (res.locals). The
+    fallbacks keep standalone rendering working without the session middleware. %>
+<% const tr = (typeof t === 'function') ? t : function (k) { return k; }; %>
+<% const pt = (typeof pageTitle === 'function') ? pageTitle : function (x) { return x; }; %>
+<% const loc = (typeof locale === 'string' && locale) ? locale : 'en'; %>
+<% const fl = (typeof flashText === 'function') ? flashText : function (c) { return c; }; %>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<%= loc %>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><%= title %> - StatusFe Admin</title>
+<title><%= pt(title) %> - <%= tr('common.adminTitle') %></title>
 <link rel="stylesheet" href="/css/admin.css">
 <script>document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('dark');});</script>
 </head>
@@ -11,30 +17,20 @@
 <div class="admin-layout">
 <%- include('../partials/_sidebar'); %>
 <main class="admin-main">
-<div class="admin-header"><h1><%= title %></h1>
+<div class="admin-header"><h1><%= pt(title) %></h1>
 <%
-// 4.0.0: the channel routes emit their own ?msg= codes. session.js only maps the
-// codes that existed before this feature, so the readable text lives here.
-var FLASH_TEXT = {
-  channel_created: 'Notification channel created.',
-  channel_updated: 'Notification channel updated.',
-  channel_deleted: 'Notification channel deleted.',
-  channel_toggled: 'Notification channel enabled state changed.',
-  channel_invalid: 'That channel is incomplete or invalid — fill in the required fields for its type.',
-  channel_notfound: 'That notification channel does not exist any more.',
-  channel_test_ok: 'Test message sent successfully!',
-  channel_test_failed: 'Test message failed.'
-};
-var flashText = message ? (FLASH_TEXT[message] || message) : null;
+// 4.0.0: the channel routes emit their own ?msg= codes. 5.0.0: their text lives
+// in the dictionaries as flash.channel_* and is resolved for THIS user's locale.
+var flashMsgText = message ? fl(message) : null;
 %>
-<% if (flashText) { %>
-<div class="flash flash-<%= messageType %>"><%= flashText %><% if (testError) { %> — <%= testError %><% } %></div>
+<% if (flashMsgText) { %>
+<div class="flash flash-<%= messageType %>"><%= flashMsgText %><% if (testError) { %> — <%= testError %><% } %></div>
 <% } %>
 </div>
 
 <div class="card">
 <h3 style="font-size:16px;font-weight:600;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border);">
-<%= channel && channel.id ? 'Edit Channel' : 'Add Channel' %>
+<%= channel && channel.id ? tr('channels.editTitle') : tr('channels.addTitle') %>
 </h3>
 <%
 if (!channel) { channel = { id: null, type: 'telegram', name: '', events: [], enabled: 1, config: {}, has_secret: {} }; }
@@ -47,27 +43,27 @@ var chEvents = channel.events || [];
 
 <div class="form-row">
 <div class="form-group">
-<label for="type">Type *</label>
+<label for="type"><%= tr('channels.type') %></label>
 <select id="type" name="type" required onchange="sfChannelType(this.value)">
-<% channelTypes.forEach(function(t) { %>
-<option value="<%= t %>" <%= channel.type === t ? 'selected' : '' %>><%= t %></option>
+<% channelTypes.forEach(function(cht) { %>
+<option value="<%= cht %>" <%= channel.type === cht ? 'selected' : '' %>><%= cht %></option>
 <% }); %>
 </select>
 </div>
 <div class="form-group">
-<label for="name">Name *</label>
-<input type="text" id="name" name="name" value="<%= channel.name || '' %>" placeholder="Ops Telegram" required>
+<label for="name"><%= tr('channels.name') %></label>
+<input type="text" id="name" name="name" value="<%= channel.name || '' %>" placeholder="<%= tr('channels.namePlaceholder') %>" required>
 </div>
 </div>
 
 <div data-channel-type="telegram">
 <div class="form-row">
 <div class="form-group">
-<label for="bot_token">Bot Token<%= hasSecret.bot_token ? '' : ' *' %></label>
-<input type="password" id="bot_token" name="bot_token" autocomplete="new-password" placeholder="<%= hasSecret.bot_token ? 'Leave blank to keep the current value' : '123456:ABC-DEF...' %>">
+<label for="bot_token"><%= tr('channels.botToken') %><%= hasSecret.bot_token ? '' : ' *' %></label>
+<input type="password" id="bot_token" name="bot_token" autocomplete="new-password" placeholder="<%= hasSecret.bot_token ? tr('channels.keepCurrent') : '123456:ABC-DEF...' %>">
 </div>
 <div class="form-group">
-<label for="chat_id">Chat ID *</label>
+<label for="chat_id"><%= tr('channels.chatId') %></label>
 <input type="text" id="chat_id" name="chat_id" value="<%= cfg.chat_id || '' %>" placeholder="-1001234567890">
 </div>
 </div>
@@ -75,31 +71,31 @@ var chEvents = channel.events || [];
 
 <div data-channel-type="slack">
 <div class="form-group">
-<label for="webhook_url_slack">Slack Webhook URL<%= hasSecret.webhook_url ? '' : ' *' %></label>
-<input type="password" id="webhook_url_slack" name="webhook_url" autocomplete="new-password" placeholder="<%= hasSecret.webhook_url ? 'Leave blank to keep the current value' : 'https://hooks.slack.com/services/T000/B000/XXXX' %>">
+<label for="webhook_url_slack"><%= tr('channels.slackUrl') %><%= hasSecret.webhook_url ? '' : ' *' %></label>
+<input type="password" id="webhook_url_slack" name="webhook_url" autocomplete="new-password" placeholder="<%= hasSecret.webhook_url ? tr('channels.keepCurrent') : 'https://hooks.slack.com/services/T000/B000/XXXX' %>">
 </div>
 </div>
 
 <div data-channel-type="discord">
 <div class="form-group">
-<label for="webhook_url_discord">Discord Webhook URL<%= hasSecret.webhook_url ? '' : ' *' %></label>
-<input type="password" id="webhook_url_discord" name="webhook_url" autocomplete="new-password" placeholder="<%= hasSecret.webhook_url ? 'Leave blank to keep the current value' : 'https://discord.com/api/webhooks/000/XXXX' %>">
+<label for="webhook_url_discord"><%= tr('channels.discordUrl') %><%= hasSecret.webhook_url ? '' : ' *' %></label>
+<input type="password" id="webhook_url_discord" name="webhook_url" autocomplete="new-password" placeholder="<%= hasSecret.webhook_url ? tr('channels.keepCurrent') : 'https://discord.com/api/webhooks/000/XXXX' %>">
 </div>
 </div>
 
 <div data-channel-type="webhook">
 <div class="form-group">
-<label for="url">Webhook URL<%= hasSecret.url ? '' : ' *' %></label>
-<input type="password" id="url" name="url" autocomplete="new-password" placeholder="<%= hasSecret.url ? 'Leave blank to keep the current value' : 'https://example.com/statusfe-hook' %>">
+<label for="url"><%= tr('channels.webhookUrl') %><%= hasSecret.url ? '' : ' *' %></label>
+<input type="password" id="url" name="url" autocomplete="new-password" placeholder="<%= hasSecret.url ? tr('channels.keepCurrent') : 'https://example.com/statusfe-hook' %>">
 </div>
 <div class="form-group">
-<label for="secret">Signing Secret (optional)</label>
-<input type="password" id="secret" name="secret" autocomplete="new-password" placeholder="<%= hasSecret.secret ? 'Leave blank to keep the current value' : 'Adds X-StatusFe-Signature: sha256=...' %>">
+<label for="secret"><%= tr('channels.secret') %></label>
+<input type="password" id="secret" name="secret" autocomplete="new-password" placeholder="<%= hasSecret.secret ? tr('channels.keepCurrent') : 'Adds X-StatusFe-Signature: sha256=...' %>">
 </div>
 </div>
 
 <div class="form-group">
-<label>Events</label>
+<label><%= tr('channels.events') %></label>
 <div class="component-checkboxes">
 <% channelEvents.forEach(function(ev) { %>
 <label class="component-checkbox">
@@ -108,49 +104,49 @@ var chEvents = channel.events || [];
 </label>
 <% }); %>
 </div>
-<p class="text-muted" style="margin-top:8px;">No event selected = every event is sent.</p>
+<p class="text-muted" style="margin-top:8px;"><%= tr('channels.eventsHelp') %></p>
 </div>
 
 <div class="form-group checkbox-group">
 <label>
 <input type="checkbox" name="enabled" value="1" <%= Number(channel.enabled) === 1 ? 'checked' : '' %>>
-Enabled
+<%= tr('channels.enabled') %>
 </label>
 </div>
 
 <div class="form-actions">
-<button type="submit" class="btn btn-primary"><%= channel.id ? 'Save Channel' : 'Add Channel' %></button>
-<% if (channel.id) { %><a href="/admin/channels" class="btn">Cancel</a><% } %>
+<button type="submit" class="btn btn-primary"><%= channel.id ? tr('channels.save') : tr('channels.addTitle') %></button>
+<% if (channel.id) { %><a href="/admin/channels" class="btn"><%= tr('common.cancel') %></a><% } %>
 </div>
 </form>
-<p class="text-muted" style="margin-top:8px;">Stored secrets are never shown again. Leave a secret field blank to keep the value already saved.</p>
+<p class="text-muted" style="margin-top:8px;"><%= tr('channels.secretsNote') %></p>
 </div>
 
 <div class="card" style="margin-top:20px;">
-<h3 style="font-size:16px;font-weight:600;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border);">Configured Channels <span class="text-muted" style="font-size:13px;">— <%= channels.length %></span></h3>
+<h3 style="font-size:16px;font-weight:600;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border);"><%= tr('channels.configured') %> <span class="text-muted" style="font-size:13px;">— <%= channels.length %></span></h3>
 <% if (channels.length > 0) { %>
 <div class="table-container">
 <table class="admin-table">
 <thead>
-<tr><th>Type</th><th>Name</th><th>Events</th><th>Enabled</th><th>Actions</th></tr>
+<tr><th><%= tr('channels.thType') %></th><th><%= tr('channels.thName') %></th><th><%= tr('channels.thEvents') %></th><th><%= tr('channels.thEnabled') %></th><th><%= tr('channels.thActions') %></th></tr>
 </thead>
 <tbody>
 <% channels.forEach(function(ch) { %>
 <tr>
 <td><strong><%= ch.type %></strong></td>
 <td><%= ch.name %></td>
-<td><%= (ch.events && ch.events.length) ? ch.events.join(', ') : 'All events' %></td>
-<td><span class="<%= Number(ch.enabled) === 1 ? 'yes' : 'no' %>"><%= Number(ch.enabled) === 1 ? 'Yes' : 'No' %></span></td>
+<td><%= (ch.events && ch.events.length) ? ch.events.join(', ') : tr('channels.allEvents') %></td>
+<td><span class="<%= Number(ch.enabled) === 1 ? 'yes' : 'no' %>"><%= Number(ch.enabled) === 1 ? tr('common.yes') : tr('common.no') %></span></td>
 <td class="actions">
-<a class="btn btn-sm" href="/admin/channels/<%= ch.id %>/edit">Edit</a>
+<a class="btn btn-sm" href="/admin/channels/<%= ch.id %>/edit"><%= tr('common.edit') %></a>
 <form action="/admin/channels/<%= ch.id %>/test" method="post" style="display:inline;">
-<button type="submit" class="btn btn-sm">Test</button>
+<button type="submit" class="btn btn-sm"><%= tr('common.test') %></button>
 </form>
 <form action="/admin/channels/<%= ch.id %>/toggle" method="post" style="display:inline;">
-<button type="submit" class="btn btn-sm"><%= Number(ch.enabled) === 1 ? 'Disable' : 'Enable' %></button>
+<button type="submit" class="btn btn-sm"><%= Number(ch.enabled) === 1 ? tr('common.disable') : tr('common.enable') %></button>
 </form>
 <form action="/admin/channels/<%= ch.id %>/delete" method="post" class="delete-form" style="display:inline;">
-<button type="submit" class="btn btn-sm btn-danger">Delete</button>
+<button type="submit" class="btn btn-sm btn-danger"><%= tr('common.delete') %></button>
 </form>
 </td>
 </tr>
@@ -159,7 +155,7 @@ Enabled
 </table>
 </div>
 <% } else { %>
-<p class="text-muted">No notification channels configured. Email notifications still work as before.</p>
+<p class="text-muted"><%= tr('channels.empty') %></p>
 <% } %>
 </div>
 </main>

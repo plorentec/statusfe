@@ -1,112 +1,123 @@
+<%# i18n (5.0.0): second copy of the sidebar (views/admin.ejs has the first).
+    Both must stay in sync — `t`/`pageTitle`/`locale` come from res.locals, and
+    the fallbacks keep standalone template rendering working. %>
+<% const tr = (typeof t === 'function') ? t : function (k) { return k; }; %>
+<% const loc = (typeof locale === 'string' && locale) ? locale : 'en'; %>
+<% const csrf = (typeof csrfToken !== 'undefined' && csrfToken) ? csrfToken : ''; %>
 <aside class="sidebar">
 <div class="sidebar-header">
 <h2 style="display:flex;align-items:center;gap:8px;">
 <span style="display:inline-flex;align-items:center;gap:8px;font-weight:800;font-size:20px;letter-spacing:-0.5px;"><span style="display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;background:linear-gradient(135deg,#10b981,#059669);border-radius:8px;color:#fff;font-size:16px;font-weight:900;line-height:1;">S</span><span>Status<span style="color:#10b981;">Fe</span></span></span>
 </h2>
-<span class="sidebar-subtitle">Admin Panel <a href="/admin/customize" style="color:#10b981;text-decoration:none;margin-left:4px;font-size:13px;">Customize</a></span>
+<span class="sidebar-subtitle"><%= tr('nav.adminPanel') %> <a href="/admin/customize" style="color:#10b981;text-decoration:none;margin-left:4px;font-size:13px;"><%= tr('nav.customize') %></a></span>
+<form class="locale-switch" method="post" action="/admin/locale" aria-label="<%= tr('nav.language') %>" style="display:flex;gap:6px;margin-top:10px;">
+<input type="hidden" name="_csrf" value="<%= csrf %>">
+<button type="submit" name="locale" value="en" title="<%= tr('nav.langEnTitle') %>" style="flex:1;padding:3px 0;font-size:11px;font-weight:700;border-radius:6px;border:1px solid rgba(255,255,255,.2);cursor:pointer;<%= loc === 'en' ? 'background:#10b981;color:#fff;' : 'background:transparent;color:inherit;' %>"><%= tr('nav.langEn') %></button>
+<button type="submit" name="locale" value="es" title="<%= tr('nav.langEsTitle') %>" style="flex:1;padding:3px 0;font-size:11px;font-weight:700;border-radius:6px;border:1px solid rgba(255,255,255,.2);cursor:pointer;<%= loc === 'es' ? 'background:#10b981;color:#fff;' : 'background:transparent;color:inherit;' %>"><%= tr('nav.langEs') %></button>
+</form>
 </div>
 <nav class="sidebar-nav">
 <a href="/admin" class="<%= title === 'Dashboard' ? 'active' : '' %>">
 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-<span>Dashboard</span>
+<span><%= tr('nav.dashboard') %></span>
 </a>
 <a href="/admin/pages" class="<%= title === 'Pages' ? 'active' : '' %>">
 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
-<span>Pages</span>
+<span><%= tr('nav.pages') %></span>
 </a>
 <!-- Components with Dependencies submenu -->
 <a href="javascript:void(0)" class="sidebar-parent <%= ['Components','Dependencies'].includes(title) ? 'active' : '' %>">
 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-<span>Components</span>
+<span><%= tr('nav.components') %></span>
 <svg class="submenu-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
 </a>
 <nav class="sidebar-submenu">
 <a href="/admin/components" class="<%= title === 'Components' ? 'active' : '' %>">
-<span>All Components</span>
+<span><%= tr('nav.allComponents') %></span>
 </a>
 <a href="/admin/dependencies" class="<%= title === 'Dependencies' ? 'active' : '' %>">
-<span>Dependencies</span>
+<span><%= tr('nav.dependencies') %></span>
 </a>
 <a href="/admin/groups" class="<%= title === 'Component Groups' ? 'active' : '' %>">
 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-<span>Groups</span>
+<span><%= tr('nav.groups') %></span>
 </a>
 </nav>
 <!-- Events with submenus -->
 <a href="javascript:void(0)" class="sidebar-parent <%= ['Events','Incidents','Maintenance'].includes(title) ? 'active' : '' %>">
 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-<span>Events</span>
+<span><%= tr('nav.events') %></span>
 <svg class="submenu-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
 </a>
 <nav class="sidebar-submenu">
 <a href="/admin/incidents" class="<%= title === 'Incidents' ? 'active' : '' %>">
-<span>Incidents</span>
+<span><%= tr('nav.incidents') %></span>
 </a>
 <a href="/admin/maintenance" class="<%= title === 'Maintenance' ? 'active' : '' %>">
-<span>Maintenance</span>
+<span><%= tr('nav.maintenance') %></span>
 </a>
 </nav>
 <a href="/admin/analytics" class="<%= title === 'Analytics' ? 'active' : '' %>">
 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-<span>Analytics</span>
+<span><%= tr('nav.analytics') %></span>
 </a>
 <!-- API with submenus -->
 <a href="javascript:void(0)" class="sidebar-parent <%= ['API Keys','API Docs'].includes(title) ? 'active' : '' %>">
 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
-<span>API</span>
+<span><%= tr('nav.api') %></span>
 <svg class="submenu-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
 </a>
 <nav class="sidebar-submenu">
 <a href="/admin/api-keys" class="<%= title === 'API Keys' ? 'active' : '' %>">
-<span>API Keys</span>
+<span><%= tr('nav.apiKeys') %></span>
 </a>
 <a href="/admin/docs" class="<%= title === 'API Docs' ? 'active' : '' %>">
-<span>API Docs</span>
+<span><%= tr('nav.apiDocs') %></span>
 </a>
 </nav>
 <a href="/admin/users" class="<%= title === 'Users' ? 'active' : '' %>">
 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
-<span>Users</span>
+<span><%= tr('nav.users') %></span>
 </a>
 <!-- Configuration with submenus (submenu-open-guard) -->
 <a href="javascript:void(0)" class="sidebar-parent <%= ['Configuration','Component Statuses','Incident Statuses','Status Mappings','Notifications','Notification Channels','2FA Setup','Changelog','Audit Log'].includes(title) ? 'active' : '' %>">
 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-<span>Configuration</span>
+<span><%= tr('nav.configuration') %></span>
 <svg class="submenu-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
 </a>
 <nav class="sidebar-submenu<% if (['Configuration','Component Statuses','Incident Statuses','Status Mappings','Notifications','Notification Channels','2FA Setup','Changelog','Audit Log'].includes(title)) { %> open<% } %>" data-submenu-open-guard="1">
 <a href="/admin/config/component-statuses" class="<%= title === 'Component Statuses' ? 'active' : '' %>">
-<span>Component Statuses</span>
+<span><%= tr('nav.componentStatuses') %></span>
 </a>
 <a href="/admin/config/incident-statuses" class="<%= title === 'Incident Statuses' ? 'active' : '' %>">
-<span>Incident Statuses</span>
+<span><%= tr('nav.incidentStatuses') %></span>
 </a>
 <a href="/admin/config/mappings" class="<%= title === 'Status Mappings' ? 'active' : '' %>">
-<span>Status Mappings</span>
+<span><%= tr('nav.statusMappings') %></span>
 </a>
 <a href="/admin/organizations" class="<%= title === 'Organizations' ? 'active' : '' %>">
-<span>Organizations</span>
+<span><%= tr('nav.organizations') %></span>
 </a>
 <a href="/admin/subscribers" class="<%= title === 'Subscribers' ? 'active' : '' %>">
-<span>Subscribers</span>
+<span><%= tr('nav.subscribers') %></span>
 </a>
 <a href="/admin/notifications" class="<%= title === 'Notifications' ? 'active' : '' %>">
-<span>Notifications</span><% if (typeof unread !== 'undefined' && unread > 0) { %><span class="notif-badge"><%= unread %></span><% } %>
+<span><%= tr('nav.notifications') %></span><% if (typeof unread !== 'undefined' && unread > 0) { %><span class="notif-badge"><%= unread %></span><% } %>
 </a>
 <a href="/admin/channels" class="<%= title === 'Notification Channels' ? 'active' : '' %>">
-<span>Channels</span>
+<span><%= tr('nav.channels') %></span>
 </a>
 <a href="/admin/2fa/setup" class="<%= title === '2FA Setup' ? 'active' : '' %>">
 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-<span>2FA</span>
+<span><%= tr('nav.twoFactor') %></span>
 </a>
 <a href="/admin/changelog" class="<%= title === 'Changelog' ? 'active' : '' %>">
 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-<span>Changelog</span>
+<span><%= tr('nav.changelog') %></span>
 </a>
 <a href="/admin/audit" class="<%= title === 'Audit Log' ? 'active' : '' %>">
 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-<span>Audit Log</span>
+<span><%= tr('nav.auditLog') %></span>
 </a>
 </nav>
 <div class="sidebar-footer">
@@ -115,7 +126,7 @@
 <span class="user-role"><%= user.role %></span>
 </div>
 <form action="/auth/logout" method="post">
-<button type="submit" class="btn-logout">Logout</button>
+<button type="submit" class="btn-logout"><%= tr('nav.logout') %></button>
 </form>
 </div>
 </aside>

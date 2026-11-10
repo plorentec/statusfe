@@ -1,6 +1,7 @@
 const { prepare, run, queryOne, queryAll } = require('./database');
 const { v4: uuidv4 } = require('uuid');
 const { sanitizeCss, sanitizeHtml } = require('../utils/sanitize');
+const { SUPPORTED: SUPPORTED_LOCALES } = require('../i18n');
 const crypto = require('crypto');
 
 // ===== SMTP password encryption at rest (2.2.7) =====
@@ -2413,11 +2414,11 @@ module.exports.componentGroups = {
 // ===== USERS =====
 module.exports.users = {
   async list() {
-    return await queryAll('SELECT id, email, name, role, created_at, email_notifications, updated_at FROM users ORDER BY created_at');
+    return await queryAll('SELECT id, email, name, role, created_at, email_notifications, updated_at, locale FROM users ORDER BY created_at');
   },
 
   async get(id) {
-    return await queryOne('SELECT id, email, name, role, created_at, email_notifications, updated_at FROM users WHERE id=$1', [id]);
+    return await queryOne('SELECT id, email, name, role, created_at, email_notifications, updated_at, locale FROM users WHERE id=$1', [id]);
   },
 
   async getByEmail(email) {
@@ -2447,6 +2448,19 @@ module.exports.users = {
       params.push(id);
       await run('UPDATE users SET ' + fields.join(', ') + ', updated_at=NOW() WHERE id=$' + (params.length), ...params);
     }
+    return this.get(id);
+  },
+
+  // 5.0.0: admin panel language, per user (S2). An unsupported value is refused
+  // here (err.code = 'invalid_locale') so the route can answer 400 and the
+  // stored value can never change to something resolveLocale() ignores.
+  async setLocale(id, locale) {
+    if (!SUPPORTED_LOCALES.includes(locale)) {
+      const err = new Error('unsupported locale: ' + locale);
+      err.code = 'invalid_locale';
+      throw err;
+    }
+    await run('UPDATE users SET locale=$1, updated_at=NOW() WHERE id=$2', [locale, id]);
     return this.get(id);
   },
 

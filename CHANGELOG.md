@@ -9,6 +9,34 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [5.0.0] — 2026-11-08
+
+### Added
+- **Panel bilingüe ES/EN** (fase 1): infraestructura `t()` con diccionarios de
+  **249 claves por idioma** (conjunto idéntico, verificado), columna
+  `users.locale` por la migración **`004`**, y **selector ES/EN** en las dos
+  sidebars. El idioma es **por usuario** y afecta solo al panel: el
+  `pages.locale` de la página pública no se toca.
+- Traducidas de punta a punta: **sidebar**, **dashboard**, **componentes**
+  (lista y formulario) y **canales**, incluidos los textos de ayuda bajo los
+  campos y las cadenas de los scripts en línea.
+- Los **mensajes flash** (`?msg=`) se muestran en el idioma del usuario: el mapa
+  de `session.js` se sustituye por `translateFlash()` y los diccionarios.
+
+### Notes
+- Una clave ausente cae al inglés y **avisa una vez** en el log; nunca deja un
+  hueco vacío.
+- Las otras 16 vistas del panel siguen en inglés: fase 2.
+- `pages.locale` (idioma de la página pública) y `users.locale` (idioma del
+  panel) son ajustes independientes a propósito.
+
+### Verified
+- `scratch/verify_i18n_admin.js` (nuevo): **44 comprobaciones** — paridad de
+  claves en ambos idiomas, interpolación, fallback, migración 004 sobre una base
+  ya en 003, cambio de idioma por POST, selector en las dos sidebars, rechazo de
+  un idioma inválido, y los flashes en español.
+- Suite: **970 checks** en 33 arneses.
+
 ## [4.0.3] — 2026-11-08
 
 ### Fixed

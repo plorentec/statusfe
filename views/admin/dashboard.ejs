@@ -1,3 +1,6 @@
+<%# i18n (5.0.0): rendered inside views/admin.ejs. `t` comes from res.locals;
+    the fallback keeps standalone rendering working. %>
+<% const tr = (typeof t === 'function') ? t : function (k) { return k; }; %>
 <div class="stats-grid">
 <div class="stat-card">
 <div class="stat-icon stat-pages">
@@ -5,7 +8,7 @@
 </div>
 <div class="stat-info">
 <div class="stat-value"><%= stats.pageCount %></div>
-<div class="stat-label">Pages</div>
+<div class="stat-label"><%= tr('dashboard.pages') %></div>
 </div>
 </div>
 <div class="stat-card">
@@ -14,7 +17,7 @@
 </div>
 <div class="stat-info">
 <div class="stat-value"><%= stats.componentCount %></div>
-<div class="stat-label">Components</div>
+<div class="stat-label"><%= tr('dashboard.components') %></div>
 </div>
 </div>
 <div class="stat-card">
@@ -23,7 +26,7 @@
 </div>
 <div class="stat-info">
 <div class="stat-value"><%= stats.operationalCount %></div>
-<div class="stat-label">Operational</div>
+<div class="stat-label"><%= tr('dashboard.operational') %></div>
 </div>
 </div>
 <div class="stat-card">
@@ -32,7 +35,7 @@
 </div>
 <div class="stat-info">
 <div class="stat-value"><%= stats.openIncidents %></div>
-<div class="stat-label">Open Incidents</div>
+<div class="stat-label"><%= tr('dashboard.openIncidents') %></div>
 </div>
 </div>
 <div class="stat-card">
@@ -41,7 +44,7 @@
 </div>
 <div class="stat-info">
 <div class="stat-value"><%= stats.incidentCount %></div>
-<div class="stat-label">Total Incidents</div>
+<div class="stat-label"><%= tr('dashboard.totalIncidents') %></div>
 </div>
 </div>
 <div class="stat-card">
@@ -50,28 +53,28 @@
 </div>
 <div class="stat-info">
 <div class="stat-value"><%= stats.userCount %></div>
-<div class="stat-label">Users</div>
+<div class="stat-label"><%= tr('dashboard.users') %></div>
 </div>
 </div>
 </div>
 
 <!-- Disk Usage -->
 <div class="card">
-<h3 style="font-size: 16px; font-weight: 600; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border);">Disk Usage</h3>
+<h3 style="font-size: 16px; font-weight: 600; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border);"><%= tr('dashboard.diskUsage') %></h3>
 <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
 <div style="flex:1;min-width:200px;">
 <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:6px;">
-<span>Storage</span>
-<span style="font-weight:600;"><%= diskInfo.dbSize ? (diskInfo.dbSize / (1024*1024)).toFixed(1) + ' MB (DB)' : diskInfo.percentage + '% used' %></span>
+<span><%= tr('dashboard.storage') %></span>
+<span style="font-weight:600;"><%= diskInfo.dbSize ? tr('dashboard.mbDb', { size: (diskInfo.dbSize / (1024*1024)).toFixed(1) }) : tr('dashboard.percentUsed', { percent: diskInfo.percentage }) %></span>
 </div>
 <div style="height:10px;background:var(--border);border-radius:5px;overflow:hidden;">
 <div style="height:100%;width:<%= diskInfo.percentage || 0 %>%;background:<%= parseFloat(diskInfo.percentage) >= 90 ? '#ef4444' : parseFloat(diskInfo.percentage) >= 75 ? '#f59e0b' : '#10b981' %>;border-radius:5px;transition:width 0.5s;"></div>
 </div>
 <% if (diskInfo.total > 0) { %>
-<div style="font-size:12px;color:var(--text-muted);margin-top:6px;"><%= (diskInfo.used / (1024*1024*1024)).toFixed(2) %> GB used of <%= (diskInfo.total / (1024*1024*1024)).toFixed(2) %> GB</div>
+<div style="font-size:12px;color:var(--text-muted);margin-top:6px;"><%= tr('dashboard.gbUsedOf', { used: (diskInfo.used / (1024*1024*1024)).toFixed(2), total: (diskInfo.total / (1024*1024*1024)).toFixed(2) }) %></div>
 <% } %>
 <% if (diskInfo.dbOnly) { %>
-<div style="font-size:12px;color:var(--text-muted);margin-top:6px;">Database: <%= (diskInfo.dbSize / (1024)).toFixed(0) %> KB</div>
+<div style="font-size:12px;color:var(--text-muted);margin-top:6px;"><%= tr('dashboard.databaseSize', { size: (diskInfo.dbSize / (1024)).toFixed(0) }) %></div>
 <% } %>
 </div>
 </div>
@@ -79,10 +82,10 @@
 
 <div class="dashboard-grid">
 <div class="dashboard-card">
-<h3>Page Status Overview</h3>
+<h3><%= tr('dashboard.pageStatusOverview') %></h3>
 <div class="page-status-list">
 <% if (pageStatuses.length === 0) { %>
-<p class="empty-state">No pages configured yet.</p>
+<p class="empty-state"><%= tr('dashboard.noPages') %></p>
 <% } else { %>
 <% pageStatuses.forEach(p => { %>
 <div class="page-status-item">
@@ -95,9 +98,9 @@
 </div>
 
 <div class="dashboard-card">
-<h3>Recent Incidents</h3>
+<h3><%= tr('dashboard.recentIncidents') %></h3>
 <% if (recentIncidents.length === 0) { %>
-<p class="empty-state">No incidents recorded.</p>
+<p class="empty-state"><%= tr('dashboard.noIncidents') %></p>
 <% } else { %>
 <div class="incident-list">
 <% recentIncidents.forEach(inc => { %>
@@ -116,14 +119,14 @@
 
 <!-- Security Quick Setup -->
 <div class="card" style="margin-top: 20px;">
-<h3>🔐 Security</h3>
+<h3><%= tr('dashboard.security') %></h3>
 <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 10px;">
 <a href="/admin/2fa/setup" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 6px;">
 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-<%= user.totp_enabled ? '2FA Enabled' : 'Setup 2FA' %>
+<%= user.totp_enabled ? tr('dashboard.twoFactorEnabled') : tr('dashboard.setupTwoFactor') %>
 </a>
 <% if (!user.totp_enabled) { %>
-<span style="color: var(--warning); font-size: 13px; align-self: center;">Recommended for all admin accounts</span>
+<span style="color: var(--warning); font-size: 13px; align-self: center;"><%= tr('dashboard.twoFactorRecommended') %></span>
 <% } %>
 </div>
 </div>

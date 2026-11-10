@@ -204,7 +204,7 @@ const WEBHOOK_SECRET = 'whsec-harness-123';
   // ===== C1: the migration on an existing installation ================
   const registered = MIGRATIONS.map(m => m.version);
   check('C1: 003-notification-channels is registered last in the migration registry',
-    registered[registered.length - 1] === '003-notification-channels' &&
+    registered[registered.length - 1] === '004-user-locale' &&
     registered.indexOf('001-baseline') < registered.indexOf('002-columns-and-backfills'), registered.join(','));
 
   const child = spawnSync(process.execPath, [__filename], {
@@ -220,20 +220,20 @@ const WEBHOOK_SECRET = 'whsec-harness-123';
     check('C1: an installation at 3.9.0 has 001+002 applied and no channels table',
       mig.appliedBefore.join(',') === '001-baseline,002-columns-and-backfills' && mig.tableBefore === false,
       mig.appliedBefore.join(',') + ' table=' + mig.tableBefore);
-    check('C1: the next boot applies ONLY 003', mig.appliedAfter.join(',') === '003-notification-channels', mig.appliedAfter.join(','));
+    check('C1: the next boot applies the migrations after the baseline', mig.appliedAfter.join(',') === '003-notification-channels,004-user-locale', mig.appliedAfter.join(','));
     check('C1: 003 is recorded in schema_migrations with a name and a checksum',
-      mig.recorded.length === 3 && mig.recorded.some(r => r.version === '003-notification-channels' && r.name && r.checksum === 64),
+      mig.recorded.length === 4 && mig.recorded.some(r => r.version === '003-notification-channels' && r.name && r.checksum === 64),
       mig.recorded.map(r => r.version + '/' + r.checksum).join(' '));
     const expectedColumns = ['config', 'created_at', 'enabled', 'events', 'id', 'name', 'type', 'updated_at'];
     check('C1: notification_channels has exactly the specified columns',
       JSON.stringify(mig.columns) === JSON.stringify(expectedColumns), mig.columns.join(','));
     check('C1: the baseline was NOT executed again (sentinel component survived)', mig.sentinel === 'Sentinel', String(mig.sentinel));
     check('C1: a second boot applies nothing new',
-      mig.againApplied.length === 0 && mig.againAlready.length === 3, JSON.stringify(mig.againApplied));
+      mig.againApplied.length === 0 && mig.againAlready.length === 4, JSON.stringify(mig.againApplied));
   }
   const parentRows = await db.queryAll('SELECT version FROM ' + MIGRATION_TABLE + ' ORDER BY version');
   check('C1: the app boot itself has 003 recorded (fresh installation path)',
-    parentRows.map(r => r.version).join(',') === '001-baseline,002-columns-and-backfills,003-notification-channels',
+    parentRows.map(r => r.version).join(',') === '001-baseline,002-columns-and-backfills,003-notification-channels,004-user-locale',
     parentRows.map(r => r.version).join(','));
 
   // ===== C2: secrets encrypted at rest, decrypted for delivery ========

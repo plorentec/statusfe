@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { queryOne, queryAll, run, getPool } = require('../db/database');
+const { DEFAULT_LOCALE, t, resolveLocale, translateFlash, translateTitle } = require('../i18n');
 
 const SESSION_SECRET = process.env.SESSION_SECRET || 'statusfe-session-secret-change-in-production';
 
@@ -46,6 +47,9 @@ async function createSession(user) {
     name: user.name,
     email: user.email,
     role: user.role,
+    // 5.0.0: the admin panel language travels in the session so a request costs
+    // no extra query. POST /admin/locale updates both the row and this store.
+    locale: resolveLocale(user),
     createdAt: Date.now(),
     _2fa_verified: false
   };
@@ -112,65 +116,18 @@ async function session(req, res, next) {
   res.locals.message = null;
   res.locals.messageType = null;
 
-  if (!req.session) req.session = {};
+  // 5.0.0 — the panel language of THIS request (S5). `locale` is a closure
+  // variable: reassigning it once the session is known updates the helpers below
+  // without rebuilding the locals.
+  let locale = DEFAULT_LOCALE;
+  res.locals.locale = locale;
+  res.locals.t = (key, vars) => t(locale, key, vars);
+  res.locals.pageTitle = (title) => translateTitle(title, locale);
+  // Flash text for a ?msg= code (S4) — the same helper the middleware uses for
+  // res.locals.message, so a view that renders its own codes stays consistent.
+  res.locals.flashText = (code) => translateFlash(code, locale);
 
-  const flashMsg = req.query.msg;
-  if (flashMsg) {
-    const msgs = {
-      success: 'Successfully completed the action.',
-      error: 'An error occurred. Please try again.',
-      invalid: 'Invalid email or password.',
-      registered: 'Registration is closed. Please contact the administrator.',
-      noreg: 'First user can register. Please sign up.',
-      admin: 'Admin access required.',
-      deleted: 'Component deleted successfully.',
-      self: 'You cannot delete your own account.',
-      created: 'User created successfully.',
-      key_created: 'API key created. Copy it now — it won\'t be shown again.',
-      revoked: 'API key revoked.',
-      reactivated: 'API key reactivated.',
-      key_deleted: 'API key permanently deleted.',
-      logo_too_large: 'Logo image too large — the encoded file must stay under 200 KB.',
-      logo_invalid: 'Logo must be a PNG, JPEG, WebP or SVG image.',
-      bulk_delete_error: 'Nothing deleted — no valid components were selected.',
-      bulk_deleted: 'Selected components deleted.',
-      invalid_parent: 'Invalid parent: a component cannot be its own parent or one of its own descendants.',
-      probe_invalid: 'The probe cannot be enabled: its target is missing or invalid for the selected probe type.',
-      parent_missing: 'The selected parent component does not exist.',
-      // 3.7.1: the component route used to emit msg=error for both of these,
-      // which made a real failure indistinguishable from a validation error.
-      notfound: 'That component does not exist any more.',
-      missing_fields: 'The component needs at least a name.',
-      // Codes added in 2.2.6: every ?msg= emitted by a redirect now has readable text
-      invalid_reset: 'Invalid or expired reset link.',
-      password_set: 'Password updated. Log in with your new password.',
-      password_changed: 'Password changed successfully.',
-      must_change: 'This administrator account still uses the password generated at first boot. Sign in and set a new password.',
-      status_updated: 'Status updated.',
-      invalid_status: 'Invalid status.',
-      last_admin: 'You cannot delete the last admin account.',
-      self_dep: 'A component cannot depend on itself.',
-      cycle: 'Circular dependency detected.',
-      exists: 'That dependency already exists.',
-      dep_deleted: 'Dependency deleted.',
-      system: 'System statuses cannot be deleted.',
-      invalid_retention: 'Retention must be between 30 and 3650 days.',
-      domain_verified: 'Custom domain verified. It now serves your page.',
-      domain_not_verified: 'TXT record not found or invalid — publish the record and try again.',
-      domain_taken: 'That custom domain is already in use by another page.',
-      invalid_domain: 'Invalid custom domain format (e.g. status.mycompany.com).',
-      org_limit: 'Organization limit reached. Upgrade the organization limits.',
-      default: flashMsg
-    };
-    res.locals.message = msgs[flashMsg] || flashMsg;
-    res.locals.messageType = req.query.type || 'success';
-    if (flashMsg === 'key_created' && req.query.key) {
-      res.locals.key_value = req.query.key;
-      res.locals.key_perms = req.query.perms || '';
-    }
-    // Rendered as a dedicated notice box in views/login.ejs.
-    if (flashMsg === 'must_change') res.locals.mustChangeNotice = true;
-  }
+  if (!req.session) req.session = {};
 
   let sessionId = null;
   // Parse cookie directly from headers to avoid cookie-parser interference
@@ -191,10 +148,29 @@ async function session(req, res, next) {
     const store = await getSession(sessionId);
     if (store) {
       req.session = store;
-      req.user = { id: store.userId, name: store.name, email: store.email, role: store.role };
+      req.user = { id: store.userId, name: store.name, email: store.email, role: store.role, locale: store.locale };
       res.locals.user = req.user;
       res.locals._2fa_verified = !!store._2fa_verified;
+      locale = resolveLocale(store);
+      res.locals.locale = locale;
     }
+  }
+
+  // Flash for ?msg= — the codes are unchanged, only the rendering became
+  // locale-aware (S4). The English texts that used to sit in a map here now live
+  // in the dictionaries as flash.<code>; translateFlash() falls back to the raw
+  // code for anything that is not a known code (the old `default:` branch), so
+  // every existing code keeps working.
+  const flashMsg = req.query.msg;
+  if (flashMsg) {
+    res.locals.message = translateFlash(flashMsg, locale);
+    res.locals.messageType = req.query.type || 'success';
+    if (flashMsg === 'key_created' && req.query.key) {
+      res.locals.key_value = req.query.key;
+      res.locals.key_perms = req.query.perms || '';
+    }
+    // Rendered as a dedicated notice box in views/login.ejs.
+    if (flashMsg === 'must_change') res.locals.mustChangeNotice = true;
   }
 
   // One-shot server-side flash (set via res.flash): read cookie, load, delete.

@@ -38,6 +38,7 @@ const MIGRATIONS = [
   require('./001-baseline'),
   require('./002-columns-and-backfills'),
   require('./003-notification-channels'),
+  require('./004-user-locale'),
 ];
 
 // sha256 of the migration's own source file (falling back to the function body
