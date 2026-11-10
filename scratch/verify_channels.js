@@ -109,6 +109,9 @@ const { MIGRATIONS, MIGRATION_TABLE } = require(path.join(ROOT, 'src', 'db', 'mi
 // seeds, exactly like production. It is ASYNC, so every DB touch below waits for
 // the health endpoint first.
 require(path.join(ROOT, 'src', 'app.js'));
+// 4.0.1: a fresh install forces a password change on first login; this harness
+// logs in as the seeded admin, so it clears the gate once the boot finishes.
+require('./_forced-change')();
 
 let failures = 0;
 const check = (name, cond, extra) => {

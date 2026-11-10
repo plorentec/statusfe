@@ -62,6 +62,7 @@ const check = (name, cond, extra) => {
 const compCount = async () => (await queryAll('SELECT id FROM components', [])).length;
 
 (async () => {
+  await require('./_forced-change')(); // 4.0.1: simula una instalación ya onboardeada
   await new Promise(r => setTimeout(r, 2500)); // wait for DB init + listen
 
   // 1. Login (session auth, same as the single delete — no requireAdmin)

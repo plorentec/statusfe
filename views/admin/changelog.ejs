@@ -2,41 +2,18 @@
 <h3>🚀 <%= version %></h3>
 <p class="text-muted">Current installed version. The release notes below are synced with the repository changelog.</p>
 
-<h4 style="margin-top: 20px; color: var(--success);">✨ What's new</h4>
-<ul>
-<li><strong>PostgreSQL backend</strong> — Production-grade relational database via <code>pg</code> pool (replaces SQLite).</li>
-<li><strong>Multi-group components</strong> — A component can belong to SEVERAL groups; groups can span multiple pages, with an aggregated group status showing the worst member status.</li>
-<li><strong>Dependency hub model</strong> — Many components can depend on one shared hub; status changes cascade transitively and circular dependencies are rejected.</li>
-<li><strong>Component Groups &amp; Group Members</strong> — Group components for organization, manage members from the group form, and type-to-search long lists.</li>
-<li><strong>Two-Factor Authentication (TOTP)</strong> — Mandatory for admin and write roles; optional for users (Google Authenticator, Authy compatible).</li>
-<li><strong>Audit Log</strong> — Complete log of all admin actions with CSV export and daily rotation.</li>
-<li><strong>Custom Layout Mode</strong> — Full HTML/CSS customization for status pages with a placeholder system.</li>
-<li><strong>Custom Component/Incident Statuses</strong> — Define your own status labels and colors, and map incident statuses to component statuses.</li>
-<li><strong>Self-signed SSL &amp; Auto Session Secret</strong> — Optional HTTPS with auto-generated certs, and a random session secret generated on first run.</li>
-</ul>
+<% if (typeof releases !== 'undefined' && releases.length) { %>
+<h4 style="margin-top: 20px; color: var(--info);">📜 Release history</h4>
+<% releases.forEach(function (r) { %>
+<details class="card" style="margin-top: 10px; padding: 12px; border: 1px solid var(--border);">
+<summary style="cursor: pointer; font-weight: 700;"><%= r.version %></summary>
+<pre style="white-space: pre-wrap; font-family: inherit; margin: 10px 0 0 0; font-size: 0.9em;"><%= r.body %></pre>
+</details>
+<% }); %>
+<% } else { %>
+<p class="text-muted">No CHANGELOG.md found next to the application.</p>
+<% } %>
 
-<h4 style="margin-top: 20px; color: var(--warning);">🔒 Security</h4>
-<ul>
-<li>API keys stored as a bcrypt hash + prefix only — shown once at creation, never persisted readable.</li>
-<li>CSRF protection on all admin forms (timing-safe validation).</li>
-<li>XSS sanitization in custom CSS/HTML/logo rendering.</li>
-<li>API key expiration enforcement, scoped permissions (read/write/admin).</li>
-<li>Webhook URL validation (SSRF protection, DNS re-resolution on delivery).</li>
-<li>Admin-only guards on user creation, docs, and status changes.</li>
-<li>CORS restricted to status pages and API only.</li>
-<li>CSV export neutralizes spreadsheet formula injection.</li>
-</ul>
-
-<h4 style="margin-top: 20px; color: var(--info);">🐛 Recent fixes</h4>
-<ul>
-<li>Private status pages no longer leak via the public API.</li>
-<li>Admin analytics page map keyed by the page's actual components.</li>
-<li>Welcome email now loads SMTP settings correctly.</li>
-<li>Malformed API key permissions no longer cause a 500.</li>
-<li>Embed widget escapes user-controlled values (reflected XSS).</li>
-</ul>
-
-<div class="card" style="margin-top: 20px; border: 1px solid var(--border);">
 <h4>🔄 Check for Updates</h4>
 <div id="updateStatus" style="padding: 10px 0;">
 <button class="btn btn-primary" onclick="checkUpdate()">Check for Updates</button>

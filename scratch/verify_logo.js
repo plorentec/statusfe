@@ -49,6 +49,7 @@ const check = (name, cond, extra) => {
 const PNG1x1 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
 (async () => {
+  await require('./_forced-change')(); // 4.0.1: simula una instalación ya onboardeada
   await new Promise(r => setTimeout(r, 2500));
 
   // Login as seeded admin and grab a CSRF token from the customize form itself.

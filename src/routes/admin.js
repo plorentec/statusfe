@@ -1488,9 +1488,34 @@ router.get('/changelog', async (req, res) => {
     user: req.user,
     message: res.locals.message,
     messageType: res.locals.messageType,
-    version: pkg.version
+    version: pkg.version,
+    // 4.0.1: the page used to show a hardcoded list frozen at ~2.2.x while
+    // claiming to be "synced with the repository changelog". It now renders the
+    // real file, so the history the operator sees is the one that shipped.
+    releases: readChangelog(12)
   }));
 });
+
+// Parse CHANGELOG.md into [{ version, body }]. Text only: the view escapes it,
+// so no HTML from the file can ever reach the page.
+function readChangelog(maxEntries) {
+  try {
+    const file = path.join(__dirname, '..', '..', 'CHANGELOG.md');
+    const raw = fs.readFileSync(file, 'utf8');
+    const parts = raw.split(/^## /m).slice(1); // drop the preamble
+    // The placeholder section is repo bookkeeping, not release history.
+    const real = parts.filter(chunk => !/^\[\s*unreleased\s*\]/i.test(chunk.trim()));
+    return real.slice(0, maxEntries || 12).map(chunk => {
+      const lines = chunk.split('\n');
+      const title = lines.shift().trim();
+      const body = lines.join('\n').trim();
+      return { version: title, body };
+    });
+  } catch (e) {
+    console.error('Could not read CHANGELOG.md:', e.message);
+    return [];
+  }
+}
 
 // Self-update: queue an update to the latest published release. The target is
 // resolved SERVER-SIDE (never accepted from the client) and handed to a

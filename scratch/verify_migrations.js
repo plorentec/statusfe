@@ -46,6 +46,7 @@ if (process.env.MIGRATIONS_CHILD === 'adoption') {
   )).map(r => r.table_name);
 
   (async () => {
+  await require('./_forced-change')(); // 4.0.1: simula una instalación ya onboardeada
     // 1. The legacy schema, built exactly as the old createTables() built it.
     await baseline.up();
     // 2. Sentinel: a component row that only survives if the baseline is NOT
@@ -154,7 +155,9 @@ const count = async (sql, params) => Number((await db.queryOne(sql, params)).n);
   check('M1: the seeded API key is stored hashed only (key NULL, 8-char prefix)',
     adminKey && adminKey.key === null && (adminKey.key_prefix || '').length === 8, adminKey && adminKey.key_prefix);
   const adminUser = await db.queryOne("SELECT must_change_password FROM users WHERE email='admin@status.local'");
-  check('M1: ADMIN_PASSWORD from the env seeds must_change_password = 0', Number(adminUser && adminUser.must_change_password) === 0);
+  // 4.0.1: a fresh install forces the change even when ADMIN_PASSWORD is set —
+  // the operator must end up owning a password they chose themselves.
+  check('M1: una instalación nueva fuerza must_change_password = 1', Number(adminUser && adminUser.must_change_password) === 1, adminUser && adminUser.must_change_password);
   const status = await migrationStatus();
   check('M1: migrationStatus() reports both migrations applied with a matching checksum',
     status.tableExists && status.migrations.length === 3 && status.migrations.every(m => m.applied && m.checksumMatches === true));

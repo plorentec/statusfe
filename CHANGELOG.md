@@ -9,6 +9,30 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [4.0.1] — 2026-11-08
+
+### Fixed
+- **El cambio de contraseña no saltaba en instalaciones nuevas** cuando el
+  operador definía `ADMIN_PASSWORD`: solo se forzaba con una contraseña
+  generada. Ahora **toda instalación nueva** fuerza a elegir contraseña en el
+  primer login, venga de donde venga el valor inicial. Las instalaciones
+  existentes siguen intactas (la columna nace en `0` y el seed solo corre si no
+  hay admin).
+- **El Changelog no mostraba el historial.** La página anunciaba «notas
+  sincronizadas con el changelog del repositorio» pero renderizaba una lista
+  **hardcodeada congelada en ~2.2.x** (hablaba de «PostgreSQL reemplaza
+  SQLite»). Ahora lee `CHANGELOG.md` en el servidor y muestra las últimas 12
+  versiones, con el texto escapado y sin la sección `[Unreleased]`.
+
+### Verified
+- `verify_first_run.js` F5 ahora exige `must_change_password = 1` también con
+  `ADMIN_PASSWORD`; `verify_migrations.js` M1 alineado.
+- `verify_e2e.js` comprueba que `/admin/changelog` renderiza el historial real y
+  la versión instalada.
+- Los arneses que entran como admin simulan una instalación ya onboardeada
+  (`scratch/_forced-change.js`, solo test); son 10 y todos vuelven a pasar.
+- Suite: **926 checks**.
+
 ## [4.0.0] — 2026-11-08
 
 ### Added

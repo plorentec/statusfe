@@ -54,6 +54,7 @@ async function waitForBoot() {
 }
 
 (async () => {
+  await require('./_forced-change')(); // 4.0.1: simula una instalación ya onboardeada
   await waitForBoot();
   console.log('--- app booted (pg-mem) ---');
 

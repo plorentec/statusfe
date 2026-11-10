@@ -79,6 +79,7 @@ process.env.ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
   require(path.join(__dirname, '..', 'src', 'app.js'));
 
   (async () => {
+  await require('./_forced-change')(); // 4.0.1: simula una instalación ya onboardeada
     await new Promise(r => setTimeout(r, 2500));
 
     // ---- unauthenticated ----

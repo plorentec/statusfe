@@ -145,6 +145,7 @@ function loginAdmin() {
 async function settle() { for (let i = 0; i < 6; i++) await new Promise(r => setTimeout(r, 15)); }
 
 (async () => {
+  await require('./_forced-change')(); // 4.0.1: simula una instalación ya onboardeada
   await waitForBoot();
   console.log('--- app booted (pg-mem, port 3976) ---');
   const SH = await loginAdmin();

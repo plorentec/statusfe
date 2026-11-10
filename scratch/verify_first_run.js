@@ -172,7 +172,9 @@ async function waitForBoot() {
   let childResult = null;
   try { childResult = JSON.parse(fs.readFileSync(childOut, 'utf8')); } catch (e) { childResult = null; }
   check('F5: el segundo arranque con ADMIN_PASSWORD termina bien', child.status === 0 && !!childResult, 'rc=' + child.status + (childResult ? '' : ' (sin resultado)'));
-  check('F5: ADMIN_PASSWORD -> must_change_password = 0', !!childResult && childResult.must_change === 0, childResult && childResult.must_change);
+  // 4.0.1: también con ADMIN_PASSWORD se fuerza el cambio — una instalación
+  // nueva debe hacer que el operador elija SU contraseña, venga de donde venga.
+  check('F5: ADMIN_PASSWORD -> must_change_password = 1 (se fuerza el cambio igual)', !!childResult && childResult.must_change === 1, childResult && childResult.must_change);
   check('F5: la contraseña del entorno autentica al admin', !!childResult && childResult.envPasswordWorks === true);
   check('F5: con ADMIN_PASSWORD no se escribe fichero de contraseña', !!childResult && childResult.passwordFileExists === false);
 

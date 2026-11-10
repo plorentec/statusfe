@@ -45,6 +45,7 @@ const check = (name, cond, extra) => {
 };
 
 (async () => {
+  await require('./_forced-change')(); // 4.0.1: simula una instalación ya onboardeada
   await new Promise(r => setTimeout(r, 2500));
 
   // 1. Login as seeded admin
@@ -225,6 +226,15 @@ const check = (name, cond, extra) => {
   check('miembro desmarcado: sin grupos y primario NULL',
     (await queryAll('SELECT component_id FROM component_group_members WHERE group_id=$1', [redCasa.id])).length === 0
     && soloAfter.group_id === null && soloAfter.group_name === null);
+
+  // 4.0.1: the changelog page must show the REAL release history from
+  // CHANGELOG.md, not the frozen hardcoded blurb it used to render.
+  const chg = await req('GET', '/admin/changelog', { headers: { Cookie: cookieHeader() } });
+  const pkgVersion = require(path.join(__dirname, '..', 'package.json')).version;
+  check('/admin/changelog muestra el historial real y la versión instalada',
+    chg.status === 200 && chg.body.includes('Release history')
+    && chg.body.includes('[' + pkgVersion + ']') && !chg.body.includes('[Unreleased]'),
+    chg.status + ' / version=' + pkgVersion);
 
   // 6. Edit component: "No group" clears group
   const upd = await req('PUT', '/admin/components/' + comp.id, {

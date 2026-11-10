@@ -120,7 +120,11 @@ async function seed() {
     const adminPasswordHash = bcrypt.hashSync(adminPassword, 10);
     await run(
       'INSERT INTO users (id, email, password_hash, name, role, totp_enabled, totp_secret, must_change_password) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
-      [adminUserId, 'admin@status.local', adminPasswordHash, 'Admin User', 'admin', 0, null, fromEnv ? 0 : 1]
+      // Always 1 on a fresh seed: a new install must make the operator choose
+      // their own password, whether it came from ADMIN_PASSWORD or was
+      // generated. Existing installs are untouched (the column defaults to 0
+      // and this block only runs when no admin row exists).
+      [adminUserId, 'admin@status.local', adminPasswordHash, 'Admin User', 'admin', 0, null, 1]
     );
     if (fromEnv) {
       console.log('Seeded: admin user (admin@status.local) with ADMIN_PASSWORD from the environment');
