@@ -983,7 +983,11 @@ body.dark select option {
   background: rgba(0,0,0,0.15);
 }
 .sidebar-submenu.open {
-  max-height: 300px;
+  /* 4.0.3: this used to be a fixed 300px. The Configuration submenu holds nine
+     entries (~650px), so the last two —Changelog and Audit Log— were clipped by
+     overflow:hidden with no scrollbar, and looked simply missing. The cap only
+     exists to animate the collapse, so it must exceed any realistic submenu. */
+  max-height: 1000px;
 }
 .sidebar-submenu a {
   padding: 8px 20px 8px 52px;
