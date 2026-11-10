@@ -12,7 +12,10 @@ module.exports = async function settleForcedChange() {
     try {
       const row = await db.queryOne("SELECT id FROM users WHERE email='admin@status.local'");
       if (row) {
-        await db.run("UPDATE users SET must_change_password=0 WHERE email='admin@status.local'");
+        // 5.0.1: the panel now defaults to Spanish. These harnesses assert on
+        // English UI strings, so the seeded admin is pinned to English here —
+        // one place instead of rewriting assertions across five harnesses.
+        await db.run("UPDATE users SET must_change_password=0, locale='en' WHERE email='admin@status.local'");
         return true;
       }
     } catch (e) { /* database not ready yet */ }

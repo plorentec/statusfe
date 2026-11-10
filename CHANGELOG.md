@@ -9,6 +9,23 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [5.0.1] — 2026-11-08
+
+### Changed
+- **El panel arranca en español** (`DEFAULT_LOCALE`), no en inglés. Un usuario
+  sin preferencia guardada —o con un valor inválido— ve español; el inglés queda
+  como opción explícita en el selector.
+- El **selector de idioma se movió a «Configuration»**, como un ítem del
+  submenú, en vez de estar suelto arriba de la sidebar.
+
+### Verified
+- `verify_i18n_admin.js`: 44 comprobaciones, ahora fijando el default español
+  (render por defecto, fallback de un idioma desconocido, resaltado de ES).
+- Los arneses que afirman textos en inglés fijan el idioma del admin sembrado en
+  inglés desde `scratch/_forced-change.js` (un solo sitio, no cinco), y el arnés
+  de i18n restaura el `NULL` para probar el default.
+- Suite: **970 checks**.
+
 ## [5.0.0] — 2026-11-08
 
 ### Added

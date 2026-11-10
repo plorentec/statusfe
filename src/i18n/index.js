@@ -19,7 +19,9 @@ const es = require('./es');
 
 const DICTIONARIES = { en, es };
 const SUPPORTED = ['en', 'es'];
-const DEFAULT_LOCALE = 'en';
+// 5.0.1: el producto es de la casa y el operador escribe en español; el panel
+// arranca en español y el inglés queda como opción explícita.
+const DEFAULT_LOCALE = 'es';
 
 // English page titles the routes render as `title`, mapped to their key. The
 // mapping lives here (not in the routes) so a view can translate a title it
@@ -111,7 +113,9 @@ function t(locale, key, vars) {
 // Per-request locale of an authenticated user (S5): no session or no preference
 // means English, which is also every pre-existing row (users.locale is NULL).
 function resolveLocale(user) {
-  return user && user.locale === 'es' ? 'es' : DEFAULT_LOCALE;
+  // resolveLocale: el idioma guardado del usuario manda; si no tiene, el
+  // DEFAULT_LOCALE (español desde 5.0.1).
+  return user && SUPPORTED.includes(user.locale) ? user.locale : DEFAULT_LOCALE;
 }
 
 // Flash text for a `?msg=` code (S4). An unknown code is shown as-is (that is

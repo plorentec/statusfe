@@ -139,8 +139,8 @@ const storedLocale = async () => (await queryOne("SELECT locale FROM users WHERE
   check('I1: no dictionary value contains HTML', Object.entries(en).concat(Object.entries(es)).every(([, v]) => !/[<>]/.test(v)),
     Object.entries(en).concat(Object.entries(es)).filter(([, v]) => /[<>]/.test(v)).map(([k]) => k).join(',') || 'clean');
   check('I1: every value is a non-empty string', Object.entries(en).concat(Object.entries(es)).every(([, v]) => typeof v === 'string' && v.length > 0));
-  check('I1: SUPPORTED is exactly en+es and the default is en',
-    i18n.SUPPORTED.join(',') === 'en,es' && i18n.DEFAULT_LOCALE === 'en', i18n.SUPPORTED.join(','));
+  check('I1: SUPPORTED is exactly en+es and the default is es',
+    i18n.SUPPORTED.join(',') === 'en,es' && i18n.DEFAULT_LOCALE === 'es', i18n.SUPPORTED.join(','));
 
   // ===== I2. interpolation + fallback + never throws ====================
   check('I2: t() interpolates a placeholder in Spanish',
@@ -155,11 +155,13 @@ const storedLocale = async () => (await queryOne("SELECT locale FROM users WHERE
   try { missing = i18n.t('es', 'this.key.does.not.exist'); } catch (e) { threw = e; }
   check('I2: a key missing from BOTH dictionaries returns the key itself, never empty',
     !threw && missing === 'this.key.does.not.exist', threw ? 'threw ' + threw.message : String(missing));
-  check('I2: an unknown locale falls back to English, not to empty',
-    i18n.t('fr', 'components.title') === en['components.title'], i18n.t('fr', 'components.title'));
-  check('I2: resolveLocale() is en unless the user asked for es',
+  // 5.0.1: el idioma por defecto pasó a español.
+  check('I2: an unknown locale falls back to the default language, not to empty',
+    i18n.t('fr', 'components.title') === es['components.title'], i18n.t('fr', 'components.title'));
+  check('I2: resolveLocale() is es unless the user asked for en',
     i18n.resolveLocale({ locale: 'es' }) === 'es' && i18n.resolveLocale({ locale: 'en' }) === 'en' &&
-    i18n.resolveLocale({}) === 'en' && i18n.resolveLocale(null) === 'en');
+    i18n.resolveLocale({}) === 'es' && i18n.resolveLocale(null) === 'es' &&
+    i18n.resolveLocale({ locale: 'fr' }) === 'es');
 
   // ===== I3. migration 004 on an installation at 001+002+003 ===========
   const registered = require(path.join(ROOT, 'src', 'db', 'migrations')).MIGRATIONS.map(m => m.version);
@@ -190,6 +192,10 @@ const storedLocale = async () => (await queryOne("SELECT locale FROM users WHERE
   }
   // ===== boot + login ===================================================
   await require('./_forced-change')(); // 4.0.1: simulate an onboarded install
+  // 5.0.1: the shared helper pins the admin to English so the other harnesses
+  // keep asserting English strings. This harness tests the DEFAULT, so the
+  // locale goes back to NULL (no preference) before any assertion.
+  await require(path.join(ROOT, 'src', 'db', 'database')).run("UPDATE users SET locale=NULL WHERE email='admin@status.local'");
   let up = false;
   for (let i = 0; i < 60 && !up; i++) {
     try { const r = await req('GET', '/api/v1/health'); up = r.status === 200; } catch (e) { up = false; }
@@ -209,8 +215,8 @@ const storedLocale = async () => (await queryOne("SELECT locale FROM users WHERE
 
   const englishPage = await req('GET', '/admin', { headers: { Cookie: cookieHeader() } });
   absorb(englishPage);
-  check('I0: GET /admin renders in English by default',
-    englishPage.status === 200 && englishPage.body.includes('Open Incidents') && !englishPage.body.includes('Incidentes abiertos'),
+  check('I0: GET /admin renders in Spanish by default',
+    englishPage.status === 200 && englishPage.body.includes('Incidentes abiertos') && !englishPage.body.includes('Open Incidents'),
     'status ' + englishPage.status);
 
   // ===== I5. the selector is in BOTH sidebar copies =====================
@@ -228,8 +234,8 @@ const storedLocale = async () => (await queryOne("SELECT locale FROM users WHERE
     !!renderedSelector && /value="en"/.test(renderedSelector[0]) && /value="es"/.test(renderedSelector[0]) &&
     /name="_csrf" value="[^"]+"/.test(renderedSelector[0]),
     renderedSelector ? renderedSelector[0].slice(0, 90).replace(/\s+/g, ' ') : 'no form');
-  check('I5: the current locale is marked active (EN highlighted before the change)',
-    !!renderedSelector && /value="en"[^>]*background:#10b981/.test(renderedSelector[0]) && !/value="es"[^>]*background:#10b981/.test(renderedSelector[0]));
+  check('I5: the current locale is marked active (ES highlighted before the change)',
+    !!renderedSelector && /value="es"[^>]*background:#10b981/.test(renderedSelector[0]) && !/value="en"[^>]*background:#10b981/.test(renderedSelector[0]));
 
   // ===== I4. switching to Spanish ======================================
   const csrf = jar['_csrf'];
