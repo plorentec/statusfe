@@ -9,6 +9,25 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [5.3.1] — 2026-11-08
+
+### Security
+- **Cerrado el DNS rebinding en las notificaciones.** La entrega validaba la URL
+  resolviendo el hostname, pero luego la librería HTTP **volvía a resolver**: un
+  DNS controlado por el atacante podía devolver una IP pública en la validación y
+  una privada en la conexión (TOCTOU). Ahora se resuelve **una sola vez**, se
+  rechaza si **cualquiera** de las direcciones es privada, y la conexión va **a la
+  IP validada** manteniendo `Host` y `servername` (SNI) del hostname original.
+  Mismo patrón que los webhooks desde 2.2.7.
+- Las redirecciones se siguen sin seguir: un `3xx` es un fallo, porque seguirlo
+  escaparía de la dirección validada.
+
+### Verified
+- `scratch/verify_channels.js`: **81 comprobaciones** (antes 69). Nuevas: una sola
+  resolución con la IP fijada, rechazo cuando **una** de las respuestas es
+  privada, `3xx` sin segunda conexión, y timeout acotado sin lanzar.
+- Suite: **981 checks**.
+
 ## [5.3.0] — 2026-11-08
 
 ### Added

@@ -1,9 +1,11 @@
 // Notification channels harness (4.0.0).
 //
-// pg-mem (in-memory PostgreSQL) + an INJECTED HTTP client: nothing here touches
-// the network. The DNS resolver is injected too, but only to control what a name
-// resolves TO — the private-IP rule itself (isPrivateIp) is the real one, so the
-// SSRF assertions exercise production logic, not a bypass.
+// pg-mem (in-memory PostgreSQL) + an INJECTED HTTP TRANSPORT: nothing here
+// touches the network. The transport is the seam the module hands its PINNED
+// target to (address + original hostname), and the DNS resolver is injected only
+// to control what a name resolves TO — the private-IP rule itself (isPrivateIp)
+// is the real one, so the SSRF assertions exercise production logic, not a
+// bypass.
 //
 //   C1  003 applies on top of an existing 001+002 database (child process), is
 //       recorded in schema_migrations, and a second boot applies nothing
@@ -17,6 +19,11 @@
 //   C6  SSRF: a destination resolving to a private IP is never contacted
 //   C7  a failing/timing-out delivery never throws out of dispatch()
 //   C8  the admin UI: list renders, create works, test reports a flash code
+//   C9  the transport receives the VALIDATED IP (one resolution only) with the
+//       original hostname as Host + TLS servername (DNS-rebinding TOCTOU)
+//   C10 an answer set with ONE private address delivers nothing
+//   C11 a 3xx is refused, not followed, and no second connection is attempted
+//   C12 a transport that never answers still settles as a failure (5 s guard)
 //   E1-E6  the six events actually reach the channels
 //
 // Run: node scratch/verify_channels.js      (needs: npm i --no-save pg-mem)
@@ -120,29 +127,48 @@ const check = (name, cond, extra) => {
 };
 const tick = (ms = 80) => new Promise(r => setTimeout(r, ms));
 
-// ----- injected HTTP client -------------------------------------------
+// ----- injected HTTP transport ----------------------------------------
+// `notify-channels` resolves the name ONCE and hands the pinned target to the
+// transport; this recorder replaces the transport so no socket is opened. The
+// recorded `address` is what the real client would connect to.
 const calls = [];
 let fetchMode = 'ok';       // 'ok' | 'fail' | 'timeout'
 let fetchPlan = null;       // (call) => response | throw
-notify.__setFetchForTests(async (url, options) => {
+let hangForever = false;    // simulate an endpoint that never answers
+notify.__setFetchForTests(async (target, request) => {
   const call = {
-    url: String(url),
-    method: options && options.method,
-    headers: (options && options.headers) || {},
-    body: JSON.parse((options && options.body) || '{}'),
-    hasSignal: !!(options && options.signal)
+    target,
+    address: target.address,
+    family: target.family,
+    port: target.port,
+    protocol: target.protocol,
+    hostname: target.hostname,
+    servername: target.servername,
+    url: target.protocol + '//' + target.host_header + target.path,
+    method: request && request.method,
+    headers: (request && request.headers) || {},
+    body: JSON.parse((request && request.body) || '{}'),
+    timeoutMs: request && request.timeoutMs
   };
   calls.push(call);
+  if (hangForever) return new Promise(() => {});
   if (fetchPlan) return fetchPlan(call);
-  if (fetchMode === 'fail') return { ok: false, status: 500 };
+  if (fetchMode === 'fail') return { status: 500 };
   if (fetchMode === 'timeout') { const e = new Error('The operation was aborted due to timeout'); e.name = 'TimeoutError'; throw e; }
-  return { ok: true, status: 200 };
+  return { status: 200 };
 });
 // Only the RESOLUTION is controlled here; isPrivateIp() is still the real rule.
+// Every hostname handed to the resolver is recorded so C9 can prove the module
+// resolves ONCE and never lets the transport resolve again.
+const dnsCalls = [];
 notify.__setDnsForTests(async (hostname) => {
+  dnsCalls.push(hostname);
   if (hostname === 'internal.example.test') return [{ address: '127.0.0.1', family: 4 }];
   if (hostname === 'private-range.example.test') return [{ address: '192.168.1.10', family: 4 }];
   if (hostname === 'unresolvable.example.test') throw new Error('ENOTFOUND');
+  if (hostname === 'pinned.example.test') return [{ address: '203.0.113.10', family: 4 }];
+  // Rebinding shape: one public answer and one private answer in the SAME set.
+  if (hostname === 'mixed.example.test') return [{ address: '203.0.113.11', family: 4 }, { address: '10.0.0.5', family: 4 }];
   return [{ address: '93.184.216.34', family: 4 }];
 });
 
@@ -301,8 +327,8 @@ const WEBHOOK_SECRET = 'whsec-harness-123';
   const expectedSig = 'sha256=' + crypto.createHmac('sha256', WEBHOOK_SECRET).update(JSON.stringify(whCall.body)).digest('hex');
   check('C3: the webhook signature header is sha256=<hmac of the body>',
     !!whCall && whCall.headers['X-StatusFe-Signature'] === expectedSig, whCall && String(whCall.headers['X-StatusFe-Signature']).slice(0, 24));
-  check('C3: every delivery carries a 5 s abort signal',
-    calls.every(c => c.hasSignal === true));
+  check('C3: every delivery is bounded by the 5 s delivery timeout',
+    calls.every(c => c.timeoutMs === 5000), calls.map(c => c.timeoutMs).join(','));
 
   const plainWh = await notificationChannels.create({ type: 'webhook', name: 'No Secret Hook', config: { url: 'https://example.com/no-secret' }, events: [] });
   resetCalls();
@@ -365,7 +391,7 @@ const WEBHOOK_SECRET = 'whsec-harness-123';
   // C6b — REVIEW FIX R4-002: a public destination that answers 3xx must NOT be
   // followed. The guard validates the URL it resolved; following a redirect would
   // reach 169.254.169.254 or an internal host with no validation at all.
-  fetchPlan = (url) => ({ status: 302, headers: { location: 'http://169.254.169.254/latest/meta-data/' }, ok: false, body: '' });
+  fetchPlan = () => ({ status: 302, headers: { location: 'http://169.254.169.254/latest/meta-data/' } });
   const redir = await notificationChannels.create({ type: 'webhook', name: 'Redir', config: { url: 'http://public.example.test/hook' }, events: [] });
   resetCalls();
   await notify.dispatch('component_status', { title: 'redir', message: 'guard', url: null });
@@ -401,6 +427,74 @@ const WEBHOOK_SECRET = 'whsec-harness-123';
     notifyLogs.some(l => l.includes('failed:') && l.includes('aborted due to timeout')),
     notifyLogs.slice(-1)[0] || 'no log');
   check('C7: all enabled channels were still attempted', calls.length >= 4, calls.length);
+
+  // ===== C9-C12: pinned connection (DNS rebinding / TOCTOU) ===========
+  // C9 — the module resolves ONCE and the transport connects to that address.
+  // A second resolution inside the HTTP client is exactly the rebinding window
+  // this fix closes, so `address`, `Host` and `servername` are asserted here.
+  const pinned = await notificationChannels.create({ type: 'webhook', name: 'Pinned', config: { url: 'https://pinned.example.test/hook' }, events: [] });
+  resetCalls();
+  dnsCalls.length = 0;
+  await notify.dispatch('component_status', { title: 'pin', message: 'rebinding', url: null });
+  const pinCall = calls.find(c => c.url.includes('pinned.example.test'));
+  check('C9: the transport receives the VALIDATED address as the connection target',
+    !!pinCall && pinCall.address === '203.0.113.10' && pinCall.hostname === 'pinned.example.test',
+    pinCall && pinCall.address + ' <- ' + pinCall.hostname);
+  check('C9: Host and TLS servername stay on the original hostname (port 443 for https)',
+    !!pinCall && pinCall.headers.Host === 'pinned.example.test' && pinCall.servername === 'pinned.example.test' && pinCall.port === 443,
+    pinCall && JSON.stringify({ host: pinCall.headers.Host, sni: pinCall.servername, port: pinCall.port }));
+  check('C9: the hostname is resolved exactly once (the transport never re-resolves)',
+    dnsCalls.filter(h => h === 'pinned.example.test').length === 1,
+    dnsCalls.filter(h => h === 'pinned.example.test').length + ' lookup(s)');
+  check('C9: the pinned delivery still carries the exact webhook payload',
+    !!pinCall && pinCall.body.event === 'component_status' && pinCall.method === 'POST',
+    pinCall && JSON.stringify(pinCall.body).slice(0, 80));
+  await notificationChannels.remove(pinned.id);
+
+  // C10 — every resolved address is checked, not just the first one: a public
+  // answer followed by a private one must deliver NOTHING.
+  const mixed = await notificationChannels.create({ type: 'webhook', name: 'Mixed Dns', config: { url: 'https://mixed.example.test/hook' }, events: [] });
+  resetCalls();
+  await notify.dispatch('component_status', { title: 'mixed', message: 'rebinding', url: null });
+  check('C10: one private address among the answers blocks the delivery',
+    !calls.some(c => c.url.includes('mixed.example.test')),
+    calls.filter(c => c.url.includes('mixed.example.test')).length + ' delivery(ies)');
+  check('C10: the mixed answer set is logged as a rejected destination',
+    notifyLogs.some(l => l.startsWith('[NOTIFY] webhook Mixed Dns failed: ') && l.includes('destination rejected')),
+    notifyLogs.filter(l => l.includes('Mixed Dns')).slice(-1)[0] || 'no log');
+  await notificationChannels.remove(mixed.id);
+
+  // C11 — a redirect is refused, never followed: following it would leave the
+  // validated address behind.
+  const hop = await notificationChannels.create({ type: 'webhook', name: 'Hop', config: { url: 'https://hop.example.test/hook' }, events: [] });
+  fetchPlan = () => ({ status: 307, headers: { location: 'http://169.254.169.254/latest/meta-data/' } });
+  resetCalls();
+  await notify.dispatch('component_status', { title: 'hop', message: 'no follow', url: null });
+  const hopCalls = calls.filter(c => c.url.includes('hop.example.test'));
+  fetchPlan = null;
+  check('C11: a 3xx is refused, not followed, and no second connection is attempted',
+    hopCalls.length === 1 && !calls.some(c => c.address === '169.254.169.254'),
+    hopCalls.length + ' connection(s), metadata=' + (calls.some(c => c.address === '169.254.169.254') ? 'CONTACTADA' : 'no'));
+  check('C11: the refusal keeps the same message (HTTP <code> redirect refused)',
+    notifyLogs.some(l => l.includes('Hop failed') && l.includes('HTTP 307 redirect refused')),
+    notifyLogs.filter(l => l.includes('Hop')).slice(-1)[0] || 'no log');
+  await notificationChannels.remove(hop.id);
+
+  // C12 — an endpoint that never answers must still settle as a failure.
+  hangForever = true;
+  resetCalls();
+  let threwHang = null;
+  const hangStart = Date.now();
+  try {
+    await notify.dispatch('component_status', { title: 'hang', message: 'never answers', url: null });
+  } catch (e) { threwHang = e; }
+  const hangElapsed = Date.now() - hangStart;
+  hangForever = false;
+  check('C12: a transport that never answers settles on the 5 s guard without throwing',
+    threwHang === null && hangElapsed >= 4500 && hangElapsed < 15000, 'elapsed=' + hangElapsed + 'ms threw=' + (threwHang && threwHang.message));
+  check('C12: the hung delivery is logged as a timeout failure',
+    notifyLogs.some(l => l.includes('failed:') && l.includes('delivery timeout')),
+    notifyLogs.filter(l => l.includes('delivery timeout')).slice(-1)[0] || 'no log');
 
   // ===== E1-E6: the six events reach the channels =====================
   const page = await models.pages.create({ name: 'Channels Harness', slug: 'channels-harness', is_public: 1, status: 'operational' });
@@ -532,8 +626,7 @@ const WEBHOOK_SECRET = 'whsec-harness-123';
 
   fetchMode = 'fail';
   const failedTest = await req('POST', '/admin/channels/' + uiRow.id + '/test', { headers: { Cookie: cookieHeader(), 'x-csrf-token': csrf } });
-  fetchMode = 'ok';
-  check('C8: a failing test reports a failure flash code with the reason',
+  fetchMode = 'ok';  check('C8: a failing test reports a failure flash code with the reason',
     failedTest.status === 302 && String(failedTest.headers.location).includes('msg=channel_test_failed') &&
     decodeURIComponent(String(failedTest.headers.location)).includes('HTTP 500'),
     failedTest.status + ' -> ' + decodeURIComponent(String(failedTest.headers.location)));
