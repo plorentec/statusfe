@@ -9,6 +9,17 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [4.0.3] — 2026-11-08
+
+### Fixed
+- **Changelog y Audit Log eran invisibles en el menú.** El submenú de
+  «Configuration» se anima con `max-height` y el estado abierto tenía un tope
+  fijo de **300px**, mientras el grupo tiene nueve entradas (~650px): con
+  `overflow: hidden` y sin scroll, los dos últimos quedaban recortados. Parecía
+  que no existían. El tope ahora supera cualquier submenú real.
+- El submenú de «Configuration» **se abre solo** al entrar en una de sus
+  páginas, sin depender del clic.
+
 ## [4.0.2] — 2026-11-08
 
 ### Fixed
