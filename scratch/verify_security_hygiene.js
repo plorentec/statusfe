@@ -148,3 +148,20 @@ async function waitForBoot() {
   console.log(failures === 0 ? '\nSECURITY HYGIENE PASSED' : `\nFAILURES: ${failures}`);
   process.exit(failures === 0 ? 0 : 1);
 })().catch(e => { console.error('HARNESS ERROR:', e); process.exit(1); });
+
+// ===== rate limits configurables (5.4.0) =====
+// El parseo de entorno es lo único con riesgo real: un valor inválido no puede
+// dejar el límite en 0 (eso bloquearía toda la API).
+(() => {
+  const { execFileSync } = require('child_process');
+  const probe = (env) => execFileSync(process.execPath, ['-e',
+    "console.log(JSON.stringify(require('./src/middleware/rate-limit').limits))"
+  ], { cwd: require('path').join(__dirname, '..'), env: { ...process.env, ...env }, encoding: 'utf8' });
+  const read = (env) => JSON.parse(probe(env));
+  const custom = read({ RATE_LIMIT_API_MAX: '5' });
+  const zero = read({ RATE_LIMIT_API_MAX: '0' });
+  const junk = read({ RATE_LIMIT_API_MAX: 'abc' });
+  check('L1: RATE_LIMIT_API_MAX se respeta', custom.API_MAX === 5, custom.API_MAX);
+  check('L2: un 0 cae al valor por defecto (no bloquea la API)', zero.API_MAX === 60, zero.API_MAX);
+  check('L3: basura cae al valor por defecto', junk.API_MAX === 60, junk.API_MAX);
+})();

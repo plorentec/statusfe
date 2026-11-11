@@ -265,7 +265,7 @@ Improvement ideas not yet implemented live in `ROADMAP.md`.
 - **SQLite→PG**: `INSERT OR REPLACE` → `INSERT ... ON CONFLICT ... DO UPDATE`. `INSERT OR IGNORE` → `ON CONFLICT ... DO NOTHING`.
 - Adding a module to `models.js` requires updating imports in `admin.js`, `admin-extra.js`, `api.js`, and `app.js`.
 - `admin-extra.js` is mounted after `admin.js` — route conflicts resolved by `admin.js` first.
-- Rate limits: global 200/min, auth 10/15min, API 60/min (`src/middleware/rate-limit.js:4-28`), admin 60/min (inline in `app.js:125-132`). All mounts wrapped in `safeLimiter` (`app.js:107`) so a limiter-internal error can't 500/stop serving.
+- Rate limits: global 200/min, auth 10/15min, API 60/min, admin 60/min. **5.4.0**: todos configurables por entorno (`RATE_LIMIT_GLOBAL_MAX`, `RATE_LIMIT_AUTH_MAX`/`_WINDOW_MS`, `RATE_LIMIT_API_MAX`/`_WINDOW_MS`, `RATE_LIMIT_ADMIN_MAX`) en `src/middleware/rate-limit.js`. Un valor `0`, negativo o no numérico **cae al default** — un 0 no puede bloquear la API entera. Además de la capa por IP, cada API key tiene su propio bucket (100/min por defecto, columna `rate_limit`). All mounts wrapped in `safeLimiter` (`app.js:107`) so a limiter-internal error can't 500/stop serving.
 - `api.js` route ORDER matters: public `GET /pages/:slug` (`:50`) matches any `/pages/<x>`; `/pages/admin` must stay registered BEFORE it (`:30`). Since 2.2.4 the public handlers are auth-aware via `optionalAuth` — do not re-add separate authed `/pages/:id` variants behind it (that shadowing was the 2.2.4 fix).
 - Docker Compose: `network_mode: host` on both services. No `ports:` mapping. `DB_HOST=127.0.0.1` (not `postgres`). Build has `network: host`. See Production deployment section for the live server specifics.
 

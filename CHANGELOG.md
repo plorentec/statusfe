@@ -9,6 +9,26 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [5.4.0] — 2026-11-08
+
+### Added
+- **Límites de peticiones configurables por entorno**: `RATE_LIMIT_GLOBAL_MAX`,
+  `RATE_LIMIT_AUTH_MAX`/`_WINDOW_MS`, `RATE_LIMIT_API_MAX`/`_WINDOW_MS` y
+  `RATE_LIMIT_ADMIN_MAX`. Un producto auto-alojado no debería tener que editar
+  código porque su PRTG con muchos sensores choque con 60/min.
+- Un valor `0`, negativo o no numérico **cae al default**: un error de tecleo en
+  el fichero de entorno no puede dejar la API bloqueada al 100 %.
+
+### Notes
+- Siguen existiendo **dos capas**: por IP (estas variables) y por API key
+  (100/min por defecto, columna `rate_limit`). Desde una sola IP el límite
+  efectivo es el de la capa por IP, no el de la clave.
+
+### Verified
+- `verify_security_hygiene.js`: L1–L3 prueban que el override se aplica y que un
+  valor inválido cae al default (en proceso hijo, leyendo el módulo real).
+- Suite: **984 checks**.
+
 ## [5.3.1] — 2026-11-08
 
 ### Security

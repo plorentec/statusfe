@@ -160,7 +160,8 @@ app.use('/api/v1', safeLimiter(apiLimiter));
 
 const adminLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 60,
+  // 5.4.0: configurable, like the other limits (see middleware/rate-limit.js).
+  max: require('./middleware/rate-limit').limits.ADMIN_MAX,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many admin requests, please try again later.' }
