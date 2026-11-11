@@ -9,6 +9,37 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [5.5.0] — 2026-11-08
+
+### Added
+- **Las notificaciones ya no hacen tormenta.** Los avisos se agrupan en una
+  ventana (**2 s**, `NOTIFY_BATCH_MS`) y salen **uno solo por canal**: cinco
+  componentes cambiando en cascada producen un mensaje que los lista, no cinco.
+  Un aviso suelto se envía **exactamente igual que antes**.
+- **Deduplicación** dentro de la ventana: el mismo evento con el mismo título se
+  menciona una vez.
+- **Reintentos con backoff** (`NOTIFY_RETRY_BASE_MS`, 1 s → 3 s, 3 intentos) para
+  lo que puede funcionar: red, timeout, 408, 429 y 5xx. **No** se reintenta otro
+  4xx ni una redirección rechazada: insistir no lo arregla.
+- Un `429` con `Retry-After` **manda sobre el backoff** (tope 30 s): si el
+  destino pide esperar, se espera.
+- Al apagar (SIGTERM/SIGINT) se **vuelca la cola** con un límite de 6 s, para no
+  perder avisos en un reinicio del contenedor.
+
+### Notes
+- Compatibilidad: un aviso suelto conserva su payload; un lote de eventos
+  distintos marca `event: "batch"` y añade `events[]`, `count` e `items[]`. Un
+  consumidor que solo mire `event` debe contemplar `batch`.
+- El botón **Probar** del panel mantiene un único intento: ahí importa el motivo
+  real, no la insistencia.
+
+### Verified
+- `verify_channels.js`: **104 comprobaciones** (antes 81). N1–N7 prueban una sola
+  entrega por canal y ventana, la deduplicación, el reintento que termina bien
+  **sin duplicar**, el `400` que **no** se reintenta, el `Retry-After`, el modo
+  sin agrupación y el volcado al apagar.
+- Suite: **1007 checks**.
+
 ## [5.4.0] — 2026-11-08
 
 ### Added

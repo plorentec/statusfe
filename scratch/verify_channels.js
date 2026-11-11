@@ -99,6 +99,13 @@ process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'harness-notification
 process.env.PORT = process.env.PORT || '3997';
 process.env.ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 process.env.SEED_ADMIN_PASSWORD_FILE = path.join(TMP, 'seed_admin_password.txt');
+// 5.5.0 knobs. The pre-existing blocks (C*, E*) assert TODAY's contract — one
+// message per channel, sent inside the dispatch() call — so both knobs start at
+// 0 (batching and retries disabled). They are read at CALL time, never at
+// require time, so the N blocks below turn them on and back off again; N6 is
+// what proves that 0 really restores the old behaviour.
+process.env.NOTIFY_BATCH_MS = '0';
+process.env.NOTIFY_RETRY_BASE_MS = '0';
 
 const { newDb } = require('pg-mem');
 const mem = newDb({ autoCreateForeignKeyIndices: true });
@@ -671,6 +678,194 @@ const WEBHOOK_SECRET = 'whsec-harness-123';
   check('C8: a channel flash code renders readable text with the failure reason',
     flashPage.status === 200 && flashPage.body.includes('Test message failed.') && flashPage.body.includes('HTTP 500') &&
     !flashPage.body.includes('channel_test_failed'), flashPage.status + ' / ' + (flashPage.body.includes('Test message failed.') ? 'text ok' : 'raw code'));
+
+  // ===== N1-N7: coalescing window, dedupe, retries, lifecycle (5.5.0) ==
+  // Counting is isolated: every channel configured so far is switched OFF, so
+  // each N block sees only the channel it creates. `onlyChannel()` also keeps
+  // the previous block's channel from receiving (or being counted in) this one.
+  const onlyChannel = async (data) => {
+    await db.run('UPDATE notification_channels SET enabled=0');
+    return notificationChannels.create(data);
+  };
+  const offAll = () => db.run('UPDATE notification_channels SET enabled=0');
+
+  // N1 — five dispatches inside ONE window → ONE message per channel.
+  process.env.NOTIFY_BATCH_MS = '200';
+  process.env.NOTIFY_RETRY_BASE_MS = '0';
+  const n1TgChan = await onlyChannel({ type: 'telegram', name: 'N1 Telegram', config: { bot_token: '777:n1-token', chat_id: '-100777' }, events: [] });
+  const n1HookChan = await onlyChannel({ type: 'webhook', name: 'N1 Hook', config: { url: 'https://example.com/n1-hook' }, events: [] });
+  // The two channels above must BOTH be enabled at dispatch time.
+  await db.run('UPDATE notification_channels SET enabled=1 WHERE id IN ($1,$2)', [n1TgChan.id, n1HookChan.id]);
+  resetCalls();
+  for (let i = 1; i <= 5; i++) {
+    await notify.dispatch('component_status', { title: 'Cascade node ' + i, message: 'node ' + i + ' moved', url: null });
+  }
+  check('N1: with batching on nothing is delivered inside the window', calls.length === 0, calls.length + ' call(s)');
+  await notify.__flushNow();
+  const n1Tg = calls.filter(c => c.url.includes('777:n1-token'));
+  const n1Wh = calls.filter(c => c.url.includes('example.com/n1-hook'));
+  check('N1: five dispatches produce EXACTLY ONE message per channel',
+    n1Tg.length === 1 && n1Wh.length === 1, 'telegram=' + n1Tg.length + ' webhook=' + n1Wh.length);
+  const n1Text = n1Tg.length === 1 ? n1Tg[0].body.text : '';
+  check('N1: the combined chat message mentions all five items',
+    n1Tg.length === 1 && [1, 2, 3, 4, 5].every(i => n1Text.includes('Cascade node ' + i)) && n1Text.includes('5 updates'),
+    n1Text.split('\n').join(' / '));
+  check('N1: the combined webhook keeps the old fields and carries the items array',
+    n1Wh.length === 1 && n1Wh[0].body.event === 'component_status' && n1Wh[0].body.count === 5 &&
+    Array.isArray(n1Wh[0].body.items) && n1Wh[0].body.items.length === 5 &&
+    n1Wh[0].body.title === '5 updates' && typeof n1Wh[0].body.timestamp === 'string' &&
+    typeof n1Wh[0].body.message === 'string' && 'url' in n1Wh[0].body,
+    n1Wh.length === 1 ? JSON.stringify({ event: n1Wh[0].body.event, count: n1Wh[0].body.count, title: n1Wh[0].body.title }) : 'no call');
+  check('N1: the combined webhook lists every item inside `items`',
+    n1Wh.length === 1 && n1Wh[0].body.items.every((it, i) => it.title === 'Cascade node ' + (i + 1) && it.event === 'component_status'),
+    n1Wh.length === 1 ? n1Wh[0].body.items.map(it => it.title).join(' | ') : 'no call');
+
+  // N2 — dedupe inside the window: same channel + event + title = ONE line.
+  resetCalls();
+  for (let i = 0; i < 3; i++) {
+    await notify.dispatch('component_status', { title: 'Duplicate title', message: 'same payload', url: null });
+  }
+  await notify.dispatch('component_status', { title: 'Other title', message: 'other payload', url: null });
+  await notify.__flushNow();
+  const n2Wh = calls.filter(c => c.url.includes('example.com/n1-hook'));
+  const n2Lines = n2Wh.length === 1 ? n2Wh[0].body.message.split('\n') : [];
+  const n2Dup = n2Wh.length === 1 ? (n2Wh[0].body.message.match(/Duplicate title/g) || []).length : 0;
+  check('N2: the same event+title dispatched three times yields ONE line, not three',
+    n2Wh.length === 1 && n2Dup === 1 && n2Lines.length === 2, n2Dup + ' line(s) in ' + n2Lines.length + ' line(s)');
+  check('N2: the duplicate is folded away, the distinct item is kept (items length 2)',
+    n2Wh.length === 1 && n2Wh[0].body.count === 2 && n2Wh[0].body.items.length === 2 &&
+    n2Wh[0].body.items[1].title === 'Other title',
+    n2Wh.length === 1 ? JSON.stringify(n2Wh[0].body.items.map(it => it.title)) : 'no call');
+  // A single queued item must still go out EXACTLY as before (same payload).
+  resetCalls();
+  await notify.dispatch('incident_created', { title: 'Lonely item', message: 'nothing to fold', url: null });
+  await notify.__flushNow();
+  const n2Single = calls.find(c => c.url.includes('example.com/n1-hook'));
+  check('N2: a channel with exactly one queued item sends the original payload (§ single case)',
+    !!n2Single && n2Single.body.event === 'incident_created' && n2Single.body.title === 'Lonely item' &&
+    n2Single.body.message === 'nothing to fold' && n2Single.body.items === undefined && n2Single.body.count === undefined,
+    n2Single && JSON.stringify(n2Single.body).slice(0, 120));
+  await offAll();
+
+  // N3 — a RETRYABLE failure is retried and the delivery happens exactly once.
+  const n3Chan = await onlyChannel({ type: 'webhook', name: 'N3 Flaky', config: { url: 'https://example.com/n3-flaky' }, events: [] });
+  process.env.NOTIFY_BATCH_MS = '0';
+  process.env.NOTIFY_RETRY_BASE_MS = '10';
+  let n3Attempts = 0;
+  fetchPlan = (call) => {
+    if (!call.url.includes('example.com/n3-flaky')) return { status: 200 };
+    n3Attempts++;
+    return n3Attempts <= 2 ? { status: 500 } : { status: 200 };
+  };
+  resetCalls();
+  const n3LogsBefore = notifyLogs.length;
+  await notify.dispatch('component_status', { title: 'Flaky', message: 'transient', url: null });
+  fetchPlan = null;
+  const n3Calls = calls.filter(c => c.url.includes('example.com/n3-flaky'));
+  const n3Logs = notifyLogs.slice(n3LogsBefore);
+  check('N3: a channel failing twice with 500 then succeeding is delivered exactly once overall',
+    n3Attempts === 3 && n3Calls.length === 3 && n3Calls[n3Calls.length - 1].body.title === 'Flaky' &&
+    !n3Logs.some(l => l.startsWith('[NOTIFY] webhook N3 Flaky failed: ')),
+    'attempts=' + n3Attempts + ' calls=' + n3Calls.length);
+  check('N3: the retries are logged with their attempt number',
+    n3Logs.some(l => l.includes('N3 Flaky attempt 1/3 failed: HTTP 500') && l.includes('retrying in 10ms')) &&
+    n3Logs.some(l => l.includes('N3 Flaky attempt 2/3 failed: HTTP 500') && l.includes('retrying in 30ms')),
+    n3Logs.filter(l => l.includes('N3 Flaky')).join(' / ') || 'no log');
+  check('N3: the log keeps silence about a success (no final failure line)',
+    !n3Logs.some(l => l.includes('N3 Flaky failed:')), n3Logs.filter(l => l.includes('N3 Flaky')).length + ' log line(s)');
+
+  // N4 — a non-retryable 4xx is tried ONCE.
+  const n4Chan = await onlyChannel({ type: 'webhook', name: 'N4 Bad Request', config: { url: 'https://example.com/n4-bad' }, events: [] });
+  let n4Attempts = 0;
+  fetchPlan = (call) => {
+    if (!call.url.includes('example.com/n4-bad')) return { status: 200 };
+    n4Attempts++;
+    return { status: 400 };
+  };
+  resetCalls();
+  const n4LogsBefore = notifyLogs.length;
+  await notify.dispatch('component_status', { title: 'Bad request', message: 'terminal', url: null });
+  fetchPlan = null;
+  const n4Calls = calls.filter(c => c.url.includes('example.com/n4-bad'));
+  const n4Logs = notifyLogs.slice(n4LogsBefore);
+  check('N4: a 400 is NOT retried (one attempt only)',
+    n4Attempts === 1 && n4Calls.length === 1, 'attempts=' + n4Attempts + ' calls=' + n4Calls.length);
+  check('N4: the 400 keeps the historical failure line and logs no retry',
+    n4Logs.some(l => l === '[NOTIFY] webhook N4 Bad Request failed: HTTP 400') &&
+    !n4Logs.some(l => l.includes('attempt')),
+    n4Logs.join(' / ') || 'no log');
+
+  // N5 — a 429 honours `Retry-After` instead of the computed backoff.
+  const n5Chan = await onlyChannel({ type: 'webhook', name: 'N5 Limited', config: { url: 'https://example.com/n5-limited' }, events: [] });
+  let n5Attempts = 0;
+  fetchPlan = (call) => {
+    if (!call.url.includes('example.com/n5-limited')) return { status: 200 };
+    n5Attempts++;
+    return n5Attempts === 1 ? { status: 429, headers: { 'retry-after': '2' } } : { status: 200 };
+  };
+  resetCalls();
+  const n5LogsBefore = notifyLogs.length;
+  const n5Start = Date.now();
+  await notify.dispatch('component_status', { title: 'Rate limited', message: 'wait for it', url: null });
+  const n5Elapsed = Date.now() - n5Start;
+  fetchPlan = null;
+  const n5Calls = calls.filter(c => c.url.includes('example.com/n5-limited'));
+  const n5Logs = notifyLogs.slice(n5LogsBefore);
+  check('N5: a 429 with Retry-After: 2 is retried after the wait, not after the 10ms backoff',
+    n5Attempts === 2 && n5Calls.length === 2 && n5Elapsed >= 1900,
+    'attempts=' + n5Attempts + ' elapsed=' + n5Elapsed + 'ms');
+  check('N5: the honoured wait is visible in the retry log (2000ms, not 10ms)',
+    n5Logs.some(l => l.includes('N5 Limited attempt 1/3 failed: HTTP 429') && l.includes('retrying in 2000ms')),
+    n5Logs.join(' / ') || 'no log');
+  check('N5: the retried 429 succeeds (the destination received the message once)',
+    n5Calls.length === 2 && n5Calls[1].body.title === 'Rate limited' &&
+    !n5Logs.some(l => l.startsWith('[NOTIFY] webhook N5 Limited failed: ')),
+    'last call=' + (n5Calls[1] && n5Calls[1].body.title));
+
+  // N6 — NOTIFY_BATCH_MS=0 restores the pre-5.5.0 contract.
+  const n6Chan = await onlyChannel({ type: 'webhook', name: 'N6 Immediate', config: { url: 'https://example.com/n6-immediate' }, events: [] });
+  process.env.NOTIFY_BATCH_MS = '0';
+  resetCalls();
+  for (let i = 1; i <= 5; i++) {
+    await notify.dispatch('component_status', { title: 'Immediate ' + i, message: 'no window', url: null });
+  }
+  const n6Calls = calls.filter(c => c.url.includes('example.com/n6-immediate'));
+  check('N6: NOTIFY_BATCH_MS=0 sends one delivery per dispatch (5 dispatches = 5 messages)',
+    n6Calls.length === 5, n6Calls.length + ' delivery(ies)');
+  check('N6: with batching off each message keeps the uncombined payload',
+    n6Calls.length === 5 && n6Calls.every(c => c.body.items === undefined && c.body.title.startsWith('Immediate ')),
+    n6Calls.map(c => c.body.title).join(' | '));
+
+  // N7 — the shutdown flush delivers what is still pending.
+  const n7Chan = await onlyChannel({ type: 'webhook', name: 'N7 Shutdown', config: { url: 'https://example.com/n7-shutdown' }, events: [] });
+  process.env.NOTIFY_BATCH_MS = '200';
+  resetCalls();
+  await notify.dispatch('maintenance_started', { title: 'Pending at shutdown', message: 'must still arrive', url: null });
+  check('N7: the notification is still queued when the signal arrives', calls.length === 0, calls.length + ' call(s)');
+  // A dummy listener keeps this harness from being terminated by the re-raise
+  // the module performs when it is the only SIGTERM handler.
+  const dummySignal = () => {};
+  process.on('SIGTERM', dummySignal);
+  const shutdownHandlers = process.listeners('SIGTERM').filter(h => h !== dummySignal);
+  check('N7: the module registered a SIGTERM handler for the pending flush', shutdownHandlers.length === 1, shutdownHandlers.length + ' handler(s)');
+  const n7Start = Date.now();
+  if (shutdownHandlers.length === 1) await shutdownHandlers[0]('SIGTERM');
+  const n7Elapsed = Date.now() - n7Start;
+  process.removeListener('SIGTERM', dummySignal);
+  const n7Calls = calls.filter(c => c.url.includes('example.com/n7-shutdown'));
+  check('N7: the shutdown flush delivers what is pending',
+    n7Calls.length === 1 && n7Calls[0].body.title === 'Pending at shutdown' && n7Calls[0].body.event === 'maintenance_started',
+    n7Calls.length + ' delivery(ies) / ' + (n7Calls[0] && n7Calls[0].body.title));
+  check('N7: the shutdown flush is bounded (it does not hang the shutdown)',
+    n7Elapsed < 6000, 'elapsed=' + n7Elapsed + 'ms');
+  await notify.__flushNow();
+  const n7AfterSecondFlush = calls.filter(c => c.url.includes('example.com/n7-shutdown')).length;
+  check('N7: the queue is drained afterwards (a later flush sends nothing twice)',
+    n7AfterSecondFlush === 1, n7AfterSecondFlush + ' delivery(ies)');
+
+  process.env.NOTIFY_BATCH_MS = '0';
+  process.env.NOTIFY_RETRY_BASE_MS = '0';
+  await offAll();
 
   console.log(failures === 0 ? '\nNOTIFICATION CHANNELS PASSED' : '\nFAILURES: ' + failures);
   process.exit(failures === 0 ? 0 : 1);

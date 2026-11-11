@@ -8,14 +8,29 @@
 // Contract of dispatch():
 //   - FIRE AND FORGET (S6): callers never await it and always add
 //     `.catch(() => {})`, exactly like email.notifyComponentStatusChange().
+//   - COALESCED (5.5.0): the notification is ENQUEUED and a flush timer groups
+//     the window PER CHANNEL, so a cascade that moves ten components sends one
+//     message per channel instead of ten. `NOTIFY_BATCH_MS` (default 2000, 0
+//     disables batching and sends inside the call, the pre-5.5.0 contract).
+//   - DEDUPLICATED inside the window: same channel + same event + same title is
+//     one line, however many writers produced it.
 //   - INDEPENDENT fan-out: every channel is delivered on its own, so a broken
 //     one cannot swallow the others (Promise.allSettled).
 //   - NEVER THROWS (S8): a failure is logged as
 //     `[NOTIFY] <type> <name> failed: <msg>` and the request/status change that
-//     triggered it is unaffected.
+//     triggered it is unaffected. A RETRYABLE failure (network error, timeout,
+//     HTTP 408/429/5xx) is retried up to 3 attempts with backoff
+//     (`NOTIFY_RETRY_BASE_MS`, default 1000 -> 1 s then 3 s; 0 disables retries)
+//     and honours a 429 `Retry-After` (capped at 30 s). A 4xx that is not
+//     retryable and the redirect refusal are NOT retried: they cannot succeed.
 //   - 5 s timeout per delivery (enforced by the transport and by a bounded
 //     guard in deliver()), and the SSRF guard of the existing webhooks
 //     (isPrivateIp + a bounded DNS lookup, failing CLOSED) runs before any POST.
+//   - LIFECYCLE: SIGTERM/SIGINT flush what is still queued, bounded (6 s), and
+//     the signal is then handed back to the default behaviour unless the host
+//     application installed its own handler. `__flushNow()` drains the queue
+//     and is awaitable; the batch timer is unref'd so it never keeps a test
+//     process alive.
 //
 // S5 / DNS rebinding (TOCTOU): validating a hostname and then letting an HTTP
 // client resolve it AGAIN leaves a window where an attacker-controlled DNS can
@@ -40,6 +55,29 @@ const { isPrivateIp } = require('./webhooks');
 
 const DELIVERY_TIMEOUT_MS = 5000;
 const DNS_TIMEOUT_MS = 2000;
+
+// Coalescing window + retries (5.5.0).
+const DEFAULT_BATCH_MS = 2000;
+const DEFAULT_RETRY_BASE_MS = 1000;
+const MAX_ATTEMPTS = 3;
+const MAX_COMBINED_LINES = 10;
+const MAX_RETRY_AFTER_MS = 30000;
+const SHUTDOWN_FLUSH_BOUND_MS = 6000;
+
+// Read at CALL time, not at load time, so an installation tunes them through the
+// environment and a harness flips them between scenarios. An empty, negative or
+// non-numeric value falls back to the default; 0 is MEANINGFUL here (it disables
+// batching / retries) and is never treated as "unset".
+function envMs(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === null || String(raw).trim() === '') return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return fallback;
+  return n;
+}
+const batchWindowMs = () => envMs('NOTIFY_BATCH_MS', DEFAULT_BATCH_MS);
+const retryBaseMs = () => envMs('NOTIFY_RETRY_BASE_MS', DEFAULT_RETRY_BASE_MS);
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Connect to the ADDRESS that was already validated. `host` is the raw IP, so
 // no second DNS resolution can happen; the original hostname travels in the
@@ -160,6 +198,59 @@ async function sendWithTimeout(target, request, timeoutMs) {
   }
 }
 
+// ----- error classification (retries) ---------------------------------
+function errMessage(e) { return (e && e.message) ? e.message : String(e); }
+
+// A retry cannot succeed: bad configuration, an SSRF-rejected destination or a
+// 3xx (never followed). Retrying those would only hammer the destination.
+function terminalError(message) {
+  const e = new Error(message);
+  e.terminal = true;
+  return e;
+}
+
+// An HTTP failure, carrying the status (and the 429 wait) so the retry loop can
+// decide without re-parsing the message.
+function statusError(status, headers) {
+  const e = new Error('HTTP ' + status);
+  e.status = status;
+  e.retryAfterMs = parseRetryAfter(headers);
+  return e;
+}
+
+// `Retry-After` is either delay-in-seconds or an HTTP date. Returns ms or null;
+// the 30 s cap is applied where the delay is chosen.
+function parseRetryAfter(headers) {
+  if (!headers) return null;
+  const raw = headers['retry-after'] !== undefined ? headers['retry-after'] : headers['Retry-After'];
+  if (raw === undefined || raw === null || String(raw).trim() === '') return null;
+  const value = String(raw).trim();
+  if (/^[0-9]+(\.[0-9]+)?$/.test(value)) return Math.round(Number(value) * 1000);
+  const when = Date.parse(value);
+  if (!isNaN(when)) return Math.max(0, when - Date.now());
+  return null;
+}
+
+// RETRYABLE = a network error / timeout (no `.status`), HTTP 408, 429 or 5xx.
+// Everything else (other 4xx, the 3xx refusal, config/SSRF failures) is final.
+function isRetryable(e) {
+  if (e && e.terminal) return false;
+  const status = e && e.status;
+  if (!status) return true;
+  if (status === 408 || status === 429) return true;
+  if (status >= 500) return true;
+  return false;
+}
+
+// A 429's Retry-After wins over the computed backoff (still capped), so a
+// destination that asks for a pause is obeyed instead of being hammered.
+function retryDelayMs(e, base, attemptNo) {
+  const retryAfter = (e && typeof e.retryAfterMs === 'number') ? e.retryAfterMs : null;
+  if (retryAfter !== null && retryAfter >= 0) return Math.min(retryAfter, MAX_RETRY_AFTER_MS);
+  const computed = base * (attemptNo === 1 ? 1 : 3); // 1 s then 3 s by default
+  return Math.min(computed, MAX_RETRY_AFTER_MS);
+}
+
 // Human-readable text for the chat-style channels (Telegram/Slack/Discord).
 function formatText(payload) {
   const p = payload || {};
@@ -211,6 +302,14 @@ function buildRequest(channel, event, payload) {
         url: (payload && payload.url) || null,
         timestamp: new Date().toISOString()
       };
+      // Coalesced delivery: the single-message shape above is kept INTACT (event,
+      // title, message, url, timestamp) so an existing consumer that only reads
+      // those fields keeps working; the batch travels alongside as `items`.
+      if (payload && Array.isArray(payload.items) && payload.items.length > 0) {
+        body.items = payload.items;
+        body.count = payload.items.length;
+        if (Array.isArray(payload.events) && payload.events.length > 0) body.events = payload.events;
+      }
       const headers = {
         'Content-Type': 'application/json',
         'User-Agent': 'StatusFe/1.0',
@@ -228,41 +327,202 @@ function buildRequest(channel, event, payload) {
   }
 }
 
-// One delivery. Never throws: returns { ok, error } so the caller can report a
-// test result, while ordinary dispatch() calls just ignore it.
+// ONE attempt. Throws (the retry loop / the caller classify the error): a
+// config error, an SSRF rejection and a 3xx are marked `terminal`, an HTTP
+// failure carries `.status`, and a transport throw (network error, timeout)
+// stays bare — which is exactly what makes it retryable.
+async function attempt(channel, event, payload) {
+  let request;
+  try {
+    request = buildRequest(channel, event, payload);
+  } catch (e) {
+    throw terminalError(errMessage(e)); // missing token / url / unknown type
+  }
+  const target = await resolveTarget(request.url);
+  if (!target) throw terminalError('destination rejected (private, unresolvable or unsupported)');
+  // The pinned Host header always wins: the socket goes to the validated IP,
+  // the request must still look like it was aimed at the configured name.
+  const headers = Object.assign({}, request.headers, { Host: target.host_header });
+  const res = await sendWithTimeout(target, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(request.body),
+    timeoutMs: DELIVERY_TIMEOUT_MS
+  }, DELIVERY_TIMEOUT_MS);
+  const status = res && typeof res.status === 'number' ? res.status : null;
+  // REVIEW FIX (R4-002): NEVER follow redirects. The SSRF guard only validates
+  // the address we pinned, so a public destination answering 302 to
+  // 169.254.169.254 (cloud metadata) or an internal host would otherwise be
+  // contacted with no validation at all. A 3xx is a failure, not a hop.
+  if (status !== null && status >= 300 && status < 400) {
+    throw terminalError('HTTP ' + status + ' redirect refused (SSRF guard does not follow redirects)');
+  }
+  if (status !== null && (status < 200 || status >= 300)) throw statusError(status, (res && res.headers) || {});
+  return { ok: true };
+}
+
+function logDeliveryFailure(channel, e) {
+  console.log('[NOTIFY] ' + (channel && channel.type) + ' ' + (channel && channel.name) + ' failed: ' + errMessage(e));
+}
+
+// One delivery, ONE attempt. Never throws: returns { ok, error } so the caller
+// can report a test result (the panel's "Test" button), exactly as before.
 async function deliver(channel, event, payload) {
   try {
-    const request = buildRequest(channel, event, payload);
-    const target = await resolveTarget(request.url);
-    if (!target) throw new Error('destination rejected (private, unresolvable or unsupported)');
-    // The pinned Host header always wins: the socket goes to the validated IP,
-    // the request must still look like it was aimed at the configured name.
-    const headers = Object.assign({}, request.headers, { Host: target.host_header });
-    const res = await sendWithTimeout(target, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(request.body),
-      timeoutMs: DELIVERY_TIMEOUT_MS
-    }, DELIVERY_TIMEOUT_MS);
-    const status = res && typeof res.status === 'number' ? res.status : null;
-    // REVIEW FIX (R4-002): NEVER follow redirects. The SSRF guard only validates
-    // the address we pinned, so a public destination answering 302 to
-    // 169.254.169.254 (cloud metadata) or an internal host would otherwise be
-    // contacted with no validation at all. A 3xx is a failure, not a hop.
-    if (status !== null && status >= 300 && status < 400) {
-      throw new Error('HTTP ' + status + ' redirect refused (SSRF guard does not follow redirects)');
-    }
-    if (status !== null && (status < 200 || status >= 300)) throw new Error('HTTP ' + status);
+    await attempt(channel, event, payload);
     return { ok: true };
   } catch (e) {
-    const message = (e && e.message) ? e.message : String(e);
-    console.log('[NOTIFY] ' + (channel && channel.type) + ' ' + (channel && channel.name) + ' failed: ' + message);
-    return { ok: false, error: message };
+    logDeliveryFailure(channel, e);
+    return { ok: false, error: errMessage(e) };
   }
 }
 
-// Fan out one event to every enabled channel that subscribes to it. Resolves
-// when every delivery has settled; callers do NOT await it in a request path.
+// One delivery with the retry policy (5.5.0). Never throws. A retryable failure
+// logs the attempt number and its backoff; the last failure keeps the original
+// `[NOTIFY] <type> <name> failed: <msg>` line so log expectations still hold.
+async function deliverWithRetry(channel, event, payload) {
+  let lastError = null;
+  let attempts = 0;
+  while (attempts < MAX_ATTEMPTS) {
+    attempts++;
+    try {
+      await attempt(channel, event, payload);
+      return { ok: true, attempts };
+    } catch (e) {
+      lastError = e;
+      const base = retryBaseMs();
+      const willRetry = isRetryable(e) && attempts < MAX_ATTEMPTS && base > 0;
+      if (!willRetry) break;
+      const delay = retryDelayMs(e, base, attempts);
+      console.log('[NOTIFY] ' + (channel && channel.type) + ' ' + (channel && channel.name) +
+        ' attempt ' + attempts + '/' + MAX_ATTEMPTS + ' failed: ' + errMessage(e) +
+        ' (retrying in ' + delay + 'ms)');
+      await sleep(delay);
+    }
+  }
+  logDeliveryFailure(channel, lastError);
+  return { ok: false, error: errMessage(lastError), attempts };
+}
+
+// ----- coalescing window ----------------------------------------------
+// `queue` holds ONE entry per (channel, event, title): a coalesced message
+// needs the channel object it is destined for, so it is captured at enqueue
+// time (the filtering by enabled/events happened in dispatch() already).
+let queue = [];
+let flushTimer = null;
+let pendingFlush = Promise.resolve();
+
+function channelKey(channel) {
+  return (channel && channel.id) ? String(channel.id) : ((channel && channel.type) + ':' + (channel && channel.name));
+}
+
+function dedupeKey(channel, event, payload) {
+  return channelKey(channel) + '\u0000' + String(event || '') + '\u0000' + String((payload && payload.title) || '');
+}
+
+function clearFlushTimer() {
+  if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+}
+
+function takeQueue() {
+  clearFlushTimer(); // the queue emptied: no timer may survive it
+  const items = queue;
+  queue = [];
+  return items;
+}
+
+function runFlush() {
+  const items = takeQueue();
+  if (items.length > 0) {
+    // Serialised: a window that is still retrying must not interleave with the
+    // next one (same destinations, finite time budget).
+    pendingFlush = pendingFlush.then(() => deliverQueued(items)).catch(() => {});
+  }
+  return pendingFlush;
+}
+
+function scheduleFlush() {
+  if (flushTimer) return;
+  flushTimer = setTimeout(() => { flushTimer = null; runFlush(); }, batchWindowMs());
+  // A pending window must never keep a test process (or an idle CLI) alive.
+  if (typeof flushTimer.unref === 'function') flushTimer.unref();
+}
+
+// Awaited by the shutdown hook and available to tests.
+async function flushNow() {
+  clearFlushTimer();
+  return runFlush();
+}
+
+// The language of a combined message FOLLOWS the payload language (English
+// today): no new i18n layer, just the suffix/header the payloads already imply.
+function batchLocale(items) {
+  const hasSpanish = items.some(item => {
+    const p = item.payload || {};
+    const loc = String(p.locale || p.lang || p.language || '').toLowerCase();
+    return loc === 'es' || loc.indexOf('es-') === 0 || loc === 'spa';
+  });
+  return hasSpanish ? 'es' : 'en';
+}
+
+// One combined message for a channel with more than one queued item: a short
+// header plus the individual lines (capped, with "and N more"). The object is
+// shaped like a normal payload so every channel type keeps its own payload.
+function combinedPayload(items) {
+  const count = items.length;
+  const locale = batchLocale(items);
+  const shown = items.slice(0, MAX_COMBINED_LINES);
+  const lines = shown.map(item => {
+    const p = item.payload || {};
+    let line = '- ' + (p.title || item.event || 'update');
+    if (p.message) line += ': ' + p.message;
+    if (p.url) line += ' (' + p.url + ')';
+    return line;
+  });
+  const hidden = count - shown.length;
+  if (hidden > 0) lines.push(locale === 'es' ? 'y ' + hidden + ' más' : 'and ' + hidden + ' more');
+  const events = [];
+  items.forEach(item => { if (events.indexOf(item.event) === -1) events.push(item.event); });
+  return {
+    title: locale === 'es' ? count + ' avisos' : count + ' updates',
+    message: lines.join('\n'),
+    url: null,
+    // A webhook consumer that switches on `event` keeps working: the shared
+    // event when every item is the same one, 'batch' when they are mixed.
+    event: events.length === 1 ? events[0] : 'batch',
+    events,
+    count,
+    items: items.map(item => ({
+      event: item.event,
+      title: (item.payload && item.payload.title) || '',
+      message: (item.payload && item.payload.message) || '',
+      url: (item.payload && item.payload.url) || null
+    }))
+  };
+}
+
+// One message PER CHANNEL per window: a single queued item is sent exactly as
+// before (same payload, same title) and several are folded into one combined
+// message. Fan-out stays independent (allSettled).
+async function deliverQueued(items) {
+  const groups = new Map();
+  for (const item of items) {
+    const key = channelKey(item.channel);
+    if (!groups.has(key)) groups.set(key, { channel: item.channel, items: [] });
+    groups.get(key).items.push(item);
+  }
+  await Promise.allSettled([...groups.values()].map(group => {
+    if (group.items.length === 1) {
+      return deliverWithRetry(group.channel, group.items[0].event, group.items[0].payload);
+    }
+    const combined = combinedPayload(group.items);
+    return deliverWithRetry(group.channel, combined.event, combined);
+  }));
+}
+
+// Fan out one event to every enabled channel that subscribes to it. The
+// notification is ENQUEUED (a cascade of ten components is one window, not ten
+// messages); callers do NOT await it in a request path.
 async function dispatch(event, payload) {
   let channels = [];
   try {
@@ -273,8 +533,60 @@ async function dispatch(event, payload) {
     return;
   }
   if (channels.length === 0) return;
-  await Promise.allSettled(channels.map(channel => deliver(channel, event, payload)));
+  if (batchWindowMs() === 0) {
+    // NOTIFY_BATCH_MS=0: the pre-5.5.0 contract — one message per channel, sent
+    // inside this call (retries still apply).
+    await Promise.allSettled(channels.map(channel => deliverWithRetry(channel, event, payload)));
+    return;
+  }
+  for (const channel of channels) {
+    const key = dedupeKey(channel, event, payload);
+    if (queue.some(item => item.key === key)) continue; // same event + title = one line
+    queue.push({ channel, event, payload, key });
+  }
+  if (queue.length > 0) scheduleFlush();
 }
+
+// ----- lifecycle: flush what is pending when the process is asked to stop ---
+let shutdownHooked = false;
+let shuttingDown = false;
+
+async function flushOnShutdown(signal, handler) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  let finished = false;
+  let timer = null;
+  // BOUNDED: a retry backoff must not hold a container restart forever.
+  const bounded = new Promise(resolve => {
+    timer = setTimeout(() => resolve('timeout'), SHUTDOWN_FLUSH_BOUND_MS);
+  });
+  await Promise.race([
+    flushNow().then(() => { finished = true; }).catch(() => { finished = true; }),
+    bounded
+  ]);
+  if (timer) clearTimeout(timer);
+  if (!finished) {
+    console.log('[NOTIFY] shutdown flush exceeded ' + SHUTDOWN_FLUSH_BOUND_MS + 'ms: pending notifications dropped');
+  }
+  // Our own listener would swallow SIGTERM and keep the process (a container)
+  // alive, so it is removed and, when nobody else handles the signal, re-raised
+  // to restore the default termination.
+  process.removeListener(signal, handler);
+  if (process.listenerCount(signal) === 0) {
+    try { process.kill(process.pid, signal); } catch (e) { /* nothing left to do */ }
+  }
+}
+
+function installShutdownHook() {
+  if (shutdownHooked) return;
+  shutdownHooked = true;
+  ['SIGTERM', 'SIGINT'].forEach(signal => {
+    const handler = function () { return flushOnShutdown(signal, handler); };
+    process.on(signal, handler);
+  });
+}
+
+installShutdownHook();
 
 // Send ONE sample message to ONE channel (the panel's "Test" button), disabled
 // channels included: an operator verifying credentials should not have to enable
@@ -288,4 +600,13 @@ async function sendTest(channel) {
   });
 }
 
-module.exports = { dispatch, sendTest, __setFetchForTests, __setDnsForTests, buildRequest, formatText };
+module.exports = {
+  dispatch,
+  sendTest,
+  __flushNow: flushNow,
+  __setFetchForTests,
+  __setDnsForTests,
+  buildRequest,
+  formatText,
+  combinedPayload
+};

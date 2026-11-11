@@ -76,17 +76,50 @@ editar, activar/desactivar, **probar** un canal sin esperar a un incidente).
 - **Fan-out independiente** (`allSettled`): un canal caído no silencia los demás.
   Timeout de 5 s por entrega, `dispatch()` nunca lanza y los fallos se registran
   como `[NOTIFY] <tipo> <nombre> failed: <motivo>`.
+- **Coalescencia por ventana (5.5.0)**: `dispatch()` ya no envía en el acto —
+  **encola** y un temporizador agrupa la ventana **por canal**, así que una
+  cascada que mueve diez componentes manda **un mensaje por canal**, no diez.
+  `NOTIFY_BATCH_MS` (por defecto **2000**; **`0` desactiva** la coalescencia y
+  vuelve al contrato anterior, un mensaje por llamada). Un solo elemento encolado
+  sale **exactamente igual** que antes; varios se combinan en un mensaje con
+  cabecera (`N updates`) y una línea por elemento (máximo 10, luego
+  `and N more` — el sufijo español `y N más` solo si el payload trae
+  `locale`/`lang` español: **no** hay capa i18n nueva). El webhook combinado
+  conserva `event`/`title`/`message`/`url`/`timestamp` (compatibilidad) y añade
+  `items`, `count` y `events`; con eventos mezclados `event` es `batch`.
+- **Deduplicación** dentro de la ventana: mismo canal + mismo evento + mismo
+  título = **una** línea, aunque lo hayan disparado varias escrituras.
+- **Reintentos con espera (5.5.0)**: hasta **3 intentos** con espera (1 s y luego
+  3 s, base configurable con `NOTIFY_RETRY_BASE_MS`, por defecto **1000**; **`0`
+  desactiva** los reintentos). Reintentable = error de red, timeout, HTTP **408**,
+  **429** y **5xx**. **No** reintentable = resto de 4xx, el rechazo de un 3xx y
+  los fallos de configuración/SSRF (reintentar no puede funcionar). Un **429 con
+  `Retry-After`** (segundos o fecha HTTP) impone la espera en vez de la calculada,
+  **con techo de 30 s**. Cada intento fallido se registra con su número
+  (`[NOTIFY] <tipo> <nombre> attempt 1/3 failed: <motivo> (retrying in Nms)`); el
+  fallo final conserva la línea histórica `failed:`.
+- **Ciclo de vida**: `SIGTERM`/`SIGINT` vacían la cola pendiente con un límite de
+  **6 s** (tras él avisa de lo descartado) y el `SIGTERM` vuelve a su
+  comportamiento por defecto si nadie más lo maneja, así que **reiniciar un
+  contenedor no pierde avisos** ni deja el proceso colgado. `__flushNow()` es
+  awaitable y el temporizador de la ventana va `unref()`, de modo que no mantiene
+  vivo un proceso de test.
 - Eventos: `component_status`, `incident_created`, `incident_updated`,
   `incident_resolved`, `maintenance_started`, `maintenance_ended`. Lista
   `events` vacía o inválida = todos (mismo criterio que los webhooks).
-- Arnés: `scratch/verify_channels.js` (69 comprobaciones, pg-mem + fetch falso).
-- **Redirecciones**: la entrega usa `redirect: 'manual'` y un 3xx es un fallo. El
-  guard SSRF solo valida la URL que resuelve, así que seguir una redirección
-  hacia `169.254.169.254` o la red interna saltaría la protección entera.
-- **Limitación conocida**: queda el DNS rebinding entre la validación y el
-  `fetch` (la validación resuelve, la entrega resuelve otra vez). Los webhooks de
-  2.2.7 sí fijan la IP validada; hacer lo mismo aquí exige un agente HTTP propio
-  y es la mejora pendiente de esta pieza.
+- Arnés: `scratch/verify_channels.js` (**104 comprobaciones**, pg-mem + transporte
+  HTTP falso). Los bloques históricos corren con las **dos** variables a `0`
+  (contrato anterior); los bloques **N** las encienden y prueban coalescencia,
+  deduplicación, reintentos, `NOTIFY_BATCH_MS=0` y el vaciado al apagar.
+  `buildRequest`, `formatText`, `combinedPayload` y `__flushNow` se exportan para
+  el arnés.
+- **Redirecciones**: la entrega ocurre por un transporte `http`/`https` propio
+  sobre la **IP ya validada**; un 3xx es un fallo (nunca una redirección) porque
+  seguirla hacia `169.254.169.254` o la red interna saltaría el guard SSRF, y no
+  se reintenta.
+- **Sin rebinding TOCTOU**: el hostname se resuelve **una sola vez** y el socket
+  se abre contra esa IP con `Host` + SNI del nombre original
+  (`__setFetchForTests` sustituye el transporte, que recibe el destino fijado).
 
 ## Migrations (3.7.0)
 
