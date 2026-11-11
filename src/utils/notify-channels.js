@@ -60,6 +60,8 @@ const DNS_TIMEOUT_MS = 2000;
 const DEFAULT_BATCH_MS = 2000;
 const DEFAULT_RETRY_BASE_MS = 1000;
 const MAX_ATTEMPTS = 3;
+// Tope de la cola de una ventana: cota de memoria ante una rafaga patologica.
+const MAX_QUEUE = 500;
 const MAX_COMBINED_LINES = 10;
 const MAX_RETRY_AFTER_MS = 30000;
 const SHUTDOWN_FLUSH_BOUND_MS = 6000;
@@ -436,7 +438,12 @@ function runFlush() {
   if (items.length > 0) {
     // Serialised: a window that is still retrying must not interleave with the
     // next one (same destinations, finite time budget).
-    pendingFlush = pendingFlush.then(() => deliverQueued(items)).catch(() => {});
+    // A whole window failing must be audible: takeQueue() already emptied the
+    // queue, so swallowing the error would drop every notification in it without
+    // a trace in the log.
+    pendingFlush = pendingFlush
+      .then(() => deliverQueued(items))
+      .catch(e => console.log('[NOTIFY] batch failed, ' + items.length + ' notification(s) lost: ' + (e && e.message)));
   }
   return pendingFlush;
 }
@@ -542,6 +549,13 @@ async function dispatch(event, payload) {
   for (const channel of channels) {
     const key = dedupeKey(channel, event, payload);
     if (queue.some(item => item.key === key)) continue; // same event + title = one line
+    // Bounded: a pathological burst (thousands of components flapping inside one
+    // window) must not grow memory without limit. The oldest line is dropped and
+    // said out loud — silence would look like the notification was never due.
+    if (queue.length >= MAX_QUEUE) {
+      const dropped = queue.shift();
+      console.log('[NOTIFY] queue full (' + MAX_QUEUE + '), dropped: ' + (dropped && dropped.key));
+    }
     queue.push({ channel, event, payload, key });
   }
   if (queue.length > 0) scheduleFlush();

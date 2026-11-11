@@ -9,6 +9,25 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [5.5.1] — 2026-11-08
+
+### Fixed
+- **La cola de una ventana no tenía tope.** Una ráfaga patológica (cientos de
+  componentes parpadeando en 2 s) podía crecer sin límite en memoria. Ahora se
+  acota a **500** y, si se desborda, se descarta la más antigua **dejándolo en el
+  log**: un aviso que desaparece en silencio es peor que uno descartado.
+- **Un lote que fallaba se perdía sin rastro.** `takeQueue()` vaciaba la cola y el
+  `catch` se tragaba el error: si `deliverQueued` reventaba, esas notificaciones
+  desaparecían sin una línea en el log. Ahora se registra cuántas se perdieron y
+  por qué.
+
+### Verified
+- Avisos de la review nativa (4 WARNING, todos no bloqueantes) revisados uno a
+  uno: dos eran reales y están corregidos; los otros dos (bloqueo por reintentos
+  y latch de apagado) no lo son — comprobado que **ningún llamador espera**
+  `dispatch()`, y el apagado está acotado a 6 s.
+- Suite: **1007 checks**.
+
 ## [5.5.0] — 2026-11-08
 
 ### Added
