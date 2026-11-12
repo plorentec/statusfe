@@ -9,6 +9,34 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [5.6.0] — 2026-11-08
+
+### Added
+- **La página pública está en los dos idiomas.** El marco de `/status/:slug` y
+  del detalle de componente —títulos, «All Systems», «Last updated», el
+  formulario de suscripción y sus mensajes, mantenimiento, estados vacíos, pie y
+  los `aria-label`— sigue **`pages.locale`**, que es un ajuste **independiente**
+  del idioma del panel: una página en inglés se sirve en inglés aunque el admin
+  esté en español. 36 claves nuevas (`public.*`) por idioma.
+- También traducidos los mensajes de suscripción/confirmación/baja y el widget
+  `/embed/:slug`. Las cadenas que construye el JavaScript en línea van por
+  `window.SF_PUBLIC_I18N`: si se quedan fijas, el inglés aparece **después** de
+  cargar y parece un bug.
+
+### Fixed
+- **El layout personalizado mostraba los estados en inglés.** `status-page.ejs`
+  declaraba su propia copia de `formatStatus` con las etiquetas fijas, que
+  sombreaba a la del route (la que sí sigue el idioma de la página).
+
+### Notes
+- Los 404/500 siguen en inglés: en ese punto no hay página, así que no hay
+  idioma que consultar.
+
+### Verified
+- `scratch/verify_i18n.js`: **35 comprobaciones** (antes 14), con **RED real**
+  contra el código anterior (13 fallos) y GREEN después.
+- Suite: **1030 checks**.
+
 ## [5.5.1] — 2026-11-08
 
 ### Fixed

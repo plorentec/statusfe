@@ -689,6 +689,50 @@ module.exports = {
   'changelog.waitingBack': 'Actualización en marcha — esperando a que vuelva la aplicación… ({count})',
   'changelog.inProgress': 'Actualización en curso — comprobando el estado…',
 
+  // ===== página pública de estado (fase 3) ==============================
+  // Marco de views/status-page.ejs y views/component-detail.ejs (además de las
+  // respuestas públicas de suscripción/confirmación/baja y /embed en app.js).
+  // Estas claves siguen `pages.locale` — el idioma de la PÁGINA — nunca la
+  // preferencia del panel (admin-i18n-5.0.0 S2). Las etiquetas de estado NO
+  // están aquí: formatStatus() ya las mapea desde `pages.locale`, y el embed
+  // reutiliza las claves existentes components.statusLong*.
+  'public.documentTitle': '{name} - Estado del sistema',
+  'public.componentDetailTitle': '{component} - Estado de {page}',
+  'public.overallStatus': 'Estado general',
+  'public.activeIncidentsOne': '{count} incidencia activa',
+  'public.activeIncidentsMany': '{count} incidencias activas',
+  'public.activeIncidentsTitle': 'Incidencias activas',
+  'public.noActiveIncidents': 'No hay incidencias activas.',
+  'public.noComponents': 'Sin componentes',
+  'public.scheduledMaintenance': 'Mantenimiento programado',
+  'public.subscribeHeading': 'Recibe novedades',
+  'public.subscribeButton': 'Suscribirse',
+  'public.subscribeNote': 'Confirmación por email y avisos de incidencias. Baja cuando quieras.',
+  'public.emailPlaceholder': 'tu@empresa.com',
+  'public.poweredBy': 'Con la tecnología de StatusFe v{version}',
+  'public.uptimeBarTitle': 'Ver el detalle del componente',
+  'public.uptimeSummary': '{percent}% de disponibilidad · {days} d',
+  'public.uptimeDaysTitle': '{days} días de disponibilidad — {percent}%',
+  'public.lastCheck': 'Última comprobación:',
+  'public.latency24h': 'Latencia (24h) — máx. {ms} ms',
+  'public.recentStatusChanges': 'Cambios de estado recientes',
+  'public.noStatusChanges': 'No hay cambios de estado registrados.',
+  'public.whenUtc': 'Cuándo (UTC)',
+  'public.fromStatus': 'Desde',
+  'public.toStatus': 'Hasta',
+  'public.subscribeInboxTitle': 'Revisa tu correo',
+  'public.subscribeInboxBody': 'Si esta dirección no está ya suscrita, se ha enviado un enlace de confirmación para tramitar tu solicitud. El enlace caduca en 7 días.',
+  'public.backToPage': '← Volver a {page}',
+  'public.subscribedTitle': '✓ Suscripción confirmada',
+  'public.subscribedBody': 'A partir de ahora recibirás novedades de esta página de estado.',
+  'public.unsubscribedTitle': 'Baja completada',
+  'public.unsubscribedBody': 'Ya no recibirás más novedades de esta página de estado.',
+  'public.confirmInvalid': 'Enlace de confirmación no válido o caducado.',
+  'public.unsubscribeInvalid': 'Enlace de baja no válido.',
+  'public.subscriptionLimit': 'Se ha alcanzado el límite de suscripciones de esta página. Inténtalo más tarde.',
+  'public.embedAllSystems': 'Todos los sistemas operativos',
+  'public.embedViewFull': 'Ver el estado completo →',
+
   // ===== flash messages (?msg= codes) ====================================
   'flash.success': 'Acción completada correctamente.',
   'flash.error': 'Se ha producido un error. Inténtalo de nuevo.',

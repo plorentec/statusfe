@@ -1,9 +1,14 @@
-<!DOCTYPE html>
-<html lang="en">
+<%
+// Public i18n (phase 3): `pt` is the translator app.js binds to `page.locale` —
+// the language of the PAGE, never the admin/user preference. Rendered
+// standalone (harness) without it, fall back to the panel translator `t`.
+const tr = (typeof pt === 'function') ? pt : ((key, vars) => (typeof t === 'function' ? t(key, vars) : key));
+%><!DOCTYPE html>
+<html lang="<%= (typeof locale !== 'undefined' && locale === 'es') ? 'es' : 'en' %>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><%= component.name %> - <%= page.name %> Status</title>
+<title><%= tr('public.componentDetailTitle', { component: component.name, page: page.name }) %></title>
 <link rel="stylesheet" href="/css/status.css">
 <% if (page.template === 'grid') { %><link rel="stylesheet" href="/css/template-grid.css">
 <% } else if (page.template === 'dark') { %><link rel="stylesheet" href="/css/template-dark.css"><% } %>
@@ -44,12 +49,12 @@
 <% if (component.description) { %><p><%= component.description %></p><% } %>
 
 <div class="detail-section">
-<h2><%= uptimeDays %>-day uptime — <%= uptimePct %>%</h2>
+<h2><%= tr('public.uptimeDaysTitle', { days: uptimeDays, percent: uptimePct }) %></h2>
 <div class="up-bar-wrap" style="cursor:default;">
 <% bar.forEach(d => { %><span class="up-cell up-<%= d.status %>" title="<%= d.date %>: <%= formatStatus(d.status) %>"></span><% }) %>
 </div>
 <% if (Number(component.probe_enabled) === 1) { %>
-<div class="detail-ms">Last check: <%= component.probe_last_checked_at ? new Date(component.probe_last_checked_at).toISOString().replace('T',' ').slice(0,19) + ' UTC' : '—' %> · <%= Number(component.probe_last_ok) === 1 ? 'OK' : 'FAILED' %> · <%= component.probe_last_ms != null ? component.probe_last_ms + ' ms' : '—' %></div>
+<div class="detail-ms"><%= tr('public.lastCheck') %> <%= component.probe_last_checked_at ? new Date(component.probe_last_checked_at).toISOString().replace('T',' ').slice(0,19) + ' UTC' : '—' %> · <%= Number(component.probe_last_ok) === 1 ? tr('common.ok') : tr('common.failed') %> · <%= component.probe_last_ms != null ? component.probe_last_ms + ' ms' : '—' %></div>
 <% const lat = (typeof latencyHistory !== 'undefined' ? latencyHistory : []).filter(x => x.ms != null); %>
 <% if (lat.length >= 2) { %>
 <%
@@ -63,7 +68,7 @@
   });
 %>
 <div class="lat-spark">
-<div class="lat-title">Latency (24h) — max <%= maxMs %> ms</div>
+<div class="lat-title"><%= tr('public.latency24h', { ms: maxMs }) %></div>
 <svg width="<%= W %>" height="<%= Hh %>" viewBox="0 0 <%= W %> <%= Hh %>" style="max-width:100%;background:rgba(100,116,139,.08);border-radius:6px;">
 <polyline points="<%= pts.join(' ') %>" fill="none" stroke="#10b981" stroke-width="2"/>
 </svg>
@@ -73,9 +78,9 @@
 </div>
 
 <div class="detail-section">
-<h2>Active incidents</h2>
+<h2><%= tr('public.activeIncidentsTitle') %></h2>
 <% if (incidents.filter(i => i.status !== 'resolved').length === 0) { %>
-<p>No active incidents.</p>
+<p><%= tr('public.noActiveIncidents') %></p>
 <% } else { %>
 <% incidents.filter(i => i.status !== 'resolved').forEach(i => { %>
 <div style="margin-bottom:10px;">
@@ -88,12 +93,12 @@
 </div>
 
 <div class="detail-section">
-<h2>Recent status changes</h2>
+<h2><%= tr('public.recentStatusChanges') %></h2>
 <% if (history.length === 0) { %>
-<p>No status changes recorded.</p>
+<p><%= tr('public.noStatusChanges') %></p>
 <% } else { %>
 <table class="detail-history">
-<tr><th>When (UTC)</th><th>From</th><th>To</th></tr>
+<tr><th><%= tr('public.whenUtc') %></th><th><%= tr('public.fromStatus') %></th><th><%= tr('public.toStatus') %></th></tr>
 <% history.forEach(h => { %>
 <tr>
 <td><%= new Date(h.created_at).toISOString().replace('T',' ').slice(0,19) %></td>

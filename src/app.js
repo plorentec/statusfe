@@ -50,6 +50,16 @@ const { session } = require('./middleware/session');
 const { csrfMiddleware, csrfProtection } = require('./middleware/csrf');
 const { globalLimiter, authLimiter, apiLimiter, rateLimit } = require('./middleware/rate-limit');
 const { generateSelfSignedCert } = require('./utils/ssl');
+const i18n = require('./i18n');
+
+// Public i18n (phase 3): the PUBLIC site speaks the language of the PAGE
+// (`pages.locale`), independently of the admin panel preference (S2). `pt` is
+// the translator bound to that locale, so a Spanish page stays Spanish even
+// when the visitor — or the administrator — runs the panel in English.
+function publicTranslator(page) {
+  const locale = page && page.locale === 'es' ? 'es' : 'en';
+  return { locale, pt: (key, vars) => i18n.t(locale, key, vars) };
+}
 
 // Express 4 does not forward rejected promises from async middleware/handlers
 // to the error handler. Without this, a single transient DB error or malformed
@@ -328,13 +338,14 @@ app.get('/status/:slug/components/:id', async (req, res) => {
       en: { operational:'Operational',under_maintenance:'Under Maintenance',degraded_performance:'Degraded Performance',partial_outage:'Partial Outage',major_outage:'Major Outage',investigating:'Investigating',identified:'Identified',monitoring:'Monitoring',resolved:'Resolved' },
       es: { operational:'Operativo',under_maintenance:'En mantenimiento',degraded_performance:'Rendimiento degradado',partial_outage:'Interrupción parcial',major_outage:'Interrupión grave',investigating:'Investigando',identified:'Identificado',monitoring:'En monitorización',resolved:'Resuelto' },
     };
-    const LABELS = STATUS_LABELS[page.locale === 'es' ? 'es' : 'en'] || STATUS_LABELS.en;
+    const { locale: pageLocale, pt } = publicTranslator(page);
+    const LABELS = STATUS_LABELS[pageLocale] || STATUS_LABELS.en;
     const formatStatus = s => LABELS[s] || s;
     const customization = await settings.getCustomization();
     res.render('component-detail', {
       page, component: comp, bar: bar.days, uptimePct: bar.uptimePct,
       history, incidents: activeIncidents, formatStatus, customization,
-      uptimeDays: UPTIME_DAYS, refreshInterval: 0, locale: page.locale || 'en', latencyHistory
+      uptimeDays: UPTIME_DAYS, refreshInterval: 0, locale: pageLocale, latencyHistory, pt
     });
   } catch (e) {
     console.error('Component detail error:', e);
@@ -431,12 +442,13 @@ app.post('/subscribe/:slug', async (req, res) => {
   try {
     const page = await pages.getBySlug(req.params.slug);
     if (!page || page.is_public !== 1) return res.status(404).send('Not found');
+    const { locale: pageLocale, pt } = publicTranslator(page);
     const email = String((req.body && req.body.email) || '').trim();
     const { subscribers } = require('./db/models');
     // Organization limits (3.1.0): maxSubscribers de la org de la página.
     if (page.organization_id) {
       const exceeded = await require('./db/models').organizations.checkLimit(page.organization_id, 'maxSubscribers');
-      if (exceeded) return res.status(402).send('Subscription limit reached for this page. Try later.');
+      if (exceeded) return res.status(402).send(pt('public.subscriptionLimit'));
     }
     const outcome = await subscribers.subscribe(email, page.id); // 'new'|'pending'|'confirmed'|'invalid'
     if (outcome === 'new' || outcome === 'pending') {
@@ -449,7 +461,7 @@ app.post('/subscribe/:slug', async (req, res) => {
         emailUtils.sendSubscriberConfirmation(email.toLowerCase(), page.name, `${base}/confirm/${row.confirm_token}`, `${base}/unsubscribe/${row.unsubscribe_token}`).catch(() => {});
       }
     }
-    res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${page.name}</title><link rel="stylesheet" href="/css/status.css"></head><body style="font-family:sans-serif;background:${'f5f5f5'};padding:40px;"><div style="max-width:520px;margin:0 auto;background:#fff;padding:28px;border-radius:10px;"><h2>Check your inbox</h2><p>If this address is not already subscribed, a confirmation link was sent to process your request. The link expires in 7 days.</p><p style="font-size:13px;"><a href="/status/${page.slug}">&larr; Back to ${page.name}</a></p></div></body></html>`);
+    res.send(`<!DOCTYPE html><html lang="${pageLocale}"><head><meta charset="utf-8"><title>${page.name}</title><link rel="stylesheet" href="/css/status.css"></head><body style="font-family:sans-serif;background:${'f5f5f5'};padding:40px;"><div style="max-width:520px;margin:0 auto;background:#fff;padding:28px;border-radius:10px;"><h2>${pt('public.subscribeInboxTitle')}</h2><p>${pt('public.subscribeInboxBody')}</p><p style="font-size:13px;"><a href="/status/${page.slug}">${pt('public.backToPage', { page: page.name })}</a></p></div></body></html>`);
   } catch (e) {
     console.error('subscribe error:', e.message);
     res.status(500).send('Internal error');
@@ -461,8 +473,11 @@ app.get('/confirm/:token', async (req, res) => {
   try {
     const { subscribers } = require('./db/models');
     const row = await subscribers.confirm(req.params.token);
-    if (!row) return res.status(404).send('Invalid or expired confirmation link.');
-    res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Subscribed</title><link rel="stylesheet" href="/css/status.css"></head><body style="font-family:sans-serif;background:#f5f5f5;padding:40px;"><div style="max-width:520px;margin:0 auto;background:#fff;padding:28px;border-radius:10px;"><h2>&#10003; Subscription confirmed</h2><p>You will now receive updates for this status page.</p></div></body></html>`);
+    // The response speaks the language of the page the subscription belongs to.
+    const page = row && row.page_id ? await pages.getById(row.page_id) : null;
+    const { locale: pageLocale, pt } = publicTranslator(page);
+    if (!row) return res.status(404).send(pt('public.confirmInvalid'));
+    res.send(`<!DOCTYPE html><html lang="${pageLocale}"><head><meta charset="utf-8"><title>${pt('public.subscribedTitle')}</title><link rel="stylesheet" href="/css/status.css"></head><body style="font-family:sans-serif;background:#f5f5f5;padding:40px;"><div style="max-width:520px;margin:0 auto;background:#fff;padding:28px;border-radius:10px;"><h2>${pt('public.subscribedTitle')}</h2><p>${pt('public.subscribedBody')}</p></div></body></html>`);
   } catch (e) {
     res.status(500).send('Internal error');
   }
@@ -472,9 +487,14 @@ app.get('/confirm/:token', async (req, res) => {
 app.get('/unsubscribe/:token', async (req, res) => {
   try {
     const { subscribers } = require('./db/models');
+    // The row is DELETED by unsubscribe(), so read the page it belongs to first:
+    // the response speaks the page's language.
+    const sub = await queryOne('SELECT page_id FROM subscribers WHERE unsubscribe_token=$1', [req.params.token]);
+    const page = sub && sub.page_id ? await pages.getById(sub.page_id) : null;
+    const { locale: pageLocale, pt } = publicTranslator(page);
     const row = await subscribers.unsubscribe(req.params.token);
-    if (!row) return res.status(404).send('Invalid unsubscribe link.');
-    res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Unsubscribed</title><link rel="stylesheet" href="/css/status.css"></head><body style="font-family:sans-serif;background:#f5f5f5;padding:40px;"><div style="max-width:520px;margin:0 auto;background:#fff;padding:28px;border-radius:10px;"><h2>Unsubscribed</h2><p>You will no longer receive updates for this status page.</p></div></body></html>`);
+    if (!row) return res.status(404).send(pt('public.unsubscribeInvalid'));
+    res.send(`<!DOCTYPE html><html lang="${pageLocale}"><head><meta charset="utf-8"><title>${pt('public.unsubscribedTitle')}</title><link rel="stylesheet" href="/css/status.css"></head><body style="font-family:sans-serif;background:#f5f5f5;padding:40px;"><div style="max-width:520px;margin:0 auto;background:#fff;padding:28px;border-radius:10px;"><h2>${pt('public.unsubscribedTitle')}</h2><p>${pt('public.unsubscribedBody')}</p></div></body></html>`);
   } catch (e) {
     res.status(500).send('Internal error');
   }
@@ -534,13 +554,14 @@ app.get('/status/:slug', async (req, res) => {
       en: { operational:'Operational',under_maintenance:'Under Maintenance',degraded_performance:'Degraded Performance',partial_outage:'Partial Outage',major_outage:'Major Outage',investigating:'Investigating',identified:'Identified',monitoring:'Monitoring',resolved:'Resolved' },
       es: { operational:'Operativo',under_maintenance:'En mantenimiento',degraded_performance:'Rendimiento degradado',partial_outage:'Interrupción parcial',major_outage:'Interrupión grave',investigating:'Investigando',identified:'Identificado',monitoring:'En monitorización',resolved:'Resuelto' },
     };
-    const LABELS = STATUS_LABELS[page.locale === 'es' ? 'es' : 'en'] || STATUS_LABELS.en;
+    const { locale: pageLocale, pt } = publicTranslator(page);
+    const LABELS = STATUS_LABELS[pageLocale] || STATUS_LABELS.en;
     const formatStatus = s => LABELS[s] || s;
     const refreshInterval = page.refresh_interval || 0;
     const customization = await settings.getCustomization();
     // 90-day uptime bars (2.6.0) — one aggregated query for the whole page.
     const { bars: uptimeBars } = await getUptimeBars(page.id, UPTIME_DAYS);
-    res.render('status-page', { page, components: resolvedComps, incidents: incs, incidentsByComponent, formatStatus, refreshInterval: refreshInterval ? parseInt(refreshInterval) : 0, groups: allGroups, upcomingMaintenance, customization, uptimeBars, uptimeDays: UPTIME_DAYS, locale: page.locale || 'en' });
+    res.render('status-page', { page, components: resolvedComps, incidents: incs, incidentsByComponent, formatStatus, refreshInterval: refreshInterval ? parseInt(refreshInterval) : 0, groups: allGroups, upcomingMaintenance, customization, uptimeBars, uptimeDays: UPTIME_DAYS, locale: pageLocale, pt, publicI18n: { locale: pageLocale, status: LABELS } });
   } catch(e) {
     console.error('Status page error:', e);
     res.status(500).send('Internal error');
@@ -562,6 +583,7 @@ app.get('/embed/:slug', async (req, res) => {
     comps.forEach(c => { const s = c.current_status || c.status; if (order[s] > order[status]) status = s; });
     
     const style = req.query.style || 'compact';
+    const { locale: embedLocale, pt } = publicTranslator(page);
 
     // Escape user-controlled values interpolated into the reflected HTML so a
     // crafted page name / slug / status cannot inject markup.
@@ -574,17 +596,27 @@ app.get('/embed/:slug', async (req, res) => {
     const pageName = esc(page.name);
     const pageSlug = esc(page.slug);
     const safeStatus = esc(status);
-    const statusLabel = safeStatus.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase());
+    // Localized label from the EXISTING status keys (no second status map here).
+    const EMBED_STATUS_KEY = {
+      operational: 'components.statusLongOperational',
+      under_maintenance: 'components.statusLongMaintenance',
+      degraded_performance: 'components.statusLongDegraded',
+      partial_outage: 'components.statusLongPartial',
+      major_outage: 'components.statusLongMajor'
+    };
+    const statusLabel = EMBED_STATUS_KEY[status]
+      ? esc(pt(EMBED_STATUS_KEY[status]))
+      : safeStatus.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase());
 
     const widgets = {
-      compact: `<div class="w"><div class="h"><span class="t">${pageName}</span></div><div class="b ${status}"><span class="d ${status}"></span>${statusLabel}</div><a href="/status/${pageSlug}">View full status &rarr;</a></div><div class="v">StatusFe v${pkg.version}</div>`,
-      detailed: `<div class="w detailed"><div class="h"><span class="t">${pageName}</span><span class="b ${status}">${statusLabel}</span></div><div class="cl"><div class="c"><span class="d ${status}"></span> All Systems Operational</div></div><a href="/status/${pageSlug}">View full status &rarr;</a></div><div class="v">StatusFe v${pkg.version}</div>`,
+      compact: `<div class="w"><div class="h"><span class="t">${pageName}</span></div><div class="b ${status}"><span class="d ${status}"></span>${statusLabel}</div><a href="/status/${pageSlug}">${pt('public.embedViewFull')}</a></div><div class="v">StatusFe v${pkg.version}</div>`,
+      detailed: `<div class="w detailed"><div class="h"><span class="t">${pageName}</span><span class="b ${status}">${statusLabel}</span></div><div class="cl"><div class="c"><span class="d ${status}"></span> ${pt('public.embedAllSystems')}</div></div><a href="/status/${pageSlug}">${pt('public.embedViewFull')}</a></div><div class="v">StatusFe v${pkg.version}</div>`,
       minimal: `<div class="w minimal"><span class="d ${status}"></span> ${statusLabel}</div><div class="v">StatusFe v${pkg.version}</div>`
     };
     
     const widget = widgets[style] || widgets.compact;
     
-    res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    res.send(`<!DOCTYPE html><html lang="${embedLocale}"><head><meta charset="utf-8"><style>
     .w{font-family:sans-serif;max-width:400px;padding:12px 16px}.h{display:flex;align-items:center;gap:8px;margin-bottom:8px}.t{font-size:14px;font-weight:600}.b{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:500}.b-operational{background:#dcffe4;color:#006b39}.b-under_maintenance{background:#fff3cd;color:#856404}.b-degraded_performance{background:#fff3cd;color:#856404}.b-partial_outage{background:#ffe5cc;color:#9c4f00}.b-major_outage{background:#ffcccc;color:#cc0000}.d{width:8px;height:8px;border-radius:50%;display:inline-block}.d-operational{background:#006b39}.d-under_maintenance{background:#856404}.d-degraded_performance{background:#856404}.d-partial_outage{background:#9c4f00}.d-major_outage{background:#cc0000}a{display:block;margin-top:8px;font-size:12px;color:#006b39;text-decoration:none}.w.detailed{padding:16px}.w.detailed .c{display:flex;align-items:center;gap:6px;font-size:13px;margin-top:8px}    .w.minimal{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;font-size:13px}.w.minimal .d{width:6px;height:6px}a{display:block;margin-top:8px;font-size:12px;color:#006b39;text-decoration:none}.v{font-size:10px;color:#999;margin-top:4px;text-align:center}
     </style></head><body>${widget}</body></html>`);
   } catch(e) {

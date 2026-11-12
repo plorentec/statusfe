@@ -1,9 +1,14 @@
-<!DOCTYPE html>
-<html lang="en">
+<%
+// Public i18n (phase 3): `pt` is the translator app.js binds to `page.locale` —
+// the language of the PAGE, never the admin/user preference. Rendered
+// standalone (harness) without it, fall back to the panel translator `t`.
+const tr = (typeof pt === 'function') ? pt : ((key, vars) => (typeof t === 'function' ? t(key, vars) : key));
+%><!DOCTYPE html>
+<html lang="<%= (typeof locale !== 'undefined' && locale === 'es') ? 'es' : 'en' %>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><%= page.name %> - System Status</title>
+<title><%= tr('public.documentTitle', { name: page.name }) %></title>
 <meta name="refresh-interval" content="<%= (typeof refreshInterval !== 'undefined' && refreshInterval) ? Math.max(15, parseInt(refreshInterval)) : 15 %>">
 <link rel="stylesheet" href="/css/status.css">
 <% if (page.template === 'grid') { %>
@@ -76,32 +81,22 @@ body { font-family: <%- sanitizeCss(customization.font_family) %>; }
 function uptimeBarHtml(c) {
   const bar = (typeof uptimeBars !== 'undefined' && uptimeBars && uptimeBars[c.id]) ? uptimeBars[c.id] : null;
   if (!bar || !bar.days || bar.days.length === 0) return '';
-  const label = s => ({operational:'Operational',under_maintenance:'Under Maintenance',degraded_performance:'Degraded Performance',partial_outage:'Partial Outage',major_outage:'Major Outage'}[s] || s);
   const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  const cells = bar.days.map(d => `<span class="up-cell up-${esc(d.status)}" title="${esc(d.date)}: ${esc(label(d.status))}"></span>`).join('');
+  // Status labels come from the route's formatStatus (page.locale) — no second map.
+  const cells = bar.days.map(d => `<span class="up-cell up-${esc(d.status)}" title="${esc(d.date)}: ${esc(formatStatus(d.status))}"></span>`).join('');
   const detail = `/status/${page.slug}/components/${c.id}`;
-  return `<a class="up-bar-wrap" href="${detail}" title="View component detail">${cells}<span class="up-pct">${bar.uptimePct}% uptime · ${uptimeDays}d</span></a>`;
+  const summary = esc(tr('public.uptimeSummary', { percent: bar.uptimePct, days: (typeof uptimeDays !== 'undefined' ? uptimeDays : 90) }));
+  return `<a class="up-bar-wrap" href="${detail}" title="${esc(tr('public.uptimeBarTitle'))}">${cells}<span class="up-pct">${summary}</span></a>`;
 }
 %>
 <%
-// Public i18n (3.0.0): page.locale (en|es). Status LABELS are localized at the
-// route level (formatStatus) — here only the UI chrome strings.
+// Public i18n: page.locale (en|es). Status LABELS are localized at the route
+// level (formatStatus); the UI chrome strings come from the public.* namespace
+// through `tr`, defined at the top of this template.
+//
+// NOTE: the custom layout below declares its own `formatStatus` with the
+// English label map (legacy) — that is why `isEs` is still needed here.
 const isEs = (typeof locale !== 'undefined' && locale === 'es');
-const t = isEs ? {
-  overall: 'Estado general',
-  activeIncidents: (n) => n + (n === 1 ? ' incidencia activa' : ' incidencias activas'),
-  getUpdates: 'Recibe novedades',
-  subscribe: 'Suscribirse',
-  subscribeNote: 'Confirmación por email y avisos de incidencias. Baja cuando quieras.',
-  emailPh: 'tu@empresa.com',
-} : {
-  overall: 'Overall Status',
-  activeIncidents: (n) => n + (n === 1 ? ' Active Incident' : ' Active Incidents'),
-  getUpdates: 'Get status updates',
-  subscribe: 'Subscribe',
-  subscribeNote: 'Email confirmations and incident updates. Unsubscribe anytime.',
-  emailPh: 'you@company.com',
-};
 %>
 <body class="<%= page.custom_layout ? 'custom-layout' : 'template-' + page.template %>">
 
@@ -127,13 +122,16 @@ const t = isEs ? {
   function formatMaintenanceDate(dateStr) {
     if (!dateStr) return '';
     var d = new Date(dateStr);
-    var months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+    // Dates follow the page language too (the old code always used Spanish months).
+    var months = isEs
+      ? ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']
+      : ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     var day = d.getDate();
     var month = months[d.getMonth()];
     var year = d.getFullYear();
     var h = d.getHours();
     var m = d.getMinutes();
-    var ampm = h >= 12 ? 'p.m.' : 'a.m.';
+    var ampm = h >= 12 ? (isEs ? 'p.m.' : 'PM') : (isEs ? 'a.m.' : 'AM');
     h = h % 12;
     if (h === 0) h = 12;
     m = m < 10 ? '0' + m : '' + m;
@@ -158,7 +156,10 @@ const t = isEs ? {
 <% if (page.custom_layout && page.custom_layout_html) { %>
 <!-- ===== CUSTOM LAYOUT ===== -->
 <%
-  function formatStatus(s) { return {operational:'Operational',under_maintenance:'Under Maintenance',degraded_performance:'Degraded Performance',partial_outage:'Partial Outage',major_outage:'Major Outage',investigating:'Investigating',identified:'Identified',monitoring:'Monitoring',resolved:'Resolved'}[s]||s; }
+  // 5.6.0: esta copia local SOMBREABA al formatStatus del route (que sí sigue
+  // page.locale), así que los layouts personalizados mostraban las etiquetas en
+  // inglés aunque la página estuviera en español. El route siempre pasa el suyo
+  // (se usa más arriba para las barras de uptime), así que no hace falta esta.
 
   // HTML escape helper for XSS prevention
   function escapeHtml(str) {
@@ -168,7 +169,7 @@ const t = isEs ? {
 
   // Render components as HTML list items (children indented under the parent)
   function renderComponentsHTML(comps) {
-    if (!comps || comps.length === 0) return '<p>No components</p>';
+    if (!comps || comps.length === 0) return '<p>' + escapeHtml(tr('public.noComponents')) + '</p>';
     let html = '';
     comps.forEach(c => {
       const status = c.current_status || c.status;
@@ -182,7 +183,7 @@ const t = isEs ? {
 
   // Render incidents as HTML list items
   function renderIncidentsHTML(incs) {
-    if (!incs || incs.length === 0) return '<p>No active incidents</p>';
+    if (!incs || incs.length === 0) return '<p>' + escapeHtml(tr('public.noActiveIncidents')) + '</p>';
     let html = '';
     incs.forEach(i => {
       html += '<div class="sp-incident-item status-' + escapeHtml(i.status) + '">';
@@ -214,7 +215,7 @@ const t = isEs ? {
 <% if (page.logo_url) { %><img src="<%= logoSrc %>" alt="<%= page.name %>" class="logo"><% } %>
 <div>
 <h1><%= page.name %></h1>
-<p><%= page.description || 'System Status' %></p>
+<p><%= page.description || tr('pages.previewTitle') %></p>
 </div>
 </div>
 </div>
@@ -223,7 +224,7 @@ const t = isEs ? {
 <div class="overall-status status-<%= page.status %>">
 <span class="pulse-dot dot-<%= page.status %>"></span>
 <div>
-<span class="overall-label"><%= t.overall %></span>
+<span class="overall-label"><%= tr('public.overallStatus') %></span>
 <span class="overall-value"><%= formatStatus(page.status) %></span>
 </div>
 </div>
@@ -248,7 +249,7 @@ const t = isEs ? {
 <div class="incidents-panel impact-<%= worstImpact %>">
 <div class="incidents-panel-header">
 <span class="alert-icon"></span>
-<span class="incidents-count"><%= activeIncs.length %> <%= t.activeIncidents(activeIncs.length) %></span>
+<span class="incidents-count"><%= tr(activeIncs.length === 1 ? 'public.activeIncidentsOne' : 'public.activeIncidentsMany', { count: activeIncs.length }) %></span>
 </div>
 <% activeIncs.forEach(inc => { %>
 <div class="incident-row impact-<%= inc.impact || 'minor' %>">
@@ -267,7 +268,7 @@ const t = isEs ? {
 <% } %>
 <% const groups = {}; %>
 <% components.forEach(c => {
-  const g = c.group_name || 'Other';
+  const g = c.group_name || tr('pages.groupFallback');
   if (!groups[g]) groups[g] = [];
   groups[g].push({ id: c.id, name: c.name, status: c.current_status || c.status, description: c.description, is_child: c.is_child });
 }); %>
@@ -294,15 +295,15 @@ const t = isEs ? {
 </div>
 <footer>
 <div class="subscribe-box">
-<h3><%= t.getUpdates %></h3>
+<h3><%= tr('public.subscribeHeading') %></h3>
 <form method="post" action="/subscribe/<%= page.slug %>">
 <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-<input type="email" name="email" required placeholder="<%= t.emailPh %>" aria-label="Email">
-<button type="submit"><%= t.subscribe %></button>
+<input type="email" name="email" required placeholder="<%= tr('public.emailPlaceholder') %>" aria-label="<%= tr('subs.thEmail') %>">
+<button type="submit"><%= tr('public.subscribeButton') %></button>
 </form>
-<p class="subscribe-note"><%= t.subscribeNote %></p>
+<p class="subscribe-note"><%= tr('public.subscribeNote') %></p>
 </div>
-<p>Powered by StatusFe v<%= version %></p>
+<p><%= tr('public.poweredBy', { version }) %></p>
 </footer>
 
 <!-- ===== GRID TEMPLATE ===== -->
@@ -315,7 +316,7 @@ const t = isEs ? {
 <% if (page.logo_url) { %><img src="<%= logoSrc %>" alt="<%= page.name %>" class="logo"><% } %>
 <div>
 <h1><%= page.name %></h1>
-<p class="subtitle"><%= page.description || 'System Status' %></p>
+<p class="subtitle"><%= page.description || tr('pages.previewTitle') %></p>
 </div>
 </div>
 </div>
@@ -325,13 +326,13 @@ const t = isEs ? {
 <div class="overall-status status-<%= page.status %>">
 <span class="pulse-dot dot-<%= page.status %>"></span>
 <div>
-<span class="overall-label"><%= t.overall %></span>
+<span class="overall-label"><%= tr('public.overallStatus') %></span>
 <span class="overall-value"><%= formatStatus(page.status) %></span>
 </div>
 </div>
 <% if (upcomingMaintenance && upcomingMaintenance.length > 0) { %>
 <div class="maintenance-banner">
-<div class="maint-header"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><h3>Scheduled Maintenance</h3></div>
+<div class="maint-header"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><h3><%= tr('public.scheduledMaintenance') %></h3></div>
 <% upcomingMaintenance.forEach(m => { %>
 <div class="maint-entry">
 <div class="maint-title"><%= m.title %></div>
@@ -348,7 +349,7 @@ const t = isEs ? {
 <div class="incidents-panel impact-<%= worstImpact %>">
 <div class="incidents-panel-header">
 <span class="alert-icon"></span>
-<span class="incidents-count"><%= activeIncs.length %> <%= t.activeIncidents(activeIncs.length) %></span>
+<span class="incidents-count"><%= tr(activeIncs.length === 1 ? 'public.activeIncidentsOne' : 'public.activeIncidentsMany', { count: activeIncs.length }) %></span>
 </div>
 <% activeIncs.forEach(inc => { %>
 <div class="incident-row impact-<%= inc.impact || 'minor' %>">
@@ -368,7 +369,7 @@ const t = isEs ? {
 <div class="grid-container">
 <% const groups = {}; %>
 <% components.forEach(c => {
-  const g = c.group_name || 'Other';
+  const g = c.group_name || tr('pages.groupFallback');
   if (!groups[g]) groups[g] = [];
   groups[g].push({ id: c.id, name: c.name, status: c.current_status || c.status, description: c.description, is_child: c.is_child });
 }); %>
@@ -394,15 +395,15 @@ const t = isEs ? {
 </div>
 <footer>
 <div class="subscribe-box">
-<h3><%= t.getUpdates %></h3>
+<h3><%= tr('public.subscribeHeading') %></h3>
 <form method="post" action="/subscribe/<%= page.slug %>">
 <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-<input type="email" name="email" required placeholder="<%= t.emailPh %>" aria-label="Email">
-<button type="submit"><%= t.subscribe %></button>
+<input type="email" name="email" required placeholder="<%= tr('public.emailPlaceholder') %>" aria-label="<%= tr('subs.thEmail') %>">
+<button type="submit"><%= tr('public.subscribeButton') %></button>
 </form>
-<p class="subscribe-note"><%= t.subscribeNote %></p>
+<p class="subscribe-note"><%= tr('public.subscribeNote') %></p>
 </div>
-<p>Powered by StatusFe v<%= version %></p>
+<p><%= tr('public.poweredBy', { version }) %></p>
 </footer>
 
 <!-- ===== DARK TEMPLATE ===== -->
@@ -415,7 +416,7 @@ const t = isEs ? {
 <% if (page.logo_url) { %><img src="<%= logoSrc %>" alt="<%= page.name %>" class="logo"><% } %>
 <div>
 <h1><%= page.name %></h1>
-<p class="subtitle"><%= page.description || 'System Status' %></p>
+<p class="subtitle"><%= page.description || tr('pages.previewTitle') %></p>
 </div>
 </div>
 </div>
@@ -425,13 +426,13 @@ const t = isEs ? {
 <div class="overall-status status-<%= page.status %>">
 <span class="pulse-dot dot-<%= page.status %>"></span>
 <div>
-<span class="overall-label"><%= t.overall %></span>
+<span class="overall-label"><%= tr('public.overallStatus') %></span>
 <span class="overall-value"><%= formatStatus(page.status) %></span>
 </div>
 </div>
 <% if (upcomingMaintenance && upcomingMaintenance.length > 0) { %>
 <div class="maintenance-banner" style="background:#451a03;border-color:#92400e;border-left-color:#f59e0b;">
-<div class="maint-header"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><h3 style="color:#fde68a;">Scheduled Maintenance</h3></div>
+<div class="maint-header"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><h3 style="color:#fde68a;"><%= tr('public.scheduledMaintenance') %></h3></div>
 <% upcomingMaintenance.forEach(m => { %>
 <div class="maint-entry" style="border-color:#92400e;">
 <div class="maint-title" style="color:#fde68a;"><%= m.title %></div>
@@ -448,7 +449,7 @@ const t = isEs ? {
 <div class="incidents-panel impact-<%= worstImpact %>">
 <div class="incidents-panel-header">
 <span class="alert-icon"></span>
-<span class="incidents-count"><%= activeIncs.length %> <%= t.activeIncidents(activeIncs.length) %></span>
+<span class="incidents-count"><%= tr(activeIncs.length === 1 ? 'public.activeIncidentsOne' : 'public.activeIncidentsMany', { count: activeIncs.length }) %></span>
 </div>
 <% activeIncs.forEach(inc => { %>
 <div class="incident-row impact-<%= inc.impact || 'minor' %>">
@@ -468,7 +469,7 @@ const t = isEs ? {
 <div class="dark-container">
 <% const groups = {}; %>
 <% components.forEach(c => {
-  const g = c.group_name || 'Other';
+  const g = c.group_name || tr('pages.groupFallback');
   if (!groups[g]) groups[g] = [];
   groups[g].push({ id: c.id, name: c.name, status: c.current_status || c.status, description: c.description, is_child: c.is_child });
 }); %>
@@ -497,19 +498,22 @@ const t = isEs ? {
 </div>
 <footer>
 <div class="subscribe-box">
-<h3><%= t.getUpdates %></h3>
+<h3><%= tr('public.subscribeHeading') %></h3>
 <form method="post" action="/subscribe/<%= page.slug %>">
 <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
-<input type="email" name="email" required placeholder="<%= t.emailPh %>" aria-label="Email">
-<button type="submit"><%= t.subscribe %></button>
+<input type="email" name="email" required placeholder="<%= tr('public.emailPlaceholder') %>" aria-label="<%= tr('subs.thEmail') %>">
+<button type="submit"><%= tr('public.subscribeButton') %></button>
 </form>
-<p class="subscribe-note"><%= t.subscribeNote %></p>
+<p class="subscribe-note"><%= tr('public.subscribeNote') %></p>
 </div>
-<p>Powered by StatusFe v<%= version %></p>
+<p><%= tr('public.poweredBy', { version }) %></p>
 </footer>
 <% } %>
 
 <script>
+// Public i18n bridge (phase 3): the inline script never hardcodes text — the
+// status labels arrive from the server in the PAGE language (SF_I18N pattern).
+window.SF_PUBLIC_I18N = <%- JSON.stringify(typeof publicI18n !== 'undefined' && publicI18n ? publicI18n : { locale: 'en', status: {} }).replace(/</g, '\\u003c') %>;
 <% function escapeJsString(str) { if (typeof str !== 'string') return str; return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/</g, '\\u003c').replace(/>/g, '\\u003e'); } %>
 <% if (page.custom_layout) { %>
 // Custom layout mode — data available for JS
@@ -532,7 +536,10 @@ setInterval(() => {
   }).catch(() => {});
 }, 60000);
 <% } %>
-function formatStatus(s) { return {operational:'Operational',under_maintenance:'Under Maintenance',degraded_performance:'Degraded Performance',partial_outage:'Partial Outage',major_outage:'Major Outage',investigating:'Investigating',identified:'Identified',monitoring:'Monitoring',resolved:'Resolved'}[s] || s; }
+function formatStatus(s) {
+  const labels = (window.SF_PUBLIC_I18N && window.SF_PUBLIC_I18N.status) || {};
+  return labels[s] || s;
+}
 
 // Auto-refresh page at configured interval
 (function() {

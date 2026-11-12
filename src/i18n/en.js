@@ -696,6 +696,50 @@ module.exports = {
   'changelog.waitingBack': 'Update running — waiting for the app to come back… ({count})',
   'changelog.inProgress': 'Update in progress — checking status…',
 
+  // ===== public status page (phase 3) ====================================
+  // Chrome of views/status-page.ejs and views/component-detail.ejs (plus the
+  // public subscribe/confirm/unsubscribe and /embed responses in app.js).
+  // These keys follow `pages.locale` — the language of the PAGE — never the
+  // admin/user preference (admin-i18n-5.0.0 S2). Status labels are NOT here:
+  // the routes' formatStatus() already maps them from `pages.locale`, and the
+  // embed reuses the existing components.statusLong* keys.
+  'public.documentTitle': '{name} - System Status',
+  'public.componentDetailTitle': '{component} - {page} Status',
+  'public.overallStatus': 'Overall Status',
+  'public.activeIncidentsOne': '{count} Active Incident',
+  'public.activeIncidentsMany': '{count} Active Incidents',
+  'public.activeIncidentsTitle': 'Active incidents',
+  'public.noActiveIncidents': 'No active incidents.',
+  'public.noComponents': 'No components',
+  'public.scheduledMaintenance': 'Scheduled Maintenance',
+  'public.subscribeHeading': 'Get status updates',
+  'public.subscribeButton': 'Subscribe',
+  'public.subscribeNote': 'Email confirmations and incident updates. Unsubscribe anytime.',
+  'public.emailPlaceholder': 'you@company.com',
+  'public.poweredBy': 'Powered by StatusFe v{version}',
+  'public.uptimeBarTitle': 'View component detail',
+  'public.uptimeSummary': '{percent}% uptime · {days}d',
+  'public.uptimeDaysTitle': '{days}-day uptime — {percent}%',
+  'public.lastCheck': 'Last check:',
+  'public.latency24h': 'Latency (24h) — max {ms} ms',
+  'public.recentStatusChanges': 'Recent status changes',
+  'public.noStatusChanges': 'No status changes recorded.',
+  'public.whenUtc': 'When (UTC)',
+  'public.fromStatus': 'From',
+  'public.toStatus': 'To',
+  'public.subscribeInboxTitle': 'Check your inbox',
+  'public.subscribeInboxBody': 'If this address is not already subscribed, a confirmation link was sent to process your request. The link expires in 7 days.',
+  'public.backToPage': '← Back to {page}',
+  'public.subscribedTitle': '✓ Subscription confirmed',
+  'public.subscribedBody': 'You will now receive updates for this status page.',
+  'public.unsubscribedTitle': 'Unsubscribed',
+  'public.unsubscribedBody': 'You will no longer receive updates for this status page.',
+  'public.confirmInvalid': 'Invalid or expired confirmation link.',
+  'public.unsubscribeInvalid': 'Invalid unsubscribe link.',
+  'public.subscriptionLimit': 'Subscription limit reached for this page. Try later.',
+  'public.embedAllSystems': 'All Systems Operational',
+  'public.embedViewFull': 'View full status →',
+
   // ===== flash messages (?msg= codes) ====================================
   // Rendered by translateFlash(code, locale) — the codes are the ones the
   // routes already emit; only the rendering became locale-aware (S4).
