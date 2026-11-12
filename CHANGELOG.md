@@ -9,6 +9,30 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [5.7.0] — 2026-11-08
+
+### Added
+- **Observabilidad de las entregas.** Cada notificación se registra en
+  `notification_deliveries` (migración **`005`**): canal, evento, estado,
+  intentos y el error si falló. En `/admin/channels` hay una tarjeta **«Últimas
+  entregas»** con las 20 más recientes y un resumen de fallos de las últimas
+  24 h por canal.
+  Antes, un canal caído solo dejaba una línea dentro del contenedor: no se podía
+  responder «¿me llegan los avisos?» sin `docker logs | grep`.
+- Retención de **7 días**, con poda oportunista (una de cada 100 grabaciones),
+  sin cron ni borrados por petición.
+
+### Notes
+- **Registrar nunca puede romper la entrega**: la escritura va en `try/catch` y,
+  si falla, se loguea y el aviso sale igual. Un sistema de observabilidad que
+  tumba lo que observa es peor que no tenerlo.
+
+### Verified
+- `verify_channels.js`: **116 comprobaciones** (antes 104). O1–O5 cubren la fila
+  correcta en éxito y en fallo, que un error al registrar **no** impide la
+  entrega, la tarjeta del panel y la poda de 7 días.
+- Suite: **1042 checks** en 34 arneses.
+
 ## [5.6.0] — 2026-11-08
 
 ### Added

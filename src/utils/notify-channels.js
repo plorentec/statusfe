@@ -23,6 +23,12 @@
 //     (`NOTIFY_RETRY_BASE_MS`, default 1000 -> 1 s then 3 s; 0 disables retries)
 //     and honours a 429 `Retry-After` (capped at 30 s). A 4xx that is not
 //     retryable and the redirect refusal are NOT retried: they cannot succeed.
+//   - PERSISTED (5.7.0): the outcome of every delivery is written to
+//     `notification_deliveries` (one row per channel per flush) so the admin
+//     panel can show what happened without reading the container log. The write
+//     is wrapped: a bookkeeping failure NEVER breaks the delivery. Rows older
+//     than `RETENTION_DAYS` are pruned opportunistically (one sweep every
+//     `PRUNE_EVERY_RECORDINGS` recordings) — no cron, no DELETE per delivery.
 //   - 5 s timeout per delivery (enforced by the transport and by a bounded
 //     guard in deliver()), and the SSRF guard of the existing webhooks
 //     (isPrivateIp + a bounded DNS lookup, failing CLOSED) runs before any POST.
@@ -65,6 +71,13 @@ const MAX_QUEUE = 500;
 const MAX_COMBINED_LINES = 10;
 const MAX_RETRY_AFTER_MS = 30000;
 const SHUTDOWN_FLUSH_BOUND_MS = 6000;
+
+// Delivery outcomes are PERSISTED (5.7.0) so an operator can see from the panel
+// whether alerts are arriving, instead of grepping the container log. Retention
+// is opportunistic: one sweep every PRUNE_EVERY_RECORDINGS rows, never a cron
+// and never a DELETE per delivery.
+const PRUNE_EVERY_RECORDINGS = 100;
+let recordingsSincePrune = 0;
 
 // Read at CALL time, not at load time, so an installation tunes them through the
 // environment and a harness flips them between scenarios. An empty, negative or
@@ -367,6 +380,45 @@ function logDeliveryFailure(channel, e) {
   console.log('[NOTIFY] ' + (channel && channel.type) + ' ' + (channel && channel.name) + ' failed: ' + errMessage(e));
 }
 
+// ----- delivery history (5.7.0) ----------------------------------------
+// Persist ONE outcome per channel per flush. Recording is bookkeeping: it must
+// never be the reason a notification is not delivered, so every failure here is
+// swallowed (and said out loud on its own line so a broken table is visible).
+async function recordDeliveryOutcome(channel, event, outcome) {
+  try {
+    const { notificationDeliveries } = require('../db/models');
+    if (!notificationDeliveries || typeof notificationDeliveries.record !== 'function') return;
+    await notificationDeliveries.record({
+      channel_id: (channel && channel.id) || null,
+      channel_type: (channel && channel.type) || null,
+      channel_name: (channel && channel.name) || null,
+      event: String(event || ''),
+      status: outcome && outcome.ok ? 'ok' : 'failed',
+      attempts: (outcome && outcome.attempts) || 0,
+      error: outcome && outcome.ok ? null : String((outcome && outcome.error) || '')
+    });
+    maybePruneDeliveries();
+  } catch (e) {
+    console.log('[NOTIFY] could not record delivery for ' + (channel && channel.type) + ' ' +
+      (channel && channel.name) + ': ' + errMessage(e));
+  }
+}
+
+// Fire-and-forget retention sweep, one recording in PRUNE_EVERY_RECORDINGS.
+function maybePruneDeliveries() {
+  recordingsSincePrune++;
+  if (recordingsSincePrune < PRUNE_EVERY_RECORDINGS) return;
+  recordingsSincePrune = 0;
+  pruneDeliveries().catch(() => {}); // never awaited: a slow DELETE must not hold a delivery
+}
+
+// Delete deliveries older than the retention window. Returns the sweep result and
+// is exported for the harness and for an operator running a one-off cleanup.
+async function pruneDeliveries(days) {
+  const { notificationDeliveries } = require('../db/models');
+  return await notificationDeliveries.prune(days);
+}
+
 // One delivery, ONE attempt. Never throws: returns { ok, error } so the caller
 // can report a test result (the panel's "Test" button), exactly as before.
 async function deliver(channel, event, payload) {
@@ -382,6 +434,8 @@ async function deliver(channel, event, payload) {
 // One delivery with the retry policy (5.5.0). Never throws. A retryable failure
 // logs the attempt number and its backoff; the last failure keeps the original
 // `[NOTIFY] <type> <name> failed: <msg>` line so log expectations still hold.
+// The outcome is persisted (5.7.0) once per call — the same single write serves a
+// batched flush and a NOTIFY_BATCH_MS=0 send.
 async function deliverWithRetry(channel, event, payload) {
   let lastError = null;
   let attempts = 0;
@@ -389,6 +443,7 @@ async function deliverWithRetry(channel, event, payload) {
     attempts++;
     try {
       await attempt(channel, event, payload);
+      await recordDeliveryOutcome(channel, event, { ok: true, attempts });
       return { ok: true, attempts };
     } catch (e) {
       lastError = e;
@@ -403,7 +458,9 @@ async function deliverWithRetry(channel, event, payload) {
     }
   }
   logDeliveryFailure(channel, lastError);
-  return { ok: false, error: errMessage(lastError), attempts };
+  const error = errMessage(lastError);
+  await recordDeliveryOutcome(channel, event, { ok: false, attempts, error });
+  return { ok: false, error, attempts };
 }
 
 // ----- coalescing window ----------------------------------------------
@@ -617,6 +674,7 @@ async function sendTest(channel) {
 module.exports = {
   dispatch,
   sendTest,
+  pruneDeliveries,
   __flushNow: flushNow,
   __setFetchForTests,
   __setDnsForTests,

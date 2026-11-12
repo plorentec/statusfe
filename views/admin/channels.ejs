@@ -158,6 +158,63 @@ var chEvents = channel.events || [];
 <p class="text-muted"><%= tr('channels.empty') %></p>
 <% } %>
 </div>
+
+<%# 5.7.0: delivery history. The operator's question is "are my alerts arriving?"
+    — a silent failure (bad token, revoked webhook, 5xx) must be visible HERE and
+    not only in the container log. Both locals come from GET /admin/channels. %>
+<% var dels = (typeof deliveries !== 'undefined' && deliveries) ? deliveries : []; %>
+<% var fails = (typeof deliveryFailures !== 'undefined' && deliveryFailures) ? deliveryFailures : []; %>
+<div class="card" style="margin-top:20px;">
+<h3 style="font-size:16px;font-weight:600;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border);"><%= tr('channels.deliveriesTitle') %> <span class="text-muted" style="font-size:13px;">— <%= dels.length %></span></h3>
+<p class="text-muted" style="margin-bottom:12px;"><%= tr('channels.deliveriesHelp') %></p>
+
+<p style="font-size:13px;font-weight:600;margin-bottom:8px;"><%= tr('channels.failures24h') %></p>
+<% if (fails.length > 0) { %>
+<div class="table-container">
+<table class="admin-table">
+<thead>
+<tr><th><%= tr('channels.thChannel') %></th><th><%= tr('channels.thType') %></th><th><%= tr('channels.thFailures') %></th><th><%= tr('channels.thLastFailure') %></th></tr>
+</thead>
+<tbody>
+<% fails.forEach(function(f) { %>
+<tr>
+<td><%= f.channel_name || '—' %></td>
+<td><%= f.channel_type || '—' %></td>
+<td><span class="no"><%= f.failures %></span></td>
+<td><%= f.last_at || '—' %></td>
+</tr>
+<% }); %>
+</tbody>
+</table>
+</div>
+<% } else { %>
+<p class="text-muted"><%= tr('channels.noFailures24h') %></p>
+<% } %>
+
+<% if (dels.length > 0) { %>
+<div class="table-container" style="margin-top:16px;">
+<table class="admin-table">
+<thead>
+<tr><th><%= tr('channels.thTime') %></th><th><%= tr('channels.thChannel') %></th><th><%= tr('channels.thEvent') %></th><th><%= tr('channels.thStatus') %></th><th><%= tr('channels.thAttempts') %></th><th><%= tr('channels.thError') %></th></tr>
+</thead>
+<tbody>
+<% dels.forEach(function(d) { %>
+<tr>
+<td><%= d.created_at || '' %></td>
+<td><%= d.channel_name || '—' %></td>
+<td><%= d.event || '—' %></td>
+<td><span class="<%= d.status === 'ok' ? 'yes' : 'no' %>"><%= d.status === 'ok' ? tr('common.ok') : tr('common.failed') %></span></td>
+<td><%= d.attempts %></td>
+<td><%= d.status === 'ok' ? '—' : (d.error || '—') %></td>
+</tr>
+<% }); %>
+</tbody>
+</table>
+</div>
+<% } else { %>
+<p class="text-muted"><%= tr('channels.noDeliveries') %></p>
+<% } %>
+</div>
 </main>
 </div>
 <script src="/js/admin.js"></script>

@@ -3,7 +3,7 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const { requireAuth, requireAdmin, updateSession } = require('../middleware/session');
-const { notifications, analytics, dependencies, settings, pages, components, componentStatuses, incidentStatuses, statusMappings, notificationChannels, users } = require('../db/models');
+const { notifications, analytics, dependencies, settings, pages, components, componentStatuses, incidentStatuses, statusMappings, notificationChannels, notificationDeliveries, users } = require('../db/models');
 const { SUPPORTED: SUPPORTED_LOCALES } = require('../i18n');
 const notifyChannels = require('../utils/notify-channels');
 const { queryOne, queryAll, run } = require('../db/database');
@@ -521,6 +521,18 @@ function emptyChannel() {
   return { id: null, type: 'telegram', name: '', events: [], enabled: 1, config: {}, has_secret: {} };
 }
 
+// Delivery history (5.7.0): the panel answers "are my alerts arriving?" without
+// anyone reading the container log. Both lists are bounded reads:
+//   deliveries       — the latest 20 outcomes, one row per channel per flush
+//   deliveryFailures — failures per channel over the last 24 h
+async function deliveryLocals() {
+  const [deliveries, deliveryFailures] = await Promise.all([
+    notificationDeliveries.recent(20),
+    notificationDeliveries.failuresSince(24)
+  ]);
+  return { deliveries, deliveryFailures };
+}
+
 router.get('/channels', requireAdmin, async (req, res) => {
   const channels = await notificationChannels.list();
   res.render('admin/channels', {
@@ -530,7 +542,8 @@ router.get('/channels', requireAdmin, async (req, res) => {
     channel: null,
     channelTypes: notificationChannels.TYPES,
     channelEvents: notificationChannels.EVENTS,
-    testError: req.query.error || null
+    testError: req.query.error || null,
+    ...(await deliveryLocals())
   });
 });
 
@@ -543,7 +556,8 @@ router.get('/channels/new', requireAdmin, async (req, res) => {
     channel: emptyChannel(),
     channelTypes: notificationChannels.TYPES,
     channelEvents: notificationChannels.EVENTS,
-    testError: null
+    testError: null,
+    ...(await deliveryLocals())
   });
 });
 
@@ -558,7 +572,8 @@ router.get('/channels/:id/edit', requireAdmin, async (req, res) => {
     channel,
     channelTypes: notificationChannels.TYPES,
     channelEvents: notificationChannels.EVENTS,
-    testError: null
+    testError: null,
+    ...(await deliveryLocals())
   });
 });
 

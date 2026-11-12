@@ -1757,6 +1757,68 @@ module.exports.notificationChannels = {
   decryptConfig: decryptChannelConfig
 };
 
+// ===== NOTIFICATION DELIVERIES (5.7.0) =====
+// One row per channel per delivery flush: `ok` (with the number of attempts it
+// needed) or `failed` (with the final error). Written by utils/notify-channels.js
+// and read by the admin panel — migration 005 owns the table. Diagnostic data,
+// never configuration: `channel_name`/`channel_type` are copied in so a row still
+// makes sense after its channel is deleted.
+const DELIVERY_RETENTION_DAYS = 7;
+const DELIVERY_ERROR_MAX = 300;
+// JS-side UTC stamp, the pattern the rest of the file uses for naive TIMESTAMP
+// columns (PostgreSQL's NOW() would evaluate in the host timezone). Also passed
+// explicitly on INSERT: pg-mem freezes a CURRENT_TIMESTAMP default for the whole
+// database and the panel orders by this column.
+const deliveryStamp = (ms) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
+
+module.exports.notificationDeliveries = {
+  RETENTION_DAYS: DELIVERY_RETENTION_DAYS,
+  MAX_ERROR_LENGTH: DELIVERY_ERROR_MAX,
+
+  async record(entry = {}) {
+    const id = entry.id || uuidv4();
+    const status = entry.status === 'ok' ? 'ok' : 'failed';
+    const attempts = Math.max(0, parseInt(entry.attempts, 10) || 0);
+    const error = entry.error === undefined || entry.error === null ? null : String(entry.error).slice(0, DELIVERY_ERROR_MAX);
+    const created_at = deliveryStamp(Date.now());
+    await run(
+      'INSERT INTO notification_deliveries (id,channel_id,channel_type,channel_name,event,status,attempts,error,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
+      [id, entry.channel_id || null, entry.channel_type || null, entry.channel_name || null,
+        entry.event || '', status, attempts, status === 'ok' ? null : error, created_at]
+    );
+    return { id, status, attempts, error: status === 'ok' ? null : error, created_at };
+  },
+
+  // Panel list: newest first.
+  async recent(limit = 20) {
+    const n = Math.min(200, Math.max(1, parseInt(limit, 10) || 20));
+    return await queryAll('SELECT * FROM notification_deliveries ORDER BY created_at DESC, id DESC LIMIT $1', [n]);
+  },
+
+  // "Are my alerts arriving?" — failures per channel over a rolling window.
+  async failuresSince(hours = 24) {
+    const since = deliveryStamp(Date.now() - (parseInt(hours, 10) || 24) * 3600000);
+    const rows = await queryAll(
+      "SELECT channel_name, channel_type, COUNT(*) AS failures, MAX(created_at) AS last_at FROM notification_deliveries WHERE status='failed' AND created_at >= $1::timestamp GROUP BY channel_name, channel_type ORDER BY failures DESC",
+      [since]
+    );
+    return rows.map(row => ({
+      channel_name: row.channel_name,
+      channel_type: row.channel_type,
+      failures: parseInt(row.failures, 10) || 0,
+      last_at: row.last_at
+    }));
+  },
+
+  // Retention. Called opportunistically by the delivery module (one sweep every
+  // N recordings) so no cron is needed and no request path pays for it.
+  async prune(days = DELIVERY_RETENTION_DAYS) {
+    const cutoff = deliveryStamp(Date.now() - (parseInt(days, 10) || DELIVERY_RETENTION_DAYS) * 86400000);
+    const result = await run('DELETE FROM notification_deliveries WHERE created_at < $1::timestamp', [cutoff]);
+    return { deleted: result.changes, cutoff };
+  }
+};
+
 // ===== NOTIFICATIONS =====
 module.exports.notifications = {
   async list(userId, limit=50) {

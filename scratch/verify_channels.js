@@ -25,6 +25,9 @@
 //   C11 a 3xx is refused, not followed, and no second connection is attempted
 //   C12 a transport that never answers still settles as a failure (5 s guard)
 //   E1-E6  the six events actually reach the channels
+//   O1-O5  delivery history (5.7.0): one row per channel per flush (ok and
+//          failed), a broken recorder never breaks a delivery, the panel renders
+//          both states, and the retention sweep drops rows older than 7 days
 //
 // Run: node scratch/verify_channels.js      (needs: npm i --no-save pg-mem)
 const fs = require('fs');
@@ -236,9 +239,10 @@ const WEBHOOK_SECRET = 'whsec-harness-123';
 
   // ===== C1: the migration on an existing installation ================
   const registered = MIGRATIONS.map(m => m.version);
-  check('C1: 003-notification-channels is registered last in the migration registry',
-    registered[registered.length - 1] === '004-user-locale' &&
-    registered.indexOf('001-baseline') < registered.indexOf('002-columns-and-backfills'), registered.join(','));
+  check('C1: the migration registry is ordered and carries 005-notification-deliveries last',
+    registered[registered.length - 1] === '005-notification-deliveries' &&
+    registered.indexOf('001-baseline') < registered.indexOf('002-columns-and-backfills') &&
+    registered.indexOf('003-notification-channels') > registered.indexOf('002-columns-and-backfills'), registered.join(','));
 
   const child = spawnSync(process.execPath, [__filename], {
     env: { ...process.env, CHANNELS_CHILD: 'migration', CHANNELS_CHILD_OUT: CHILD_OUT },
@@ -253,20 +257,20 @@ const WEBHOOK_SECRET = 'whsec-harness-123';
     check('C1: an installation at 3.9.0 has 001+002 applied and no channels table',
       mig.appliedBefore.join(',') === '001-baseline,002-columns-and-backfills' && mig.tableBefore === false,
       mig.appliedBefore.join(',') + ' table=' + mig.tableBefore);
-    check('C1: the next boot applies the migrations after the baseline', mig.appliedAfter.join(',') === '003-notification-channels,004-user-locale', mig.appliedAfter.join(','));
+    check('C1: the next boot applies the migrations after the baseline', mig.appliedAfter.join(',') === '003-notification-channels,004-user-locale,005-notification-deliveries', mig.appliedAfter.join(','));
     check('C1: 003 is recorded in schema_migrations with a name and a checksum',
-      mig.recorded.length === 4 && mig.recorded.some(r => r.version === '003-notification-channels' && r.name && r.checksum === 64),
+      mig.recorded.length === 5 && mig.recorded.some(r => r.version === '003-notification-channels' && r.name && r.checksum === 64),
       mig.recorded.map(r => r.version + '/' + r.checksum).join(' '));
     const expectedColumns = ['config', 'created_at', 'enabled', 'events', 'id', 'name', 'type', 'updated_at'];
     check('C1: notification_channels has exactly the specified columns',
       JSON.stringify(mig.columns) === JSON.stringify(expectedColumns), mig.columns.join(','));
     check('C1: the baseline was NOT executed again (sentinel component survived)', mig.sentinel === 'Sentinel', String(mig.sentinel));
     check('C1: a second boot applies nothing new',
-      mig.againApplied.length === 0 && mig.againAlready.length === 4, JSON.stringify(mig.againApplied));
+      mig.againApplied.length === 0 && mig.againAlready.length === 5, JSON.stringify(mig.againApplied));
   }
   const parentRows = await db.queryAll('SELECT version FROM ' + MIGRATION_TABLE + ' ORDER BY version');
   check('C1: the app boot itself has 003 recorded (fresh installation path)',
-    parentRows.map(r => r.version).join(',') === '001-baseline,002-columns-and-backfills,003-notification-channels,004-user-locale',
+    parentRows.map(r => r.version).join(',') === '001-baseline,002-columns-and-backfills,003-notification-channels,004-user-locale,005-notification-deliveries',
     parentRows.map(r => r.version).join(','));
 
   // ===== C2: secrets encrypted at rest, decrypted for delivery ========
@@ -862,6 +866,95 @@ const WEBHOOK_SECRET = 'whsec-harness-123';
   const n7AfterSecondFlush = calls.filter(c => c.url.includes('example.com/n7-shutdown')).length;
   check('N7: the queue is drained afterwards (a later flush sends nothing twice)',
     n7AfterSecondFlush === 1, n7AfterSecondFlush + ' delivery(ies)');
+
+  process.env.NOTIFY_BATCH_MS = '0';
+  process.env.NOTIFY_RETRY_BASE_MS = '0';
+  await offAll();
+
+  // ===== O1-O5: delivery history is PERSISTED (5.7.0) ==================
+  // The operator question behind this feature is "are my alerts arriving?". A
+  // silent failure (bad token, revoked webhook, 5xx) used to exist only as a
+  // console line inside the container; now every outcome is a row the panel shows.
+  process.env.NOTIFY_BATCH_MS = '0';
+  process.env.NOTIFY_RETRY_BASE_MS = '0';
+  // Isolate the rows this block asserts from the deliveries the earlier blocks
+  // legitimately produced.
+  await db.run('DELETE FROM notification_deliveries');
+
+  // O1 — a success writes ONE row, with the channel identity copied in.
+  const o1Chan = await onlyChannel({ type: 'telegram', name: 'O1 Recorded', config: { bot_token: '444:o1-token', chat_id: '-100444' }, events: [] });
+  resetCalls();
+  await notify.dispatch('component_status', { title: 'Recorded delivery', message: 'one row', url: null });
+  const o1Rows = await db.queryAll('SELECT * FROM notification_deliveries WHERE channel_id=$1', [o1Chan.id]);
+  check('O1: a successful delivery writes exactly ONE row', o1Rows.length === 1, o1Rows.length + ' row(s)');
+  check('O1: the row carries status ok, one attempt and the channel name/type',
+    o1Rows.length === 1 && o1Rows[0].status === 'ok' && Number(o1Rows[0].attempts) === 1 &&
+    o1Rows[0].channel_name === 'O1 Recorded' && o1Rows[0].channel_type === 'telegram' &&
+    o1Rows[0].event === 'component_status' && !o1Rows[0].error,
+    o1Rows.length === 1 ? JSON.stringify({ status: o1Rows[0].status, attempts: o1Rows[0].attempts, name: o1Rows[0].channel_name, type: o1Rows[0].channel_type, error: o1Rows[0].error }) : 'no row');
+
+  // O2 — a delivery that fails every attempt writes ONE failed row.
+  const o2Chan = await onlyChannel({ type: 'webhook', name: 'O2 Broken', config: { url: 'https://example.com/o2-broken' }, events: [] });
+  process.env.NOTIFY_RETRY_BASE_MS = '10';
+  fetchPlan = (call) => (call.url.includes('example.com/o2-broken') ? { status: 500 } : { status: 200 });
+  resetCalls();
+  await notify.dispatch('component_status', { title: 'Broken delivery', message: 'every attempt fails', url: null });
+  fetchPlan = null;
+  const o2Rows = await db.queryAll('SELECT * FROM notification_deliveries WHERE channel_id=$1', [o2Chan.id]);
+  check('O2: a delivery that fails all attempts writes ONE row', o2Rows.length === 1, o2Rows.length + ' row(s)');
+  check('O2: the row carries status failed, the attempt count (3) and the error text',
+    o2Rows.length === 1 && o2Rows[0].status === 'failed' && Number(o2Rows[0].attempts) === 3 && o2Rows[0].error === 'HTTP 500',
+    o2Rows.length === 1 ? JSON.stringify({ status: o2Rows[0].status, attempts: o2Rows[0].attempts, error: o2Rows[0].error }) : 'no row');
+
+  // O3 — bookkeeping must never be the reason a notification is not delivered.
+  const o3Chan = await onlyChannel({ type: 'webhook', name: 'O3 Unrecordable', config: { url: 'https://example.com/o3-unrecordable' }, events: [] });
+  const realRecord = models.notificationDeliveries.record;
+  models.notificationDeliveries.record = async () => { throw new Error('record exploded'); };
+  resetCalls();
+  const o3LogsBefore = notifyLogs.length;
+  let o3Threw = null;
+  try {
+    await notify.dispatch('component_status', { title: 'Still delivered', message: 'bookkeeping broke', url: null });
+  } catch (e) { o3Threw = e; }
+  models.notificationDeliveries.record = realRecord;
+  const o3Calls = calls.filter(c => c.url.includes('example.com/o3-unrecordable'));
+  const o3Logs = notifyLogs.slice(o3LogsBefore);
+  check('O3: a recording failure does NOT break the delivery (the message still goes out)',
+    o3Threw === null && o3Calls.length === 1 && o3Calls[0].body.title === 'Still delivered',
+    'threw=' + (o3Threw && o3Threw.message) + ' calls=' + o3Calls.length);
+  check('O3: the recording failure is logged instead of being swallowed silently',
+    o3Logs.some(l => l.includes('could not record delivery') && l.includes('record exploded')),
+    o3Logs.join(' / ') || 'no log');
+  const o3Rows = await db.queryAll('SELECT id FROM notification_deliveries WHERE channel_id=$1', [o3Chan.id]);
+  check('O3: no row is written when the recorder itself is broken', o3Rows.length === 0, o3Rows.length + ' row(s)');
+
+  // O4 — the panel renders the history, in both states, with the error text.
+  const o4Page = await req('GET', '/admin/channels', { headers: { Cookie: cookieHeader() } });
+  const o4Section = o4Page.body.slice(o4Page.body.indexOf('Latest deliveries'));
+  check('O4: the panel renders the deliveries section with its failure summary',
+    o4Page.status === 200 && o4Page.body.includes('Latest deliveries') && o4Page.body.includes('Failures in the last 24 h'),
+    o4Page.status + ' / ' + (o4Page.body.includes('Latest deliveries') ? 'section present' : 'section missing'));
+  check('O4: the section lists one row in each state (ok and failed) with its error',
+    !!o4Section && o4Section.includes('O1 Recorded') && o4Section.includes('O2 Broken') &&
+    o4Section.includes('>OK<') && o4Section.includes('>FAILED<') && o4Section.includes('HTTP 500'),
+    o4Section ? ('OK=' + o4Section.includes('>OK<') + ' FAILED=' + o4Section.includes('>FAILED<') + ' error=' + o4Section.includes('HTTP 500')) : 'no section');
+  check('O4: the section is part of the admin page only when authenticated (requireAdmin intact)',
+    (await req('GET', '/admin/channels')).status === 302, 'anonymous');
+
+  // O5 — retention: an explicit old created_at is pruned, a fresh row survives.
+  await db.run(
+    "INSERT INTO notification_deliveries (id,channel_id,channel_type,channel_name,event,status,attempts,error,created_at) VALUES ('o5-old','o5-chan','telegram','O5 Old','component_status','failed',3,'HTTP 500',$1)",
+    ['2020-01-01 00:00:00']
+  );
+  await models.notificationDeliveries.record({ channel_id: 'o5-chan', channel_type: 'telegram', channel_name: 'O5 Fresh', event: 'component_status', status: 'ok', attempts: 1 });
+  const o5OldBefore = await db.queryOne("SELECT id FROM notification_deliveries WHERE id='o5-old'");
+  const o5Prune = await notify.pruneDeliveries();
+  const o5OldAfter = await db.queryOne("SELECT id FROM notification_deliveries WHERE id='o5-old'");
+  const o5Fresh = await db.queryOne("SELECT id FROM notification_deliveries WHERE channel_name='O5 Fresh'");
+  check('O5: retention deletes rows older than 7 days',
+    !!o5OldBefore && !o5OldAfter && typeof o5Prune.deleted === 'number',
+    'before=' + !!o5OldBefore + ' after=' + !!o5OldAfter + ' deleted=' + o5Prune.deleted);
+  check('O5: a recent row survives the sweep', !!o5Fresh, o5Fresh ? 'kept' : 'deleted');
 
   process.env.NOTIFY_BATCH_MS = '0';
   process.env.NOTIFY_RETRY_BASE_MS = '0';

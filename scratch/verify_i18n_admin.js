@@ -166,7 +166,7 @@ const storedLocale = async () => (await queryOne("SELECT locale FROM users WHERE
   // ===== I3. migration 004 on an installation at 001+002+003 ===========
   const registered = require(path.join(ROOT, 'src', 'db', 'migrations')).MIGRATIONS.map(m => m.version);
   check('I3: 004-user-locale is registered last and after 003',
-    registered[registered.length - 1] === '004-user-locale' && registered.indexOf('003-notification-channels') < registered.lastIndexOf('004-user-locale'),
+    registered[registered.length - 1] === '005-notification-deliveries' && registered.indexOf('003-notification-channels') < registered.lastIndexOf('004-user-locale'),
     registered.join(','));
   const child = spawnSync(process.execPath, [__filename], {
     env: { ...process.env, I18N_CHILD: 'migration', I18N_CHILD_OUT: CHILD_OUT },
@@ -181,14 +181,14 @@ const storedLocale = async () => (await queryOne("SELECT locale FROM users WHERE
     check('I3: the installation stopped at 001+002+003 had no users.locale column',
       mig.appliedBefore.join(',') === '001-baseline,002-columns-and-backfills,003-notification-channels' && mig.hadColumn === false,
       mig.appliedBefore.join(',') + ' column=' + mig.hadColumn);
-    check('I3: the next boot applies ONLY 004', mig.appliedAfter.join(',') === '004-user-locale', mig.appliedAfter.join(','));
+    check('I3: the next boot applies ONLY 004', mig.appliedAfter.join(',') === '004-user-locale,005-notification-deliveries', mig.appliedAfter.join(','));
     check('I3: users.locale exists afterwards and is nullable TEXT',
       mig.hasColumn === true);
     check('I3: 004 is recorded with a name and a checksum',
       mig.recorded.some(r => r.version === '004-user-locale' && r.name && r.checksum === 64),
       mig.recorded.map(r => r.version + '/' + r.checksum).join(' '));
     check('I3: a further boot applies nothing new',
-      mig.againApplied.length === 0 && mig.againAlready.length === 4, JSON.stringify(mig.againApplied));
+      mig.againApplied.length === 0 && mig.againAlready.length === 5, JSON.stringify(mig.againApplied));
   }
   // ===== boot + login ===================================================
   await require('./_forced-change')(); // 4.0.1: simulate an onboarded install
@@ -205,7 +205,7 @@ const storedLocale = async () => (await queryOne("SELECT locale FROM users WHERE
   if (!up) { console.log('\nFAILURES: cannot continue without a listening app'); process.exit(1); }
   const bootedRows = (await queryAll('SELECT version FROM schema_migrations ORDER BY version')).map(r => r.version);
   check('I3: the app boot recorded 004 on a fresh installation',
-    bootedRows[bootedRows.length - 1] === '004-user-locale', bootedRows.join(','));
+    bootedRows[bootedRows.length - 1] === '005-notification-deliveries', bootedRows.join(','));
 
   const login = await req('POST', '/auth/login', { body: { email: 'admin@status.local', password: 'admin123' } });
   absorb(login);
