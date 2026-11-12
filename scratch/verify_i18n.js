@@ -6,6 +6,7 @@
 // labels and the inline-script strings (window.SF_PUBLIC_I18N). The language is
 // the PAGE's (`pages.locale`) and never the panel/user preference.
 const path = require('path');
+const fs = require('fs');
 const http = require('http');
 const { newDb } = require('pg-mem');
 const mem = newDb({ autoCreateForeignKeyIndices: true });
@@ -53,6 +54,34 @@ function post(pathname, fields, cookie) {
     req.write(data);
     req.end();
   });
+}
+
+// Keys a public view asks the translator for. `tr(...)` / `t(...)` are scanned
+// with a tiny literal reader (not a bare regex) so conditional keys
+// (`tr(x === 1 ? 'a' : 'b')`) and nested calls (`esc(tr('k'))`) are all seen:
+// every quoted literal inside the call's parentheses that LOOKS like a key is
+// reported, and the caller checks it exists in both dictionaries.
+const KEY_SHAPE = /^[a-z][A-Za-z0-9]*\.[A-Za-z0-9]+$/;
+function referencedKeys(src) {
+  const keys = new Set();
+  const re = /\b(?:tr|t)\(/g;
+  let m;
+  while ((m = re.exec(src))) {
+    let i = m.index + m[0].length - 1;
+    let depth = 0, quote = null, lit = '';
+    for (; i < src.length; i++) {
+      const ch = src[i];
+      if (quote) {
+        if (ch === '\\') { lit += src[++i] || ''; continue; }
+        if (ch === quote) { quote = null; if (lit) keys.add(lit); lit = ''; continue; }
+        lit += ch; continue;
+      }
+      if (ch === "'" || ch === '"') { quote = ch; lit = ''; continue; }
+      if (ch === '(') { depth++; continue; }
+      if (ch === ')') { depth--; if (depth === 0) break; continue; }
+    }
+  }
+  return keys;
 }
 
 async function waitForBoot() {
@@ -195,6 +224,77 @@ async function waitForBoot() {
   const unsub = subRow ? await get('/unsubscribe/' + subRow.unsubscribe_token) : { status: 0, body: '' };
   check('I18N-ES: unsubscribe page in Spanish',
     unsub.status === 200 && unsub.body.includes('Baja completada') && unsub.body.includes('Ya no recibirás más novedades'), unsub.status);
+
+  // ===== Custom layout: las etiquetas de estado salen del formatStatus del
+  // route (page.locale), no de una copia local. 5.6.0 quitó del template una
+  // segunda copia con las etiquetas en inglés que SOMBREABA a la del route y
+  // hacía que una página española con layout personalizado se viera en inglés.
+  // Es la rama que ningún test renderizaba.
+  const CL_HTML = '<div id="cl"><h1>{{page_name}}</h1><p class="cl-status">{{page_status}}</p>{{components}}{{incidents}}</div>';
+  const clEsPage = await pages.create({ name: 'Estado CL', slug: 'cl-es', is_public: true, locale: 'es', status: 'under_maintenance', custom_layout: 1, custom_layout_html: CL_HTML });
+  const clEnPage = await pages.create({ name: 'CL EN', slug: 'cl-en', is_public: true, status: 'under_maintenance', custom_layout: 1, custom_layout_html: CL_HTML });
+  const clCompEs = await components.create({ name: 'cl-api-es', status: 'under_maintenance' });
+  await components.assignToPage(clEsPage.id, clCompEs.id);
+  const clCompEn = await components.create({ name: 'cl-api-en', status: 'under_maintenance' });
+  await components.assignToPage(clEnPage.id, clCompEn.id);
+  await incidents.create({ page_id: clEsPage.id, name: 'Fallo CL', status: 'investigating', message: 'mirando', visible: 1 });
+  await incidents.create({ page_id: clEnPage.id, name: 'CL incident', status: 'investigating', message: 'looking', visible: 1 });
+  const clEs = await get('/status/cl-es');
+  check('I18N-ES: custom layout renderizado (rama custom_layout)',
+    clEs.status === 200 && clEs.body.includes('id="cl"') && clEs.body.includes('Estado CL'), clEs.status);
+  check('I18N-ES: custom layout — {{page_status}} y estados de componente/incidencia en español',
+    clEs.body.includes('class="cl-status">En mantenimiento<') && clEs.body.includes('class="sp-component-status">En mantenimiento<')
+    && clEs.body.includes('Investigando'), 'page_status + componente + incidencia');
+  check('I18N-ES: custom layout NO muestra las etiquetas en inglés (sin copia local de formatStatus)',
+    !clEs.body.includes('Under Maintenance') && !clEs.body.includes('Investigating'));
+  const clEn = await get('/status/cl-en');
+  check('I18N-EN: custom layout — las etiquetas siguen en inglés (control)',
+    clEn.status === 200 && clEn.body.includes('class="cl-status">Under Maintenance<')
+    && clEn.body.includes('Investigating') && !clEn.body.includes('En mantenimiento'), clEn.status);
+
+  // ===== Embed widget (localizado en 5.6.0, sin cobertura hasta ahora) =====
+  const embEsPage = await pages.create({ name: 'Embed ES', slug: 'embed-es', is_public: true, locale: 'es' });
+  const embEnPage = await pages.create({ name: 'Embed EN', slug: 'embed-en', is_public: true });
+  const embComp = await components.create({ name: 'emb-api', status: 'operational' });
+  await components.assignToPage(embEsPage.id, embComp.id);
+  await components.assignToPage(embEnPage.id, embComp.id);
+  const embEs = await get('/embed/embed-es?style=detailed');
+  check('I18N-ES: embed detailed — "Todos los sistemas operativos" y estado en español',
+    embEs.status === 200 && embEs.body.includes('<html lang="es">')
+    && embEs.body.includes('Todos los sistemas operativos') && embEs.body.includes('>Operativo<')
+    && embEs.body.includes('Ver el estado completo'), embEs.status);
+  check('I18N-ES: embed detailed sin textos en inglés',
+    !embEs.body.includes('All Systems Operational') && !embEs.body.includes('View full status') && !embEs.body.includes('Operational'));
+  const embEsMin = await get('/embed/embed-es?style=minimal');
+  check('I18N-ES: embed minimal — etiqueta de estado en español',
+    embEsMin.status === 200 && embEsMin.body.includes(' Operativo<') && !embEsMin.body.includes('Operational'), embEsMin.status);
+  const embEn = await get('/embed/embed-en?style=detailed');
+  check('I18N-EN: embed detailed — "All Systems Operational" y estado en inglés',
+    embEn.status === 200 && embEn.body.includes('<html lang="en">')
+    && embEn.body.includes('All Systems Operational') && embEn.body.includes('>Operational<')
+    && embEn.body.includes('View full status'), embEn.status);
+  check('I18N-EN: embed detailed sin textos en español',
+    !embEn.body.includes('Todos los sistemas operativos') && !embEn.body.includes('Ver el estado completo'));
+
+  // ===== Claves FUERA del namespace public (hallazgo de review) =====
+  // status-page/component-detail reutilizan claves del panel (common.ok,
+  // common.failed, pages.groupFallback, subs.thEmail…). Renombrar una de esas
+  // claves en el panel no rompe nada visible allí, pero el traductor devuelve la
+  // PROPIA clave y el visitante vería "common.ok". Se comprueban las dos
+  // diccionarios (es es el DEFAULT_LOCALE: sin fallback a inglés).
+  for (const view of ['views/status-page.ejs', 'views/component-detail.ejs']) {
+    const keys = [...referencedKeys(fs.readFileSync(path.join(__dirname, '..', view), 'utf8'))]
+      .filter(k => KEY_SHAPE.test(k)).sort();
+    const missingEn = keys.filter(k => !Object.prototype.hasOwnProperty.call(enDict, k));
+    const missingEs = keys.filter(k => !Object.prototype.hasOwnProperty.call(esDict, k));
+    check(`I18N keys: ${view} — todas sus claves existen en en y es`,
+      keys.length > 0 && missingEn.length === 0 && missingEs.length === 0,
+      keys.length + ' claves' + (missingEn.length ? ' | falta en en: ' + missingEn.join(',') : '')
+      + (missingEs.length ? ' | falta en es: ' + missingEs.join(',') : ''));
+  }
+  check('I18N keys: las claves de panel reutilizadas en el público existen en los dos',
+    ['common.ok', 'common.failed', 'pages.groupFallback', 'subs.thEmail']
+      .every(k => k in enDict && k in esDict));
 
   console.log(failures === 0 ? '\nI18N PASSED' : `\nFAILURES: ${failures}`);
   process.exit(failures === 0 ? 0 : 1);

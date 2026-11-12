@@ -1,0 +1,9 @@
+{
+  "title": "Página pública de estado — direcciones",
+  "brief": "Tres direcciones visuales para la página de estado que una empresa muestra a sus propios clientes. Objetivo: que la empresa quiera mostrar esta página aunque no la necesite, porque la hace quedar profesional. Audiencia: clientes finales de la empresa, no técnicos. Contenido real: empresa B2B SaaS (Nébula Cloud), 5 componentes, uptime 99,98 %, un incidente resuelto hoy y mantenimiento programado.",
+  "artboards": [
+    { "file": "01-executive-trust.html", "title": "Confianza ejecutiva", "tradeoff": "Sobria y creíble: los números mandan. Menos personalidad, más autoridad.", "width": 1440, "height": 1100 },
+    { "file": "02-product-modern.html", "title": "Producto moderno", "tradeoff": "Oscura y contemporánea: sugiere producto técnico puntero. Arriesga en entornos conservadores.", "width": 1440, "height": 1100 },
+    { "file": "03-brand-surface.html", "title": "Marca como escaparate", "tradeoff": "La página como escaparate de marca: logo y titular grandes. Menos densidad de datos por pantalla.", "width": 1440, "height": 1100 }
+  ]
+}

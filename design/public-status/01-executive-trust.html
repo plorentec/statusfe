@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Nébula Cloud — Estado del servicio</title>
+<style>
+  :root{
+    --bg:#ffffff;--surface:#ffffff;--text:#1e293b;--light:#64748b;--border:#e2e8f0;
+    --radius:12px;--primary:#6366f1;
+    --ok:#006b39;--degr:#f0ad4e;--major:#d9534f;--maint:#7c3aed;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#f8fafc;color:var(--text);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.55}
+  .wrap{width:1440px;margin:0 auto;padding:0 64px 96px}
+  header{border-bottom:1px solid var(--border);background:#fff}
+  .bar{width:1440px;margin:0 auto;padding:20px 64px;display:flex;align-items:center;gap:14px}
+  .logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#6366f1,#8b5cf6);
+    display:grid;place-items:center;color:#fff;font-weight:800;font-size:15px}
+  .brand{font-weight:700;font-size:17px;letter-spacing:-.01em}
+  .bar nav{margin-left:auto;display:flex;gap:26px;font-size:14px}
+  .bar nav a{color:var(--light);text-decoration:none}
+  .bar nav a:hover{color:var(--text)}
+
+  .hero{background:#fff;border-bottom:1px solid var(--border);padding:56px 0 48px}
+  .status-line{display:flex;align-items:center;gap:14px;margin-bottom:8px}
+  .dot{width:14px;height:14px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 6px rgba(0,107,57,.12)}
+  .hero h1{margin:0;font-size:40px;letter-spacing:-.025em}
+  .hero p{margin:10px 0 0;color:var(--light);font-size:16px}
+
+  .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:34px}
+  .metric{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:20px 22px}
+  .metric b{display:block;font-size:30px;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .metric span{color:var(--light);font-size:13px}
+
+  h2{font-size:19px;margin:44px 0 14px;letter-spacing:-.01em}
+  .card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+  .comp{display:grid;grid-template-columns:1fr 260px 130px;align-items:center;gap:18px;
+    padding:16px 22px;border-bottom:1px solid var(--border)}
+  .comp:last-child{border-bottom:0}
+  .comp b{font-weight:600;font-size:15px}
+  .comp small{display:block;color:var(--light);font-weight:400;font-size:12.5px}
+  .bars{display:flex;gap:2px;height:26px;align-items:flex-end}
+  .bars i{flex:1;background:var(--ok);border-radius:2px;height:100%;min-width:2px}
+  .bars i.bad{background:var(--degr)}
+  .pill{font-size:12px;font-weight:600;padding:4px 12px;border-radius:999px;justify-self:end}
+  .p-ok{background:#e7f6ee;color:var(--ok)}
+  .p-degr{background:#fdf3e2;color:#8a5a00}
+
+  .inc{display:flex;gap:16px;padding:18px 22px;border-bottom:1px solid var(--border)}
+  .inc:last-child{border-bottom:0}
+  .tag{font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:999px;height:fit-content;white-space:nowrap}
+  .t-res{background:#e7f6ee;color:var(--ok)}
+  .t-mnt{background:#efe9fd;color:var(--maint)}
+  .inc h3{margin:0 0 4px;font-size:15px}
+  .inc p{margin:0;color:var(--light);font-size:13.5px}
+
+  .cta{display:flex;align-items:center;gap:18px;background:#fff;border:1px solid var(--border);
+    border-radius:var(--radius);padding:22px;margin-top:34px}
+  .cta p{margin:0;font-size:14px;color:var(--light)}
+  .cta strong{color:var(--text);display:block;font-size:15px}
+  input[type=email]{margin-left:auto;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:14px;width:250px}
+  .btn{background:var(--primary);color:#fff;border:0;border-radius:8px;padding:11px 20px;font-size:14px;font-weight:600;cursor:pointer}
+  .btn:focus-visible,input:focus-visible{outline:3px solid #a5b4fc;outline-offset:2px}
+  footer{color:var(--light);font-size:13px;margin-top:44px;display:flex;gap:20px;align-items:center}
+  footer a{color:var(--light)}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <div class="logo">N</div>
+    <div class="brand">Nébula Cloud</div>
+    <nav>
+      <a href="#">Producto</a><a href="#">Precios</a><a href="#" style="color:#1e293b;font-weight:600">Estado</a><a href="#">Documentación</a>
+    </nav>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <div class="status-line"><span class="dot"></span><h1>Todos los sistemas operativos</h1></div>
+    <p>Última comprobación hace 30 segundos · Actualización automática cada 15 s</p>
+    <div class="metrics">
+      <div class="metric"><b>99,98 %</b><span>Disponibilidad últimos 90 días</span></div>
+      <div class="metric"><b>142 ms</b><span>Latencia media de API (24 h)</span></div>
+      <div class="metric"><b>1</b><span>Incidente resuelto hoy</span></div>
+    </div>
+  </div>
+</section>
+
+<div class="wrap">
+  <h2>Componentes</h2>
+  <div class="card">
+    <div class="comp">
+      <div><b>API pública <small>api.nebula.cloud</small></b></div>
+      <div class="bars" aria-label="90 días sin incidencias"><i></i><i></i><i></i><i></i><i class="bad"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <span class="pill p-ok">Operativo</span>
+    </div>
+    <div class="comp">
+      <div><b>Panel web <small>app.nebula.cloud</small></b></div>
+      <div class="bars" aria-label="90 días sin incidencias"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <span class="pill p-ok">Operativo</span>
+    </div>
+    <div class="comp">
+      <div><b>Pasarela de pagos <small>Pagos con tarjeta y transferencias</small></b></div>
+      <div class="bars" aria-label="90 días con incidencias puntuales"><i></i><i></i><i></i><i class="bad"></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="bad"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <span class="pill p-degr">Degradado</span>
+    </div>
+    <div class="comp">
+      <div><b>Notificaciones <small>Correo y push</small></b></div>
+      <div class="bars" aria-label="90 días sin incidencias"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <span class="pill p-ok">Operativo</span>
+    </div>
+    <div class="comp">
+      <div><b>Almacenamiento <small>Ficheros y copias de seguridad</small></b></div>
+      <div class="bars" aria-label="90 días sin incidencias"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <span class="pill p-ok">Operativo</span>
+    </div>
+  </div>
+
+  <h2>Incidencias y mantenimiento</h2>
+  <div class="card">
+    <div class="inc">
+      <span class="tag t-res">Resuelto</span>
+      <div>
+        <h3>Latencia elevada en la API pública</h3>
+        <p>Entre las 09:12 y las 09:38 el percentil 95 superó los 900 ms. Se ajustó el escalado del clúster de lectura. 14:05</p>
+      </div>
+    </div>
+    <div class="inc">
+      <span class="tag t-mnt">Programado</span>
+      <div>
+        <h3>Mantenimiento del almacenamiento</h3>
+        <p>Migración de volumen el sábado 14 de noviembre, de 02:00 a 04:00 (UTC). Sin interrupción prevista del servicio.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="cta">
+    <div>
+      <strong>Recibe avisos antes que nadie</strong>
+      <p>Te escribimos solo cuando hay algo que contar.</p>
+    </div>
+    <input type="email" placeholder="tu@empresa.com" aria-label="Correo electrónico">
+    <button class="btn">Suscribirme</button>
+  </div>
+
+  <footer>
+    <span>© 2026 Nébula Cloud</span><span>·</span>
+    <a href="#">Política de privacidad</a><span>·</span>
+    <a href="#">Estado por correo</a>
+    <span style="margin-left:auto">Funciona con StatusFe</span>
+  </footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Nébula Cloud — Estado</title>
+<style>
+  :root{--bg:#0a0a0f;--surface:#12121a;--border:#1e1e2e;--text:#e2e8f0;--muted:#64748b;
+    --accent:#6366f1;--ok:#22c55e;--degr:#eab308;--danger:#ef4444;--maint:#a855f7;--radius:16px}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.55}
+  .glow{position:fixed;inset:-30% 30% 60% -10%;background:radial-gradient(closest-side,rgba(99,102,241,.22),transparent);pointer-events:none}
+  .wrap{width:1440px;margin:0 auto;padding:40px 64px 80px;position:relative}
+  .bar{display:flex;align-items:center;gap:12px;margin-bottom:64px}
+  .logo{width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#a855f7);display:grid;place-items:center;font-weight:800;font-size:14px;color:#fff}
+  .brand{font-weight:700;letter-spacing:-.01em}
+  .bar .live{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+  .pulse{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 0 rgba(34,197,94,.7);animation:p 2s infinite}
+  @keyframes p{70%{box-shadow:0 0 0 10px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
+  @media (prefers-reduced-motion:reduce){.pulse{animation:none}}
+
+  .hero{display:grid;grid-template-columns:1.35fr .65fr;gap:56px;align-items:center;margin-bottom:64px}
+  h1{margin:0;font-size:64px;line-height:1.04;letter-spacing:-.035em;font-weight:800}
+  h1 em{font-style:normal;background:linear-gradient(90deg,#818cf8,#c084fc);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero p{color:var(--muted);font-size:17px;max-width:52ch;margin:20px 0 0}
+  .ring{width:280px;height:280px;margin-left:auto;position:relative}
+  .ring svg{transform:rotate(-90deg)}
+  .ring .val{position:absolute;inset:0;display:grid;place-items:center;text-align:center}
+  .ring .val b{font-size:44px;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .ring .val span{color:var(--muted);font-size:13px;display:block}
+
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px;
+    transition:border-color .18s ease,transform .18s ease}
+  .card:hover{border-color:#2f2f4a;transform:translateY(-2px)}
+  @media (prefers-reduced-motion:reduce){.card{transition:none}.card:hover{transform:none}}
+  .card .top{display:flex;align-items:flex-start;gap:12px;margin-bottom:18px}
+  .dot{width:9px;height:9px;border-radius:50%;margin-top:7px;flex:0 0 auto}
+  .card h3{margin:0;font-size:16px;letter-spacing:-.01em}
+  .card small{color:var(--muted);font-size:12.5px}
+  .card .num{margin-left:auto;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .spark{display:flex;gap:2px;height:34px;align-items:flex-end;margin-bottom:10px}
+  .spark i{flex:1;background:rgba(34,197,94,.55);border-radius:2px;min-width:2px}
+  .spark i.warn{background:rgba(234,179,8,.7)}
+  .state{font-size:12.5px;font-weight:600}
+  .s-ok{color:var(--ok)}.s-degr{color:var(--degr)}
+
+  .feed{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-top:40px;overflow:hidden}
+  .feed h2{margin:0;padding:18px 24px;font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border)}
+  .item{display:flex;gap:16px;padding:20px 24px;border-bottom:1px solid var(--border)}
+  .item:last-child{border-bottom:0}
+  .tag{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:3px 9px;border-radius:6px;height:fit-content;white-space:nowrap}
+  .t-res{background:rgba(34,197,94,.14);color:var(--ok)}
+  .t-mnt{background:rgba(168,85,247,.16);color:var(--maint)}
+  .item h4{margin:0 0 4px;font-size:15px}
+  .item p{margin:0;color:var(--muted);font-size:13.5px}
+
+  .cta{margin-top:40px;background:linear-gradient(135deg,rgba(99,102,241,.18),rgba(168,85,247,.12));
+    border:1px solid #2b2b47;border-radius:var(--radius);padding:28px;display:flex;align-items:center;gap:20px}
+  .cta strong{font-size:16px;display:block}
+  .cta span{color:var(--muted);font-size:14px}
+  .cta .grow{flex:1}
+  .btn{background:var(--accent);color:#fff;border:0;border-radius:10px;padding:12px 22px;font-weight:600;font-size:14px;cursor:pointer}
+  .btn:focus-visible{outline:3px solid #a5b4fc;outline-offset:3px}
+</style>
+</head>
+<body>
+<div class="glow"></div>
+<div class="wrap">
+  <div class="bar">
+    <div class="logo">N</div><div class="brand">Nébula Cloud</div>
+    <div class="live"><span class="pulse"></span>En directo · hace 12 s</div>
+  </div>
+
+  <section class="hero">
+    <div>
+      <h1>Todo <em>en marcha</em>.<br>Y cuando no, lo contamos.</h1>
+      <p>Estado en tiempo real de la plataforma Nébula Cloud. Sin filtros, sin letra pequeña.</p>
+    </div>
+    <div class="ring">
+      <svg width="280" height="280" viewBox="0 0 280 280" role="img" aria-label="99,98 por ciento de disponibilidad">
+        <circle cx="140" cy="140" r="120" fill="none" stroke="#1e1e2e" stroke-width="18"/>
+        <circle cx="140" cy="140" r="120" fill="none" stroke="url(#g)" stroke-width="18" stroke-linecap="round"
+                stroke-dasharray="754" stroke-dashoffset="4"/>
+        <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#22c55e"/><stop offset="1" stop-color="#4ade80"/></linearGradient></defs>
+      </svg>
+      <div class="val"><div><b>99,98 %</b><span>90 días</span></div></div>
+    </div>
+  </section>
+
+  <div class="grid">
+    <article class="card">
+      <div class="top"><span class="dot" style="background:var(--ok)"></span>
+        <div><h3>API pública</h3><small>api.nebula.cloud</small></div><span class="num">142 ms</span></div>
+      <div class="spark"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="state s-ok">Operativo</div>
+    </article>
+    <article class="card">
+      <div class="top"><span class="dot" style="background:var(--ok)"></span>
+        <div><h3>Panel web</h3><small>app.nebula.cloud</small></div><span class="num">98 ms</span></div>
+      <div class="spark"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="state s-ok">Operativo</div>
+    </article>
+    <article class="card">
+      <div class="top"><span class="dot" style="background:var(--degr)"></span>
+        <div><h3>Pasarela de pagos</h3><small>Tarjeta y transferencias</small></div><span class="num">610 ms</span></div>
+      <div class="spark"><i></i><i></i><i></i><i class="warn"></i><i></i><i></i><i></i><i class="warn"></i><i></i><i></i><i></i><i></i></div>
+      <div class="state s-degr">Rendimiento degradado</div>
+    </article>
+    <article class="card">
+      <div class="top"><span class="dot" style="background:var(--ok)"></span>
+        <div><h3>Notificaciones</h3><small>Correo y push</small></div><span class="num">1,2 s</span></div>
+      <div class="spark"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="state s-ok">Operativo</div>
+    </article>
+    <article class="card">
+      <div class="top"><span class="dot" style="background:var(--ok)"></span>
+        <div><h3>Almacenamiento</h3><small>Ficheros y copias</small></div><span class="num">36 ms</span></div>
+      <div class="spark"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="state s-ok">Operativo</div>
+    </article>
+    <article class="card" style="display:grid;place-items:center;text-align:center">
+      <div>
+        <div style="font-size:34px;font-weight:800;letter-spacing:-.02em">0</div>
+        <div class="state" style="color:var(--muted)">incidentes abiertos</div>
+      </div>
+    </article>
+  </div>
+
+  <section class="feed">
+    <h2>Historial reciente</h2>
+    <div class="item"><span class="tag t-res">Resuelto</span>
+      <div><h4>Latencia elevada en la API pública</h4>
+        <p>Percentil 95 por encima de 900 ms entre las 09:12 y las 09:38. Escalado del clúster de lectura ajustado. 14:05</p></div></div>
+    <div class="item"><span class="tag t-mnt">Programado</span>
+      <div><h4>Mantenimiento del almacenamiento</h4>
+        <p>Sábado 14 de noviembre, 02:00–04:00 UTC. Sin interrupción prevista. 11:30</p></div></div>
+  </section>
+
+  <div class="cta">
+    <div class="grow"><strong>Te avisamos por correo</strong><span>Antes de que lo notes tú.</span></div>
+    <button class="btn">Suscribirme a los avisos</button>
+  </div>
+</div>
+</body>
+</html>

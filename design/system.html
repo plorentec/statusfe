@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>StatusFe — sistema de diseño</title>
+<style>
+  :root{
+    --bg:#ffffff;--white:#ffffff;--text:#1e293b;--light:#64748b;--border:#e2e8f0;
+    --radius:12px;--primary:#6366f1;--primary-hover:#4f46e5;
+    --ok:#006b39;--maint:#f0ad4e;--degr:#f0ad4e;--part:#f0ad85;--major:#d9534f;
+    --d-bg:#0a0a0f;--d-surface:#12121a;--d-border:#1e1e2e;--d-text:#e2e8f0;
+    --d-accent:#6366f1;--d-ok:#22c55e;--d-degr:#eab308;--d-part:#f97316;--d-major:#ef4444;--d-maint:#a855f7;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#f6f7fb;color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.55}
+  main{width:1440px;margin:0 auto;padding:48px 64px 96px}
+  h1{font-size:34px;margin:0 0 6px;letter-spacing:-.02em}
+  h2{font-size:20px;margin:48px 0 16px;letter-spacing:-.01em}
+  .sub{color:var(--light);margin:0 0 8px}
+  .grid{display:grid;gap:16px}
+  .cols-5{grid-template-columns:repeat(5,1fr)}
+  .cols-4{grid-template-columns:repeat(4,1fr)}
+  .cols-3{grid-template-columns:repeat(3,1fr)}
+  .swatch{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:#fff}
+  .chip{height:74px}
+  .meta{padding:10px 12px;font-size:12px}
+  .meta b{display:block;font-size:13px}
+  .meta code{color:var(--light);font-size:11px}
+  .panel-dark{background:var(--d-bg);border-radius:var(--radius);padding:28px;border:1px solid var(--d-border)}
+  .panel-dark h3{color:var(--d-text);margin:0 0 16px;font-size:16px}
+  .type-row{display:flex;align-items:baseline;gap:16px;border-bottom:1px solid var(--border);padding:10px 0}
+  .type-row span:first-child{width:120px;color:var(--light);font-size:12px}
+  .demo{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-top:8px}
+  .row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+  .row:last-child{border-bottom:0}
+  .dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto}
+  .pill{margin-left:auto;font-size:12px;padding:3px 10px;border-radius:999px;font-weight:600}
+  .btn{display:inline-block;background:var(--primary);color:#fff;border:0;border-radius:8px;padding:10px 18px;font-size:14px;font-weight:600;cursor:pointer}
+  .btn:hover{background:var(--primary-hover)}
+  .btn:focus-visible{outline:3px solid #a5b4fc;outline-offset:2px}
+  .warn{background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:var(--radius);padding:14px 16px;font-size:14px;margin-top:12px}
+</style>
+</head>
+<body>
+<main>
+  <h1>StatusFe — sistema de diseño</h1>
+  <p class="sub">Tokens capturados de <code>status.css</code>, <code>template-dark.css</code> y <code>admin.css</code>. Sin valores inventados.</p>
+
+  <h2>Página pública — claro</h2>
+  <div class="grid cols-5">
+    <div class="swatch"><div class="chip" style="background:#ffffff;border-bottom:1px solid var(--border)"></div><div class="meta"><b>Fondo / superficie</b><code>--bg #ffffff</code></div></div>
+    <div class="swatch"><div class="chip" style="background:#1e293b"></div><div class="meta"><b>Texto</b><code>--text #1e293b</code></div></div>
+    <div class="swatch"><div class="chip" style="background:#64748b"></div><div class="meta"><b>Secundario</b><code>--light #64748b</code></div></div>
+    <div class="swatch"><div class="chip" style="background:#e2e8f0"></div><div class="meta"><b>Borde</b><code>--border #e2e8f0</code></div></div>
+    <div class="swatch"><div class="chip" style="background:#6366f1"></div><div class="meta"><b>Acento</b><code>--primary #6366f1</code></div></div>
+  </div>
+
+  <h2>Estados del servicio</h2>
+  <div class="grid cols-5">
+    <div class="swatch"><div class="chip" style="background:var(--ok)"></div><div class="meta"><b>Operativo</b><code>claro #006b39 · oscuro #22c55e</code></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--degr)"></div><div class="meta"><b>Degradado</b><code>claro #f0ad4e · oscuro #eab308</code></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--maint)"></div><div class="meta"><b>Mantenimiento</b><code>claro #f0ad4e · oscuro #a855f7</code></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--part)"></div><div class="meta"><b>Parcial</b><code>claro #f0ad85 · oscuro #f97316</code></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--major)"></div><div class="meta"><b>Caído</b><code>claro #d9534f · oscuro #ef4444</code></div></div>
+  </div>
+  <div class="warn"><strong>Deuda:</strong> en el tema claro, «Degradado» y «Mantenimiento» comparten <code>#f0ad4e</code>. Se distinguen solo por la etiqueta, no por el color.</div>
+
+  <h2>Página pública — oscuro</h2>
+  <div class="panel-dark">
+    <h3>Tema oscuro (template-dark.css)</h3>
+    <div class="grid cols-4">
+      <div class="swatch" style="background:var(--d-surface);border-color:var(--d-border)"><div class="chip" style="background:var(--d-bg)"></div><div class="meta" style="color:var(--d-text)"><b>Fondo</b><code>--dark-bg #0a0a0f</code></div></div>
+      <div class="swatch" style="background:var(--d-surface);border-color:var(--d-border)"><div class="chip" style="background:var(--d-surface)"></div><div class="meta" style="color:var(--d-text)"><b>Superficie</b><code>--dark-surface #12121a</code></div></div>
+      <div class="swatch" style="background:var(--d-surface);border-color:var(--d-border)"><div class="chip" style="background:var(--d-accent)"></div><div class="meta" style="color:var(--d-text)"><b>Acento</b><code>--dark-accent #6366f1</code></div></div>
+      <div class="swatch" style="background:var(--d-surface);border-color:var(--d-border)"><div class="chip" style="background:linear-gradient(90deg,var(--d-ok),var(--d-degr),var(--d-part),var(--d-major),var(--d-maint))"></div><div class="meta" style="color:var(--d-text)"><b>Estados</b><code>#22c55e · #eab308 · #f97316 · #ef4444 · #a855f7</code></div></div>
+    </div>
+  </div>
+
+  <h2>Tipografía</h2>
+  <p class="sub">No hay familias declaradas: el proyecto usa la pila del sistema. Sin fuentes externas.</p>
+  <div class="demo">
+    <div class="type-row"><span>34 / 700</span><span style="font-size:34px;font-weight:700;letter-spacing:-.02em">Estado de los sistemas</span></div>
+    <div class="type-row"><span>20 / 600</span><span style="font-size:20px;font-weight:600">Componentes</span></div>
+    <div class="type-row"><span>16 / 400</span><span style="font-size:16px">API pública — operativa</span></div>
+    <div class="type-row"><span>13 / 400</span><span style="font-size:13px;color:var(--light)">Actualizado hace 30 segundos</span></div>
+  </div>
+
+  <h2>Radio y componentes</h2>
+  <div class="grid cols-3">
+    <div class="swatch"><div class="chip" style="background:#eef2ff"></div><div class="meta"><b>Radio público</b><code>--radius 12px</code></div></div>
+    <div class="swatch"><div class="chip" style="background:#eef2ff"></div><div class="meta"><b>Radio panel</b><code>--radius 8px</code></div></div>
+    <div class="swatch"><div class="chip" style="display:flex;align-items:center;justify-content:center;background:#fff"><button class="btn">Suscripción</button></div><div class="meta"><b>Botón primario</b><code>#6366f1 → #4f46e5</code></div></div>
+  </div>
+
+  <div class="demo">
+    <div class="row"><span class="dot" style="background:var(--ok)"></span><span>API pública</span><span class="pill" style="background:#e7f6ee;color:#006b39">Operativo</span></div>
+    <div class="row"><span class="dot" style="background:var(--degr)"></span><span>Pasarela de pagos</span><span class="pill" style="background:#fff4e5;color:#8a5a00">Rendimiento degradado</span></div>
+    <div class="row"><span class="dot" style="background:var(--major)"></span><span>Portal de clientes</span><span class="pill" style="background:#fdeaea;color:#a1231f">Caído</span></div>
+  </div>
+  <p class="sub" style="margin-top:10px">El color nunca va solo: cada punto lleva su etiqueta de texto.</p>
+</main>
+</body>
+</html>

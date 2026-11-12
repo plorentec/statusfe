@@ -9,6 +9,25 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [5.7.1] — 2026-11-08
+
+### Added (diseño)
+- **Sistema de diseño capturado** en `design/system.md` (tokens reales de
+  `status.css`, `template-dark.css` y `admin.css`) con su tablero
+  `design/system.html`. Al capturarlo salieron tres deudas: «degradado» y
+  «mantenimiento» comparten color en el tema claro, el radio difiere entre
+  público (12px) y panel (8px) sin motivo, y no hay escala tipográfica.
+- **Tres direcciones** para la página pública en
+  `design/public-status/`: *Confianza ejecutiva*, *Producto moderno* y *Marca
+  como escaparate*. Ninguna implementada todavía; son propuestas para elegir.
+
+### Verified
+- Cobertura de la review de 5.6.0 cerrada: el **layout personalizado**, el
+  **widget embed** y una **auditoría de claves** (toda clave usada por las vistas
+  públicas existe en los dos idiomas). `verify_i18n.js`: **48 comprobaciones**
+  (antes 36), con tres fallos inyectados a propósito que salieron en rojo.
+- Suite: **1054 checks**.
+
 ## [5.7.0] — 2026-11-08
 
 ### Added
