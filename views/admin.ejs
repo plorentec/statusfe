@@ -5,6 +5,14 @@
 <% const pt = (typeof pageTitle === 'function') ? pageTitle : function (x) { return x; }; %>
 <% const loc = (typeof locale === 'string' && locale) ? locale : 'en'; %>
 <% const csrf = (typeof csrfToken !== 'undefined' && csrfToken) ? csrfToken : ''; %>
+<%
+const sidebarOpen = {
+  components: ["Components","Dependencies","Component Groups"].includes(title),
+  events: ["Events","Incidents","Maintenance"].includes(title),
+  api: ["API Keys","API Docs"].includes(title),
+  configuration: ["Configuration","Component Statuses","Incident Statuses","Status Mappings","Organizations","Subscribers","Notifications","Notification Channels","2FA Setup","Changelog","Audit Log"].includes(title),
+};
+%>
 <!DOCTYPE html>
 <html lang="<%= loc %>">
 <head>
@@ -32,12 +40,12 @@
 <%= tr('nav.pages') %>
 </a>
 <!-- Components with Dependencies submenu -->
-<a href="javascript:void(0)" class="sidebar-parent <%= ['Components','Dependencies'].includes(title) ? 'active' : '' %>">
+<button type="button" id="sidebar-components-toggle" class="sidebar-parent <%= sidebarOpen.components ? 'active open' : '' %>" aria-label="<%= tr('nav.components') %>" aria-expanded="<%= sidebarOpen.components ? 'true' : 'false' %>" aria-controls="sidebar-components">
 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
 <%= tr('nav.components') %>
 <svg class="submenu-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-</a>
-<nav class="sidebar-submenu">
+</button>
+<nav id="sidebar-components" class="sidebar-submenu<%= sidebarOpen.components ? ' open' : '' %>" aria-labelledby="sidebar-components-toggle" <%= sidebarOpen.components ? '' : 'hidden' %>>
 <a href="/admin/components" class="<%= title === 'Components' ? 'active' : '' %>">
 <%= tr('nav.allComponents') %>
 </a>
@@ -50,12 +58,12 @@
 </a>
 </nav>
 <!-- Events with submenus -->
-<a href="javascript:void(0)" class="sidebar-parent <%= ['Events','Incidents','Maintenance'].includes(title) ? 'active' : '' %>">
+<button type="button" id="sidebar-events-toggle" class="sidebar-parent <%= sidebarOpen.events ? 'active open' : '' %>" aria-label="<%= tr('nav.events') %>" aria-expanded="<%= sidebarOpen.events ? 'true' : 'false' %>" aria-controls="sidebar-events">
 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
 <%= tr('nav.events') %>
 <svg class="submenu-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-</a>
-<nav class="sidebar-submenu">
+</button>
+<nav id="sidebar-events" class="sidebar-submenu<%= sidebarOpen.events ? ' open' : '' %>" aria-labelledby="sidebar-events-toggle" <%= sidebarOpen.events ? '' : 'hidden' %>>
 <a href="/admin/incidents" class="<%= title === 'Incidents' ? 'active' : '' %>">
 <%= tr('nav.incidents') %>
 </a>
@@ -68,12 +76,12 @@
 <%= tr('nav.analytics') %>
 </a>
 <!-- API with submenus -->
-<a href="javascript:void(0)" class="sidebar-parent <%= ['API Keys','API Docs'].includes(title) ? 'active' : '' %>">
+<button type="button" id="sidebar-api-toggle" class="sidebar-parent <%= sidebarOpen.api ? 'active open' : '' %>" aria-label="<%= tr('nav.api') %>" aria-expanded="<%= sidebarOpen.api ? 'true' : 'false' %>" aria-controls="sidebar-api">
 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
 <%= tr('nav.api') %>
 <svg class="submenu-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-</a>
-<nav class="sidebar-submenu">
+</button>
+<nav id="sidebar-api" class="sidebar-submenu<%= sidebarOpen.api ? ' open' : '' %>" aria-labelledby="sidebar-api-toggle" <%= sidebarOpen.api ? '' : 'hidden' %>>
 <a href="/admin/api-keys" class="<%= title === 'API Keys' ? 'active' : '' %>">
 <%= tr('nav.apiKeys') %>
 </a>
@@ -86,12 +94,12 @@
 <%= tr('nav.users') %>
 </a>
 <!-- Configuration with submenus (submenu-open-guard) -->
-<a href="javascript:void(0)" class="sidebar-parent <%= ['Configuration','Component Statuses','Incident Statuses','Status Mappings','Notifications','Notification Channels','2FA Setup','Changelog','Audit Log'].includes(title) ? 'active' : '' %>">
+<button type="button" id="sidebar-configuration-toggle" class="sidebar-parent <%= sidebarOpen.configuration ? 'active open' : '' %>" aria-label="<%= tr('nav.configuration') %>" aria-expanded="<%= sidebarOpen.configuration ? 'true' : 'false' %>" aria-controls="sidebar-configuration">
 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
 <%= tr('nav.configuration') %>
 <svg class="submenu-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-</a>
-<nav class="sidebar-submenu<% if (['Configuration','Component Statuses','Incident Statuses','Status Mappings','Notifications','Notification Channels','2FA Setup','Changelog','Audit Log'].includes(title)) { %> open<% } %>" data-submenu-open-guard="1">
+</button>
+<nav id="sidebar-configuration" class="sidebar-submenu<%= sidebarOpen.configuration ? ' open' : '' %>" aria-labelledby="sidebar-configuration-toggle" <%= sidebarOpen.configuration ? '' : 'hidden' %> data-submenu-open-guard="1">
 <a href="/admin/config/component-statuses" class="<%= title === 'Component Statuses' ? 'active' : '' %>">
 <%= tr('nav.componentStatuses') %>
 </a>

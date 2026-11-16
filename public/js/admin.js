@@ -75,35 +75,32 @@ document.addEventListener('DOMContentLoaded', function() {
       setTimeout(function() { flash.remove(); }, 500);
     }, 5000);
   }
-  // Open parent nav items that have submenus
+  // One state transition owns visibility, styling and the announced state.
+  function setSubmenuOpen(parent, submenu, open) {
+    if (!open && submenu.contains(document.activeElement)) parent.focus();
+    parent.classList.toggle('open', open);
+    submenu.classList.toggle('open', open);
+    parent.setAttribute('aria-expanded', String(open));
+    submenu.hidden = !open;
+  }
   var parents = document.querySelectorAll('.sidebar-parent');
   for (var i = 0; i < parents.length; i++) {
-    (function(p) {
-      p.addEventListener('click', function(e) {
-        e.preventDefault();
-        // Sync both elements to the SAME target state. Toggling them
-        // independently breaks as soon as the server renders one of them open
-        // (data-submenu-open-guard): the first click would close instead of open.
-        var submenu = p.nextElementSibling;
-        var willOpen = !p.classList.contains('open');
-        p.classList.toggle('open', willOpen);
-        if (submenu && submenu.classList.contains('sidebar-submenu')) {
-          submenu.classList.toggle('open', willOpen);
+    (function(parent) {
+      var submenu = parent.nextElementSibling;
+      if (!submenu || !submenu.classList.contains('sidebar-submenu')) return;
+      // Preserve server-open guards and automatic expansion for active children.
+      setSubmenuOpen(parent, submenu, parent.classList.contains('open') ||
+        submenu.classList.contains('open') || !!submenu.querySelector('a.active'));
+      parent.addEventListener('click', function() {
+        setSubmenuOpen(parent, submenu, parent.getAttribute('aria-expanded') !== 'true');
+      });
+      submenu.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          setSubmenuOpen(parent, submenu, false);
         }
       });
     })(parents[i]);
-  }
-  // Open parent nav items that have active children
-  var submenus = document.querySelectorAll('.sidebar-submenu');
-  for (var j = 0; j < submenus.length; j++) {
-    var activeChild = submenus[j].querySelector('.active');
-    if (activeChild) {
-      var parent = submenus[j].previousElementSibling;
-      if (parent && parent.classList.contains('sidebar-parent')) {
-        parent.classList.add('open');
-        submenus[j].classList.add('open');
-      }
-    }
   }
 });
 

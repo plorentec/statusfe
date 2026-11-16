@@ -114,7 +114,15 @@ body {
   padding: 12px 0;
   overflow-y: auto;
 }
-.sidebar-nav a {
+.sidebar-nav button.sidebar-parent {
+  width: 100%;
+  background: none;
+  border: 0;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sidebar-nav a, .sidebar-nav button.sidebar-parent {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -126,14 +134,19 @@ body {
   transition: all 0.15s;
   border-left: 3px solid transparent;
 }
-.sidebar-nav a:hover {
+.sidebar-nav a:hover, .sidebar-nav button.sidebar-parent:hover {
   background: rgba(255,255,255,0.05);
   color: #fff;
 }
-.sidebar-nav a.active {
+.sidebar-nav a.active, .sidebar-nav button.sidebar-parent.active {
   background: rgba(99,102,241,0.15);
   color: #fff;
   border-left-color: var(--sidebar-active);
+}
+
+.sidebar-nav a:focus-visible, .sidebar-nav button.sidebar-parent:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: -3px;
 }
 
 .sidebar-footer {
@@ -552,13 +565,13 @@ code {
     overflow: hidden;
   }
   .sidebar-header, .sidebar-nav span, .sidebar-subtitle, .sidebar-footer { display: none; }
-  .sidebar-nav a {
+  .sidebar-nav a, .sidebar-nav button.sidebar-parent {
     justify-content: center;
     padding: 12px;
     border-left: none;
     border-bottom: 3px solid transparent;
   }
-  .sidebar-nav a.active { border-bottom-color: var(--sidebar-active); }
+  .sidebar-nav a.active, .sidebar-nav button.sidebar-parent.active { border-bottom-color: var(--sidebar-active); }
   .admin-main { margin-left: 60px; padding: 20px; }
   .form-row { grid-template-columns: 1fr; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
@@ -981,6 +994,10 @@ body.dark select option {
   overflow: hidden;
   transition: max-height 0.25s ease;
   background: rgba(0,0,0,0.15);
+}
+.sidebar-submenu[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-parent .submenu-arrow, .sidebar-submenu { transition: none; }
 }
 .sidebar-submenu.open {
   /* 4.0.3: this used to be a fixed 300px. The Configuration submenu holds nine
