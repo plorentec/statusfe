@@ -9,6 +9,44 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [5.7.2] — 2026-11-16
+
+### Fixed
+- **Los submenús de la barra lateral eran enlaces de mentira.** Las cuatro
+  secciones con submenú (Componentes, Eventos, API y Configuración) usaban
+  `<a href="javascript:void(0)">`, que un lector de pantalla no anuncia como
+  control. Ahora son **botones nativos** (`<button type="button">`) con
+  `aria-expanded`, `aria-controls` (enlazado por `id`) y `aria-label`.
+- **El estado del submenú vivía en dos sitios que se pisaban.** El servidor
+  pintaba la clase `open` y el JavaScript volvía a togglear al cargar, con una
+  guarda (`data-submenu-open-guard`) intentando parchear el desajuste. Ahora el
+  servidor es la **fuente única**: renderiza `aria-expanded` y el atributo
+  `hidden`, y el JavaScript lo lee en vez de reinventarlo — un submenú cerrado
+  queda oculto también para el teclado **antes** de que corra ningún script.
+- **`Escape` no cerraba el submenú ni devolvía el foco.** Ahora `Escape` desde
+  dentro de un submenú lo cierra y devuelve el foco a su botón; cerrar un
+  submenú que contiene el foco actual también lo restituye.
+- **El pie de la sidebar quedaba dentro del `<nav>`.** A la copia del partial
+  (`views/partials/_sidebar.ejs`) le faltaba el `</nav>` que cierra el
+  contenedor de navegación, así que el bloque de usuario y salida era
+  semánticamente parte de la navegación. Corregido.
+
+### Changed
+- CSS a juego con los botones: estilo de `.sidebar-parent` como botón,
+  contorno visible en `:focus-visible`, `.sidebar-submenu[hidden] { display:
+  none }` y `prefers-reduced-motion` apaga la animación del submenú.
+
+### Verified
+- `scratch/verify_sidebar_a11y.js` (nuevo): **124 comprobaciones** en jsdom —
+  renderiza las dos plantillas reales en es/en, carga el `public/js/admin.js`
+  real y comprueba los cuatro botones, los `id` únicos, el estado coherente
+  antes y después del JavaScript, la apertura/cierre por clic y por `Escape`, y
+  que el pie quede fuera del `<nav>`.
+- **Honesto sobre los límites**: jsdom verifica el estado del DOM y los eventos
+  sintetizados, pero **no** acredita la activación nativa del navegador ni el
+  orden real de Tab — eso exige una prueba con navegador real. No se acredita
+  conformidad WCAG completa.
+
 ## [5.7.1] — 2026-11-08
 
 ### Added (diseño)
