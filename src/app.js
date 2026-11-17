@@ -250,6 +250,25 @@ app.use((req, res, next) => {
   }
 });
 
+// Admin theme (installation-global colors): load the admin panel appearance into
+// res.locals for the shared _admin-theme.ejs partial. This only ADDS a render
+// local for authenticated /admin requests — it never gates access, weakens the
+// requireAuth/require2FA/requireAdmin/CSRF chain, or exposes settings. The
+// colors are non-secret; login/auth/public screens never receive them, and a
+// failure to load falls back to the default appearance instead of failing the
+// request.
+app.use((req, res, next) => {
+  if (!req.user || !req.path.startsWith('/admin')) return next();
+  const adminTheme = require('./utils/admin-theme');
+  adminTheme.getAdminTheme()
+    .then((theme) => {
+      res.locals.adminTheme = theme;
+      res.locals.adminThemeCss = adminTheme.renderCss(theme);
+      next();
+    })
+    .catch(() => next());
+});
+
 // Auth routes
 app.use('/auth', authRoutes);
 app.get('/login', async (req, res) => {

@@ -1,0 +1,12 @@
+<%# Admin panel appearance (installation-global colors). `adminThemeCss` is
+    produced by src/utils/admin-theme.js renderCss() and placed on res.locals by
+    the /admin-scoped middleware in app.js. When that local is absent — a
+    standalone render harness — or no custom admin colors are saved, this emits
+    NOTHING: the existing admin.css :root/body.dark tokens win and the panel
+    looks byte-for-byte the same as before. %>
+<% var themeCss = (typeof adminThemeCss === 'string' && adminThemeCss) ? adminThemeCss : ''; %>
+<% if (themeCss) { %>
+<style id="admin-theme">
+<%- themeCss %>
+</style>
+<% } %>

@@ -601,6 +601,14 @@ module.exports = {
   'customize.unsupportedType': 'Unsupported file type ({type}). Use PNG, JPEG, WebP or SVG.',
   'customize.fileTooLarge': 'File too large — encoded size is {size} KB (max 200 KB).',
   'customize.readFailed': 'Could not read the file.',
+  'customize.adminAppearance': 'Admin Panel Appearance',
+  'customize.adminAppearanceHelp': 'These colors theme this admin panel only. The public status pages keep the Branding and Colors above.',
+  'customize.adminPrimary': 'Primary / Accent',
+  'customize.adminSidebarBg': 'Sidebar Background',
+  'customize.adminSidebarText': 'Sidebar Text',
+  'customize.adminPanelBg': 'Panel Background',
+  'customize.adminPanelText': 'Panel Text',
+  'customize.adminSave': 'Save Admin Appearance',
 
   // ===== two-factor authentication (phase 2, batch 3) ===================
   'twofa.setupTitle': 'Setup 2FA for your account',
@@ -771,6 +779,7 @@ module.exports = {
   'flash.key_deleted': 'API key permanently deleted.',
   'flash.logo_too_large': 'Logo image too large — the encoded file must stay under 200 KB.',
   'flash.logo_invalid': 'Logo must be a PNG, JPEG, WebP or SVG image.',
+  'flash.admin_theme_invalid': 'One or more admin panel colors are invalid — use a hex color like #6366f1. Nothing was saved.',
   'flash.bulk_delete_error': 'Nothing deleted — no valid components were selected.',
   'flash.bulk_deleted': 'Selected components deleted.',
   'flash.invalid_parent': 'Invalid parent: a component cannot be its own parent or one of its own descendants.',

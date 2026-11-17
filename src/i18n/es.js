@@ -594,6 +594,14 @@ module.exports = {
   'customize.unsupportedType': 'Tipo de fichero no admitido ({type}). Usa PNG, JPEG, WebP o SVG.',
   'customize.fileTooLarge': 'Fichero demasiado grande: el tamaño codificado es de {size} KB (máximo 200 KB).',
   'customize.readFailed': 'No se pudo leer el fichero.',
+  'customize.adminAppearance': 'Apariencia del panel de administración',
+  'customize.adminAppearanceHelp': 'Estos colores se aplican solo a este panel de administración. Las páginas de estado públicas conservan la marca y los colores de arriba.',
+  'customize.adminPrimary': 'Primario / Acento',
+  'customize.adminSidebarBg': 'Fondo de la barra lateral',
+  'customize.adminSidebarText': 'Texto de la barra lateral',
+  'customize.adminPanelBg': 'Fondo del panel',
+  'customize.adminPanelText': 'Texto del panel',
+  'customize.adminSave': 'Guardar apariencia del panel',
 
   // ===== autenticación en dos pasos (fase 2, lote 3) ====================
   'twofa.setupTitle': 'Configurar el 2FA de tu cuenta',
@@ -762,6 +770,7 @@ module.exports = {
   'flash.key_deleted': 'Clave de API eliminada definitivamente.',
   'flash.logo_too_large': 'Imagen del logo demasiado grande: el fichero codificado debe quedar por debajo de 200 KB.',
   'flash.logo_invalid': 'El logo debe ser una imagen PNG, JPEG, WebP o SVG.',
+  'flash.admin_theme_invalid': 'Uno o varios colores del panel de administración no son válidos: usa un color hexadecimal como #6366f1. No se guardó nada.',
   'flash.bulk_delete_error': 'No se borró nada: no se seleccionó ningún componente válido.',
   'flash.bulk_deleted': 'Componentes seleccionados borrados.',
   'flash.invalid_parent': 'Padre no válido: un componente no puede ser su propio padre ni uno de sus descendientes.',

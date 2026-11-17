@@ -11,6 +11,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><%= pt(title) %> - <%= tr('common.adminTitle') %></title>
 <link rel="stylesheet" href="/css/admin.css">
+<%- include('../partials/_admin-theme'); %>
 <style>
 .chart-bar { display: flex; align-items: flex-end; gap: 2px; height: 120px; margin-top: 12px; }
 .chart-bar .bar { flex: 1; background: var(--primary); border-radius: 3px 3px 0 0; min-width: 4px; transition: height 0.3s; }

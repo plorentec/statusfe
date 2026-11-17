@@ -14,6 +14,7 @@ node scratch/verify_render.js     # render de todas las plantillas tocadas (+ CS
 node scratch/verify_sidebar_a11y.js # ambas barras laterales: botones, aria-expanded/controls, hidden, Escape y retorno del foco (requiere jsdom)
 node scratch/verify_smoke.js      # app completa arrancada + HTTP (health, status, embed, audit, cookies basura, 403 CSRF, guards de crash v2.2.4, redirect loop 2FA, role=user)
 node scratch/verify_e2e.js        # E2E: login → CSRF → componente con grupo nuevo → página → pública; estados; multi-grupo; miembros; API keys; 2FA
+node scratch/verify_admin_customization.js # apariencia del panel de admin (T1: colores instalación-global, validación hex, aislamiento de la marca pública)
 ```
 
 Cada script imprime PASS/FAIL por caso y sale con código 0/1.

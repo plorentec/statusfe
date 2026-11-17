@@ -12,6 +12,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><%= __pt(title) %> - <%= __tr('common.adminTitle') %></title>
 <link rel="stylesheet" href="/css/admin.css">
+<%- include('../partials/_admin-theme'); %>
 <script>document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('dark');});</script>
 </head>
 <body>
@@ -122,6 +123,44 @@
 </div>
 
 </form>
+
+<div class="card" style="margin-top:20px;" id="admin-appearance">
+<% const __admin = (typeof adminTheme === 'object' && adminTheme) ? adminTheme : { primary: '#6366f1', sidebar_bg: '#1a1b2e', sidebar_text: '#a0a3b5', panel_bg: '#0f1117', panel_text: '#e2e8f0' }; %>
+<h3 style="font-size:16px;font-weight:600;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border);"><%= __tr('customize.adminAppearance') %></h3>
+<p class="text-muted" style="margin-bottom:16px;"><%= __tr('customize.adminAppearanceHelp') %></p>
+<form action="/admin/customize/theme" method="post">
+<%- include("../partials/_csrf"); %>
+<div class="form-row">
+<div class="form-group">
+<label for="admin_primary"><%= __tr('customize.adminPrimary') %></label>
+<input type="color" id="admin_primary" name="admin_primary" value="<%= __admin.primary %>" style="height:40px;">
+</div>
+<div class="form-group">
+<label for="admin_sidebar_bg"><%= __tr('customize.adminSidebarBg') %></label>
+<input type="color" id="admin_sidebar_bg" name="admin_sidebar_bg" value="<%= __admin.sidebar_bg %>" style="height:40px;">
+</div>
+</div>
+<div class="form-row">
+<div class="form-group">
+<label for="admin_sidebar_text"><%= __tr('customize.adminSidebarText') %></label>
+<input type="color" id="admin_sidebar_text" name="admin_sidebar_text" value="<%= __admin.sidebar_text %>" style="height:40px;">
+</div>
+<div class="form-group">
+<label for="admin_panel_bg"><%= __tr('customize.adminPanelBg') %></label>
+<input type="color" id="admin_panel_bg" name="admin_panel_bg" value="<%= __admin.panel_bg %>" style="height:40px;">
+</div>
+</div>
+<div class="form-row">
+<div class="form-group">
+<label for="admin_panel_text"><%= __tr('customize.adminPanelText') %></label>
+<input type="color" id="admin_panel_text" name="admin_panel_text" value="<%= __admin.panel_text %>" style="height:40px;">
+</div>
+</div>
+<div class="form-actions" style="margin-top:20px;border-top:none;padding-top:0;">
+<button type="submit" class="btn btn-primary"><%= __tr('customize.adminSave') %></button>
+</div>
+</form>
+</div>
 
 </main>
 </div>

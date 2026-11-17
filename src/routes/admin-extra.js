@@ -7,6 +7,7 @@ const { notifications, analytics, dependencies, settings, pages, components, com
 const { SUPPORTED: SUPPORTED_LOCALES } = require('../i18n');
 const notifyChannels = require('../utils/notify-channels');
 const { queryOne, queryAll, run } = require('../db/database');
+const adminTheme = require('../utils/admin-theme');
 
 router.use(requireAuth);
 
@@ -398,6 +399,21 @@ router.post('/customize', requireAdmin, async (req, res) => {
   }
   if (removeLogo) await settings.delete('custom_logo_image');
   await settings.setCustomization(data);
+  res.redirect('/admin/customize?msg=success&type=success');
+});
+
+// POST /admin/customize/theme — installation-global ADMIN panel appearance,
+// kept separate from POST /customize (public status-page branding). This form
+// only writes custom_admin_* settings; the public setCustomization model and its
+// cache are never touched, so saving admin colors can neither leak into the
+// public theme nor be cleared by a public Customize save. Every submitted color
+// is validated BEFORE any write (admin-theme.saveAdminTheme), so a malformed
+// value can never land a partial write or reach the generated <style>.
+router.post('/customize/theme', requireAdmin, async (req, res) => {
+  const result = await adminTheme.saveAdminTheme(req.body || {});
+  if (!result.ok) {
+    return res.redirect('/admin/customize?msg=admin_theme_invalid&type=error');
+  }
   res.redirect('/admin/customize?msg=success&type=success');
 });
 
