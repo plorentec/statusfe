@@ -20,6 +20,10 @@
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+// Node 20 has no global WebSocket (Node 22.4+ only), so the Chrome DevTools
+// transport below uses core Node only: Chrome's `--remote-debugging-pipe`
+// protocol over child_process stdio fds 3/4 (NUL-delimited JSON), with no
+// WebSocket and no external dependency.
 
 const REPO = path.join(__dirname, '..');
 
@@ -119,54 +123,75 @@ const dbGet = async (key) => {
   return row ? row.value : null;
 };
 
-// ---- headless Chrome functional proof (CDP over the global WebSocket) ----
+// ---- headless Chrome functional proof (CDP over --remote-debugging-pipe) ----
+// Chrome speaks CDP over a pipe when launched with --remote-debugging-pipe:
+// Node WRITES commands to child.stdio[3] and READS NUL-delimited JSON responses
+// from child.stdio[4]. Core Node only — no WebSocket, no /json endpoint, no
+// external dependency — so the harness runs on Node 20 and Node 22 alike.
 function launchChrome() {
   const { spawn } = require('child_process');
   const profile = path.join(fixture, 'chrome-profile');
   fs.mkdirSync(profile, { recursive: true });
   const child = spawn('/usr/bin/google-chrome', [
     '--headless=new', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage',
-    '--remote-debugging-port=0', '--user-data-dir=' + profile, 'about:blank'
-  ], { stdio: ['ignore', 'ignore', 'ignore'] });
-  return { child, profile };
-}
-
-async function chromeReady(child, profile) {
-  const portFile = path.join(profile, 'DevToolsActivePort');
-  for (let i = 0; i < 150; i++) {
-    if (fs.existsSync(portFile)) {
-      const lines = fs.readFileSync(portFile, 'utf8').trim().split(/\r?\n/);
-      const port = Number(lines[0]);
-      if (port) {
-        const targets = await fetch('http://127.0.0.1:' + port + '/json').then(r => r.json());
-        const page = targets.find(t => t.type === 'page');
-        if (page) return { port, wsUrl: page.webSocketDebuggerUrl };
-      }
-    }
-    if (child.exitCode !== null) throw new Error('chrome exited early (code ' + child.exitCode + ')');
-    await new Promise(r => setTimeout(r, 100));
-  }
-  throw new Error('chrome did not expose a DevTools target in time');
+    '--remote-debugging-pipe', '--user-data-dir=' + profile, 'about:blank'
+  ], { stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'] });
+  // stdio[3] = write (commands in), stdio[4] = read (responses out).
+  const cdp = new Cdp(child.stdio[4], child.stdio[3]);
+  return { child, profile, cdp };
 }
 
 class Cdp {
-  constructor(wsUrl) {
-    this.ws = new WebSocket(wsUrl);
+  constructor(readStream, writeStream) {
+    this.read = readStream;
+    this.write = writeStream;
     this.id = 0;
     this.pending = new Map();
+    this.sessionId = null;
+    this._buffer = '';
+    readStream.on('data', (chunk) => this._onData(chunk));
+    readStream.on('error', () => { /* Chrome exit tears the pipe; pending ops hit their timeout */ });
   }
-  async open() {
-    await new Promise((res, rej) => { this.ws.onopen = res; this.ws.onerror = rej; });
-    this.ws.onmessage = (ev) => {
-      const msg = JSON.parse(ev.data);
-      if (msg.id && this.pending.has(msg.id)) { this.pending.get(msg.id)(msg); this.pending.delete(msg.id); }
-    };
+  _onData(chunk) {
+    this._buffer += chunk.toString('utf8');
+    let idx;
+    while ((idx = this._buffer.indexOf('\0')) >= 0) {
+      const raw = this._buffer.slice(0, idx);
+      this._buffer = this._buffer.slice(idx + 1);
+      if (!raw.trim()) continue;
+      let msg;
+      try { msg = JSON.parse(raw); } catch (e) { continue; }
+      if (msg.id && this.pending.has(msg.id)) {
+        this.pending.get(msg.id)(msg);
+        this.pending.delete(msg.id);
+      }
+    }
   }
-  send(method, params = {}) {
+  send(method, params = {}, sessionId = this.sessionId) {
     const id = ++this.id;
-    return new Promise((res) => { this.pending.set(id, res); this.ws.send(JSON.stringify({ id, method, params })); });
+    return new Promise((resolve) => {
+      this.pending.set(id, resolve);
+      const msg = { id, method, params };
+      if (sessionId) msg.sessionId = sessionId;
+      this.write.write(JSON.stringify(msg) + '\0');
+    });
   }
-  close() { try { this.ws.close(); } catch (e) { /* ignore */ } }
+  async connect(child, timeoutMs = 15000) {
+    const race = (p) => Promise.race([
+      p,
+      new Promise((_, rej) => setTimeout(() => rej(new Error('chrome did not respond over the CDP pipe (exit code ' + (child.exitCode === null ? 'n/a' : child.exitCode) + ')')), timeoutMs))
+    ]);
+    const created = await race(this.send('Target.createTarget', { url: 'about:blank' }, null));
+    const targetId = created.result && created.result.targetId;
+    if (!targetId) throw new Error('Target.createTarget returned no targetId: ' + JSON.stringify(created));
+    const attached = await race(this.send('Target.attachToTarget', { targetId, flatten: true }, null));
+    this.sessionId = attached.result && attached.result.sessionId;
+    if (!this.sessionId) throw new Error('Target.attachToTarget returned no sessionId: ' + JSON.stringify(attached));
+  }
+  close() {
+    try { this.read.destroy(); } catch (e) { /* ignore */ }
+    try { this.write.end(); } catch (e) { /* ignore */ }
+  }
 }
 
 const STYLE_EXPR = `(() => {
@@ -293,11 +318,9 @@ let chromeChild = null;
       panelBg: 'rgb(68, 85, 102)',
       panelText: 'rgb(119, 136, 153)'
     };
-    const { child } = launchChrome();
+    const { child, cdp } = launchChrome();
     chromeChild = child;
-    const { wsUrl } = await chromeReady(child, path.join(fixture, 'chrome-profile'));
-    const cdp = new Cdp(wsUrl);
-    await cdp.open();
+    await cdp.connect(child);
 
     const masterStyles = await chromeStyles(cdp, 'http://127.0.0.1:' + PORT + '/admin', { cookieValue: adminSessionCookie });
     check('chrome(master): admin-theme style present', !!masterStyles && masterStyles.hasAdminTheme === true, masterStyles && masterStyles.hasAdminTheme);

@@ -61,7 +61,13 @@ never the repository's. It also drives a real headless Google Chrome (already
 installed) over CDP to assert computed styles — sidebar background/text, panel
 background/text and the primary token on both the master shell and a
 full-document admin page, the `body.dark` cascade actually overridden, and
-login/public/status never receiving the admin theme.
+login/public/status never receiving the admin theme. The CDP transport uses only
+core Node APIs: Chrome's **`--remote-debugging-pipe`** protocol (NUL-delimited
+JSON over `child_process` stdio fds 3/4 — commands written to fd 3, responses
+read from fd 4), so it needs no global `WebSocket` (a Node 22.4+ addition) and
+no external dependency. It is verified against real Chrome under Node 22 with
+the global `WebSocket` deleted to simulate Node 20; it has not been run on an
+actual Node 20 runtime.
 
 ## Verification
 
