@@ -41,6 +41,7 @@ const tr = (typeof pt === 'function') ? pt : ((key, vars) => (typeof t === 'func
 </head>
 <body class="<%= page.custom_layout ? 'custom-layout' : 'template-' + page.template %>">
 <div class="detail-wrap">
+<div style="margin-bottom:14px;"><%- include('partials/_logo'); %></div>
 <a class="detail-back" href="/status/<%= page.slug %>">&larr; <%= page.name %></a>
 <div class="detail-head">
 <h1><%= component.name %></h1>

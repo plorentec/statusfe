@@ -122,6 +122,11 @@
 <small class="text-muted"><%= tr('pages.logoHelp') %></small>
 </div>
 <div class="form-group">
+<label for="logo_text"><%= tr('pages.fieldLogoText') %></label>
+<input type="text" id="logo_text" name="logo_text" value="<%= page.logo_text || '' %>" placeholder="<%= tr('pages.logoTextPlaceholder') %>">
+<small class="text-muted"><%= tr('pages.logoTextHelp') %></small>
+</div>
+<div class="form-group">
 <label for="status"><%= tr('components.fieldStatus') %></label>
 <select id="status" name="status">
 <option value="operational" <%= page.status === 'operational' ? 'selected' : '' %>><%= tr('components.statusLongOperational') %></option>

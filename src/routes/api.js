@@ -166,7 +166,7 @@ router.get('/info', (req, res) => res.json({ name: 'StatusFe API', version: '1.0
 router.post('/pages', requirePerm('write'), async (req, res) => {
   // A scoped key cannot create pages: any new page is outside its scope.
   if (req.user.page_id) return res.status(403).json({ error: 'Scoped keys cannot create pages' });
-  const { name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public, external_id, organization_id } = req.body;
+  const { name, slug, description, status, timezone, logo_url, logo_text, custom_css, custom_html, is_public, external_id, organization_id } = req.body;
   // An org-bound key creates pages INSIDE its organization (tenant isolation).
   const effectiveOrg = req.user.organization_id || organization_id || null;
   // Only a key BOUND to an org is restricted: a global (admin) key may place
@@ -188,7 +188,7 @@ router.post('/pages', requirePerm('write'), async (req, res) => {
   if (existing) return res.status(409).json({ error: 'Slug exists' });
   let page;
   try {
-    page = await pages.create({ name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public, external_id, organization_id: effectiveOrg, custom_domain: req.body.custom_domain });
+    page = await pages.create({ name, slug, description, status, timezone, logo_url, logo_text, custom_css, custom_html, is_public, external_id, organization_id: effectiveOrg, custom_domain: req.body.custom_domain });
   } catch (e) {
     if (['invalid_domain', 'domain_taken', 'org_missing'].includes(e.code)) return res.status(400).json({ error: e.message });
     throw e;

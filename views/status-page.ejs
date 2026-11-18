@@ -211,8 +211,6 @@ const isEs = (typeof locale !== 'undefined' && locale === 'es');
 <div class="page-header">
 <div class="page-header-inner">
 <%- include('partials/_logo'); %>
-<% var logoSrc = (page.logo_url || '').replace(/"/g, '&quot;'); %>
-<% if (page.logo_url) { %><img src="<%= logoSrc %>" alt="<%= page.name %>" class="logo"><% } %>
 <div>
 <h1><%= page.name %></h1>
 <p><%= page.description || tr('pages.previewTitle') %></p>
@@ -312,8 +310,6 @@ const isEs = (typeof locale !== 'undefined' && locale === 'es');
 <div class="container">
 <div class="header-content">
 <%- include('partials/_logo'); %>
-<% var logoSrc = (page.logo_url || '').replace(/"/g, '&quot;'); %>
-<% if (page.logo_url) { %><img src="<%= logoSrc %>" alt="<%= page.name %>" class="logo"><% } %>
 <div>
 <h1><%= page.name %></h1>
 <p class="subtitle"><%= page.description || tr('pages.previewTitle') %></p>
@@ -412,8 +408,6 @@ const isEs = (typeof locale !== 'undefined' && locale === 'es');
 <div class="container">
 <div class="header-content">
 <%- include('partials/_logo'); %>
-<% var logoSrc = (page.logo_url || '').replace(/"/g, '&quot;'); %>
-<% if (page.logo_url) { %><img src="<%= logoSrc %>" alt="<%= page.name %>" class="logo"><% } %>
 <div>
 <h1><%= page.name %></h1>
 <p class="subtitle"><%= page.description || tr('pages.previewTitle') %></p>

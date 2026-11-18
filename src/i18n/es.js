@@ -266,7 +266,10 @@ module.exports = {
   'pages.fieldOrganization': 'Organización (opcional)',
   'pages.orgNone': '— Ninguna —',
   'pages.fieldLogoUrl': 'URL del logo de la página (opcional)',
-  'pages.logoHelp': 'Sustituye al logo global de Personalizar en la página de estado pública.',
+  'pages.logoHelp': 'Sustituye a la imagen del logo global. Déjalo vacío para heredar el logo global.',
+  'pages.fieldLogoText': 'Texto del logo de la página (opcional)',
+  'pages.logoTextPlaceholder': 'p. ej. Mi Servicio',
+  'pages.logoTextHelp': 'Sustituye al texto del logo global. Déjalo vacío para usar el texto global de Personalizar.',
   'pages.makePublic': 'Hacer pública la página',
   'pages.fieldRefresh': 'Intervalo de actualización de la página pública (segundos)',
   'pages.every15s': '15 segundos',
@@ -569,6 +572,7 @@ module.exports = {
 
   // ===== personalización / marca (fase 2, lote 3) =======================
   'customize.branding': 'Marca',
+  'customize.brandingHelp': 'Los valores globales del logo que se muestran en todas las páginas de estado públicas. Cada página puede sustituir su propio texto e imagen.',
   'customize.logoText': 'Texto del logo',
   'customize.logoColor': 'Color del logo',
   'customize.logoHelp': 'Se aplica al logo de todas las páginas de estado públicas.',

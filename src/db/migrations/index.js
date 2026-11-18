@@ -40,6 +40,7 @@ const MIGRATIONS = [
   require('./003-notification-channels'),
   require('./004-user-locale'),
   require('./005-notification-deliveries'),
+  require('./006-page-branding'),
 ];
 
 // sha256 of the migration's own source file (falling back to the function body

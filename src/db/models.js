@@ -293,7 +293,7 @@ module.exports.pages = {
   async getByExternalId(ex_id) { if (!ex_id) return null; return await queryOne('SELECT * FROM pages WHERE external_id=$1', [ex_id]); },
   async getByCustomDomain(domain) { if (!domain) return null; return await queryOne('SELECT * FROM pages WHERE custom_domain=$1 AND domain_verified=1', [String(domain).toLowerCase()]); },
 
-  async create({ name, slug, description, status, timezone, logo_url, custom_css, custom_html, is_public, template, refresh_interval, custom_layout, custom_layout_css, custom_layout_html, external_id, organization_id, locale, custom_domain }) {
+  async create({ name, slug, description, status, timezone, logo_url, logo_text, custom_css, custom_html, is_public, template, refresh_interval, custom_layout, custom_layout_css, custom_layout_html, external_id, organization_id, locale, custom_domain }) {
     const id = uuidv4();
     let orgId = String(organization_id || '').trim() || null;
     if (orgId) {
@@ -307,9 +307,12 @@ module.exports.pages = {
       const existing = await queryOne('SELECT id FROM pages WHERE custom_domain=$1', [domain]);
       if (existing) { const err = new Error('Custom domain already in use'); err.code = 'domain_taken'; throw err; }
     }
+    // Per-page brand text: empty/whitespace means NULL (inherit the global
+    // default), matching the empty-value semantics of logo_url in create.
+    const logoText = String(logo_text || '').trim() || null;
     await run(
-      'INSERT INTO pages (id,name,slug,description,status,template,timezone,logo_url,organization_id,locale,custom_css,custom_html,is_public,refresh_interval,custom_layout,custom_layout_css,custom_layout_html,external_id,custom_domain,domain_verified) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,0)',
-      [id, name, slug, description||'', status||'operational', template||'default', timezone||'UTC', logo_url||null, orgId, (['en','es'].includes(locale) ? locale : 'en'), sanitizeCss(custom_css)||null, sanitizeHtml(custom_html)||null, toBool01(is_public), refresh_interval ? Math.max(15, parseInt(refresh_interval)) : 15, toBool01(custom_layout), sanitizeCss(custom_layout_css)||null, sanitizeHtml(custom_layout_html)||null, external_id||null, domain]
+      'INSERT INTO pages (id,name,slug,description,status,template,timezone,logo_url,organization_id,locale,custom_css,custom_html,is_public,refresh_interval,custom_layout,custom_layout_css,custom_layout_html,external_id,custom_domain,logo_text,domain_verified) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,0)',
+      [id, name, slug, description||'', status||'operational', template||'default', timezone||'UTC', logo_url||null, orgId, (['en','es'].includes(locale) ? locale : 'en'), sanitizeCss(custom_css)||null, sanitizeHtml(custom_html)||null, toBool01(is_public), refresh_interval ? Math.max(15, parseInt(refresh_interval)) : 15, toBool01(custom_layout), sanitizeCss(custom_layout_css)||null, sanitizeHtml(custom_layout_html)||null, external_id||null, domain, logoText]
     );
     return this.getById(id);
   },
@@ -317,7 +320,7 @@ module.exports.pages = {
   async update(id, data) {
     const fields = [];
     const params = [];
-    const allowed = ['name','slug','description','status','template','timezone','logo_url','custom_css','custom_html','is_public','refresh_interval','custom_layout','custom_layout_css','custom_layout_html','external_id','organization_id','locale','custom_domain','domain_verified'];
+    const allowed = ['name','slug','description','status','template','timezone','logo_url','logo_text','custom_css','custom_html','is_public','refresh_interval','custom_layout','custom_layout_css','custom_layout_html','external_id','organization_id','locale','custom_domain','domain_verified'];
     for (const k of allowed) {
       if (data[k] !== undefined) {
         let val = data[k];
@@ -331,6 +334,9 @@ module.exports.pages = {
           } else val = null;
         }
         if (k === 'locale') val = ['en','es'].includes(val) ? val : 'en';
+        // Per-page brand text: an absent value is already skipped above (preserves
+        // existing); an explicit empty/whitespace value means NULL (inherit).
+        if (k === 'logo_text') val = String(val || '').trim() || null;
         if (k === 'custom_domain') {
           val = String(val || '').trim().toLowerCase() || null;
           if (val) {

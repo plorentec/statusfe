@@ -273,7 +273,10 @@ module.exports = {
   'pages.fieldOrganization': 'Organization (optional)',
   'pages.orgNone': '— None —',
   'pages.fieldLogoUrl': 'Page logo URL (optional)',
-  'pages.logoHelp': 'Shown instead of the global Customize logo on this page\'s status page.',
+  'pages.logoHelp': 'Overrides the global logo image. Leave empty to inherit the global logo.',
+  'pages.fieldLogoText': 'Page logo text (optional)',
+  'pages.logoTextPlaceholder': 'e.g. My Service',
+  'pages.logoTextHelp': 'Overrides the global logo text. Leave empty to use the global Customize text.',
   'pages.makePublic': 'Make page public',
   'pages.fieldRefresh': 'Public Page Refresh Interval (seconds)',
   'pages.every15s': '15 seconds',
@@ -576,6 +579,7 @@ module.exports = {
 
   // ===== customize / branding (phase 2, batch 3) =======================
   'customize.branding': 'Branding',
+  'customize.brandingHelp': 'The global logo defaults shown on every public status page. Each page can override its own text and image.',
   'customize.logoText': 'Logo Text',
   'customize.logoColor': 'Logo Color',
   'customize.logoHelp': 'Applied to the logo on all public status pages.',
