@@ -9,6 +9,47 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [5.8.0] — 2026-11-22
+
+### Added
+- **Apariencia del panel de administración configurable** (cinco colores, sin
+  rediseño): `/admin/customize` gana una sección **«Admin Panel Appearance»**
+  que guarda **por separado** cinco controles de color — primario/acento,
+  fondo y texto de la barra lateral, y fondo y texto del panel — cada uno
+  mapeado a una propiedad CSS existente de `admin.css`. Los dos bloques (marca
+  pública y apariencia del panel) se guardan **aislados**: tocar uno no lee,
+  escribe ni borra el otro. No hay editor de fuentes, radios ni CSS/HTML/JS
+  arbitrario, y los colores del panel **nunca** afectan al login ni a las
+  pantallas de auth.
+- **Marca por página con herencia global** (`006-page-branding`): el logo de la
+  página pública pasa a ser un **valor global por defecto** que cada página
+  puede sobrescribir de forma independiente — `pages.logo_text` (texto, nueva)
+  y `pages.logo_url` (imagen, ya existía). Una página puede anular solo la
+  imagen, solo el texto o ambos; `NULL`/vacío = «sin override» y hereda el
+  global. **Limpiar un override** (campo explícitamente vacío) devuelve la
+  herencia y **no** toca los ajustes globales guardados.
+- **Pruebas de Chrome sin `WebSocket` global** — el arnés de apariencia del
+  panel conduce un Chrome real por CDP con el protocolo
+  `--remote-debugging-pipe` (JSON delimitado por NUL sobre los fd 3/4 de
+  `child_process`), usando **solo APIs de Node**: no depende del `WebSocket`
+  global (añadido en Node 22.4+) ni de dependencias externas. Verificado contra
+  Chrome real bajo Node 22 con el `WebSocket` global eliminado para simular
+  Node 20. **No se ha ejecutado aún sobre un runtime Node 20 real ni en la CI
+  completa** — no se acredita esa compatibilidad todavía.
+
+### Notes
+- **`006-page-branding` es aditiva e idempotente**: añade la columna nullable
+  `pages.logo_text` (sondeando `information_schema` primero); las filas
+  existentes conservan `NULL` y su `logo_url` previo, sin backfill destructivo.
+  No se edita ninguna migración ya aplicada.
+
+### Verified
+- `scratch/verify_admin_customization.js` — apariencia del panel (pg-mem +
+  Chrome real: estilos calculados, la cascada `body.dark` realmente sobrescrita,
+  login/público/status sin el tema del panel).
+- `scratch/verify_page_branding.js` — herencia global por página y clear/reset.
+- `scratch/verify_migrations.js` — registro/adopción/idempotencia incl. `006`.
+
 ## [5.7.2] — 2026-11-16
 
 ### Fixed
