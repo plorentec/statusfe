@@ -7,6 +7,8 @@ proyecto — se instala temporalmente):
 ```bash
 npm install --no-save pg-mem
 
+node scratch/verify_migrations.js # migraciones versionadas: baseline + adopción + runner compartido
+node scratch/verify_legacy_upgrade.js # reparación de adopción legacy pre-2.9 (5.8.1): prerrequisito de esquema antes de 002, idempotencia, preservación de datos/historia y superficie pública
 node scratch/verify_plan.js       # modelos: grupos, resolveGroup, getForPage, sanitización, seguridad v2.2.1, regresiones v2.2.4
 node scratch/verify_multigroup.js # multi-grupo: setGroups/setMembers/resolveGroup, expansión en getForPage, backfill, getGroupIdsForPage, is_global, regression "quitar grupo de página", migrate idempotente
 node scratch/verify_deps.js       # dependencias: hub muchos-a-uno, cascada transitiva, ciclos, CSV safety, admin analytics page→components

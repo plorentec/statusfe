@@ -43,6 +43,11 @@ const MIGRATIONS = [
   require('./006-page-branding'),
 ];
 
+// The concrete 002 migration module. The legacy schema prerequisite runs right
+// before THIS module — never before a fake migration that merely reuses its
+// '002-columns-and-backfills' version string (custom registries in harnesses).
+const BACKFILLS_MIGRATION = MIGRATIONS.find(m => m.version === '002-columns-and-backfills');
+
 // sha256 of the migration's own source file (falling back to the function body
 // for injected/experimental migrations that have no file on disk). Stored so a
 // later boot can WARN when an already-applied migration was edited — never to
@@ -105,6 +110,17 @@ async function record(migration, checksum) {
   );
 }
 
+// Legacy schema prerequisite (5.8.1). Creates the newer-era tables a pre-2.9
+// adopted database is missing, right before 002 needs them. Idempotent and
+// fail-closed: any real DDL failure propagates (nothing here swallows it), and
+// the only observable log line is emitted when tables were actually created.
+async function runPrerequisites() {
+  const { created } = await require('./legacy-schema-prerequisites').up();
+  if (created.length > 0) {
+    console.log('Legacy schema prerequisites created: ' + created.join(', '));
+  }
+}
+
 // Apply every pending migration in ascending version order.
 //   options.upTo       — apply nothing above this version (init() uses it to put
 //                        the seed between the baseline and the rest).
@@ -125,6 +141,16 @@ async function runMigrations(options = {}) {
     applied.set(baseline.version, { version: baseline.version, name: baseline.name, applied_at: new Date(), checksum: checksumFor(baseline) });
     result.adopted = true;
     report(baseline.version, 'adopted (existing installation — baseline not re-run)');
+    // Complete the adopted baseline schema BEFORE seed: init() runs seed()
+    // between the upTo:001 call and the full call, and the pre-3.7 order was
+    // createTables -> seed -> migrate. A pre-2.9 database adopted the baseline
+    // without running its CREATEs, so the newer-era tables are still missing.
+    // Only run it when the REAL 002 is in the registry — a custom registry that
+    // reuses the 001/002 version strings for arbitrary callbacks never triggers
+    // the concrete 002 repair.
+    if (known.includes(BACKFILLS_MIGRATION)) {
+      await runPrerequisites();
+    }
   }
 
   for (const migration of list) {
@@ -138,6 +164,14 @@ async function runMigrations(options = {}) {
       result.alreadyApplied.push(migration.version);
       report(migration.version, 'already applied');
       continue;
+    }
+
+    // Retry path (adoption already recorded on a prior boot): the prerequisite
+    // must run right before the REAL 002 executes, only when the baseline is
+    // already applied. A fresh boot reaches here too (001 just ran in this same
+    // loop) and the prerequisite is a probe-only no-op then.
+    if (migration === BACKFILLS_MIGRATION && applied.has(BASELINE_VERSION)) {
+      await runPrerequisites();
     }
 
     try {
