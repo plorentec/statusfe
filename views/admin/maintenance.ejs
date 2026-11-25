@@ -43,8 +43,7 @@
 <tr>
 <td><strong><%= w.title %></strong><br><small class="text-muted"><%= (w.description || '').substring(0, 50) %><%= (w.description || '').length > 50 ? '...' : '' %></small></td>
 <td><code><%= w.page_id ? w.page_id.substring(0,8) + '...' : '-' %></code></td>
-<%# 5.2.0: igual que en suscriptores, el marcado va en la plantilla; dentro de
-    una cadena con <%= %> se escapaba y se veia literal. %>
+<%# Keep markup in the template rather than in an escaped output string. %>
 <td><% if (w.component_id) { %><%= w.component_id.substring(0,8) %>...<% } else { %><span class="text-muted"><%= tr('maintenance.allComponents') %></span><% } %></td>
 <td><span class="status-badge status-<%= w.status %>"><%= w.status %></span></td>
 <td><%= w.starts_at %></td>

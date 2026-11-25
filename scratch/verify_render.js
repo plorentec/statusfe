@@ -73,6 +73,17 @@ render('customize', path.join(__dirname, '../views/admin/customize.ejs'), { titl
 render('logo/no-customization', path.join(__dirname, '../views/partials/_logo.ejs'), {});
 render('logo/custom', path.join(__dirname, '../views/partials/_logo.ejs'), { customization: { ...customization, logo_text: 'Mi Empresa', logo_color: '#ff0000' } });
 
+// Maintenance must compile with both branches, using the list route's locals.
+const maintenanceLocals = { title: 'Maintenance', user: { name: 'u', role: 'admin' }, message: null, messageType: null, pages: [mkPage('default')], components: comps, csrfToken: 'tok' };
+const maintenanceEmpty = render('maintenance/empty', path.join(__dirname, '../views/admin/maintenance.ejs'), { ...maintenanceLocals, windows: [] });
+if (!maintenanceEmpty.includes('class="empty-state"') || !maintenanceEmpty.includes('href="/admin/maintenance/new"')) { console.log('FAIL maintenance: empty list and create link'); failures++; }
+const maintenanceRows = render('maintenance/populated', path.join(__dirname, '../views/admin/maintenance.ejs'), { ...maintenanceLocals, windows: [
+  { id: 'mw-all', title: 'All services', description: '', page_id: 'page-example', component_id: null, status: 'upcoming', starts_at: '2026-11-25 20:00:00', ends_at: '2026-11-25 21:00:00' },
+  { id: 'mw-component', title: 'Router update', description: 'Scheduled work', page_id: 'page-example', component_id: 'component-example', status: 'ongoing', starts_at: '2026-11-25 20:00:00', ends_at: '2026-11-25 21:00:00' },
+] });
+if (!maintenanceRows.includes('<span class="text-muted">' + i18n.t('en', 'maintenance.allComponents') + '</span>') || !maintenanceRows.includes('componen...')) { console.log('FAIL maintenance: all-components markup and selected component'); failures++; }
+if (!maintenanceRows.includes('All services') || !maintenanceRows.includes('Router update') || !maintenanceRows.includes('/admin/maintenance/mw-all/edit') || !maintenanceRows.includes('/admin/maintenance/mw-component?_method=DELETE')) { console.log('FAIL maintenance: titles and existing row actions'); failures++; }
+
 // config-statuses: the CSRF injection script must be present (fixes "CSRF token missing")
 const csHtml = render('config-statuses/csrf-check', path.join(__dirname, '../views/admin/config-statuses.ejs'), { title: 'Component Statuses', user: { name: 'u', role: 'admin' }, statuses: [], type: 'component', message: null, messageType: null, csrfToken: 'tok' });
 if (!csHtml.includes("input.name = '_csrf'")) { console.log('FAIL config-statuses sin inyección CSRF'); failures++; }

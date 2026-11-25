@@ -9,6 +9,21 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [5.8.2] — 2026-11-25
+
+### Fixed
+- **La página de Mantenimiento no se podía abrir**: EJS devolvía
+  `Could not find matching close tag for "<%#".` por unos delimitadores
+  anidados dentro de un comentario de la plantilla. Se corrige únicamente
+  ese comentario, sin cambiar rutas, permisos, datos ni migraciones.
+
+### Verified
+- El arnés `scratch/verify_render.js` ahora cubre Mantenimiento vacío y con
+  registros, la presentación de todos los componentes o uno concreto y los
+  enlaces de creación, edición y borrado. El error se reprodujo antes del
+  arreglo y el arnés completo de renderizado pasa después.
+- Sin dependencias nuevas ni cambios de runtime o CI.
+
 ## [5.8.1] — 2026-11-25
 
 ### Fixed
