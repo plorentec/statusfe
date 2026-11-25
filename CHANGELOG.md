@@ -9,6 +9,38 @@ All notable changes to StatusFe.
 - **Host self-update agent** (`scripts/self-update.sh`, `scripts/install-update-agent.sh`, `systemd/statusfe-update.path`, `systemd/statusfe-update.service`) — installs a trigger-based oneshot agent that operates on the shared data volume without docker.sock access.
 - **Self-update regression harness** (`scratch/verify_update.js`) — pg-mem-based test covering request/status flow, CSRF guard, stale-request detection, and `SELF_UPDATE_DISABLED`.
 
+## [5.8.1] — 2026-11-25
+
+### Fixed
+- **Actualizaciones antiguas que fallaban en `002-columns-and-backfills`**
+  con `relation "organizations" does not exist`: el runner prepara de forma
+  aditiva las tablas que faltan en una base heredada antes del backfill.
+  Funciona tanto en la adopción inicial como al reintentar con `001-baseline`
+  ya registrada. No vuelve a ejecutar el baseline completo, no modifica las
+  migraciones históricas `001–006` ni sus checksums y conserva los datos y
+  el historial existente.
+- **Reintentos tras una interrupción del DDL**: se asegura el índice único
+  de los tokens de invitación aunque su tabla ya exista. Si hay tokens
+  duplicados, la actualización falla en cerrado: no borra filas ni registra
+  falsamente la migración como aplicada.
+
+### Verified
+- `scratch/verify_legacy_upgrade.js` — **46 comprobaciones** en PostgreSQL
+  en memoria: adopción, reintento, conservación de datos/historial,
+  idempotencia, límites `upTo`, registros personalizados y DDL interrumpido.
+- **36/36 arneses de regresión** en una copia aislada de las fuentes;
+  revisión independiente del caso de interrupción: **14/14**.
+
+### Notes
+- Parche preparado y verificado **localmente**; no se ha accedido a la base
+  de la empresa ni se ha desplegado esta versión. No hay dependencias nuevas.
+- **Sin prueba en PostgreSQL real**: no había una instancia de pruebas
+  aislada disponible. Las comprobaciones anteriores usan `pg-mem`.
+- Una base anterior a **2.2.0** que además carezca de `components.group_id`
+  sigue fuera de esta reparación; hay que confirmar la versión de origen
+  antes de actualizar. Detalles de la reparación y límites conocidos:
+  [`docs/legacy-upgrade.md`](docs/legacy-upgrade.md).
+
 ## [5.8.0] — 2026-11-22
 
 ### Added
